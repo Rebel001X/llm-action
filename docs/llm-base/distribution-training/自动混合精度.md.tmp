@@ -1,0 +1,377 @@
+# 自动混合精度（Automatic Mixed Precision, AMP）
+
+> 用低精度（FP16/BF16）做绝大多数算子换取 2~3 倍吞吐与一半显存，再用 FP32 主权重 + Loss Scaling 守住数值精度。📍 导航：[[00-知识地图]]
+> 🔗 相关：[[llm-base/distribution-training/FP16-BF16]] · [[llm-compression/quantization/fp8]] · [[llm-compression/quantization/量化基础]] · [[ai-infra/算力/GPU工作原理]] · [[ai-framework/deepspeed/README]]
+
+## 阅读地图
+
+| 节 | 你会得到什么 | 关键词 |
+|----|------------|--------|
+| 0 | 一句话锚点 | 低精度算 + 高精度存 |
+| 1 | 浮点数地基：IEEE754 / FP32 / FP16 / BF16 / TF32 | 符号·指数·尾数 |
+| 2 | 为什么低精度会"坏"：上溢/下溢/舍入/吞噬 | 动态范围 |
+| 3 | AMP 三件套：autocast / 主权重 / Loss Scaling | 配方 |
+| 4 | autocast 白/黑名单：哪些算子降精度 | 算子分类 |
+| 5 | 静态 vs 动态 Loss Scaling 全流程 | 缩放因子 |
+| 6 | FP32 主权重副本与 0.5+0.5 吞噬 | master weight |
+| 7 | BF16 路线：为什么常常不需要 Loss Scaling | 大模型首选 |
+| 8 | 显存账：到底省了多少 | 16 字节/参数 |
+| 9 | 与 ZeRO / 张量并行 / FP8 的关系 | 分布式 |
+| 10 | PyTorch / DeepSpeed / Megatron 用法 | 工程 |
+| 数值手算 | GPT 类模型逐数算显存 & 缩放 | 实战 |
+| FAQ | 踩坑速查 | 排错 |
+
+## 0. 一句话锚点
+
+**AMP = 在 FP16/BF16 下做矩阵乘和卷积（快、省显存），在 FP32 下做权重更新与数值敏感的归约（稳）。**
+
+它不是"把整个模型变成 FP16"，而是一套**精度分层**策略：
+
+```
+        计算(前向/反向)              参数更新
+   ┌──────────────────────┐   ┌──────────────────────┐
+   │  FP16/BF16 算子       │   │  FP32 主权重(master) │
+   │  matmul / conv / ...  │──▶│  optimizer.step()    │
+   │  快 2~3x, 显存减半     │   │  累加微小梯度不被吞噬 │
+   └──────────────────────┘   └──────────────────────┘
+            ▲                            │
+            └──── 下一步 cast 回 FP16 ◀──┘
+```
+
+记住三个动词：**算得快**（低精度算子）、**存得准**（FP32 主权重）、**别溢出**（Loss Scaling）。
+
+> 历史：早期要装 NVIDIA 的 `apex.amp`（O0~O3 级别）。PyTorch 自 1.6 起内置 `torch.cuda.amp`（即 `torch.amp`），无需第三方库。**apex 已不推荐**，新代码用原生 AMP。
+
+## 1. 地基：浮点数是怎么存的
+
+一个浮点数 = $(-1)^{s}\times (1.m)\times 2^{(e-\text{bias})}$，由**符号 s / 指数 e / 尾数 m** 三段组成。
+
+```
+FP32 (单精度, 32bit):  S│EEEEEEEE│MMMMMMMMMMMMMMMMMMMMMMM
+                       1 │   8    │          23
+FP16 (半精度, 16bit):  S│EEEEE│MMMMMMMMMM
+                       1 │  5  │     10
+BF16 (脑浮点, 16bit):  S│EEEEEEEE│MMMMMMM
+                       1 │   8    │   7
+TF32 (Ampere 内部19bit):S│EEEEEEEE│MMMMMMMMMM   (8指数+10尾数, 存仍占32bit)
+```
+
+两段决定两件事：
+
+- **指数位**决定**动态范围**（能表示多大/多小的数）。
+- **尾数位**决定**精度**（相邻可表示数之间的相对间隔，即"分辨率"）。
+
+| 类型 | 位宽 | 指数位 | 尾数位 | 动态范围（约） | 最小正规数 | 相对精度 $2^{-(m+1)}$ |
+|------|------|--------|--------|----------------|-----------|----------------------|
+| FP32 | 32 | 8 | 23 | $10^{-38}\sim10^{38}$ | $1.18\times10^{-38}$ | $\approx6\times10^{-8}$ |
+| FP16 | 16 | 5 | 10 | $6\times10^{-8}\sim65504$ | $6.10\times10^{-5}$ | $\approx4.9\times10^{-4}$ |
+| BF16 | 16 | 8 | 7 | 与 FP32 几乎相同 | $1.18\times10^{-38}$ | $\approx3.9\times10^{-3}$ |
+| TF32 | 19 | 8 | 10 | 与 FP32 相同 | 同 FP32 | $\approx4.9\times10^{-4}$ |
+
+**核心对比**：
+- FP16 与 BF16 **同为 16bit**，但分配不同：FP16 多尾数（更精）、BF16 多指数（范围大）。
+- BF16 的指数位 = FP32（都是 8 位），所以 **FP32↔BF16 互转几乎只是截尾**，动态范围不变 → 训练几乎不溢出。
+- FP16 指数仅 5 位，最大只到 **65504**，最小正规数 $\approx6\times10^{-5}$ → 大数易上溢、小梯度易下溢为 0，这正是要 Loss Scaling 的原因。
+
+> 详细的 FP16/BF16 位级解剖见 [[llm-base/distribution-training/FP16-BF16]]；更激进的 FP8(E4M3/E5M2) 见 [[llm-compression/quantization/fp8]]。
+
+## 2. 为什么"直接全 FP16"会坏：四种数值病
+
+```
+ 反向传播梯度分布(典型) ── 横轴: log10(|grad|)
+ 数量
+  │            ┌────────┐
+  │         ┌──┘        └──┐
+  │      ┌──┘   多数梯度    └──┐
+  │   ───┘   10^-3 ~ 10^-7     └────
+  └───┼──────┼──────┼──────┼──────┼──▶
+    10^-10 10^-7  10^-3   10^0  10^3
+      ▲ FP16 在此处下溢为 0(丢失!)
+      └──── FP16 最小正规数 ≈ 6e-5 ────┘
+```
+
+四种病：
+
+1. **下溢（Underflow）**：梯度 $< 6\times10^{-5}$ 在 FP16 里直接变 0，权重永不更新 → **训练停滞**。这是 FP16 训练最致命的问题。
+2. **上溢（Overflow）**：中间激活/梯度 $> 65504$ 变成 `inf` → NaN 扩散，loss 爆炸。
+3. **舍入误差（Rounding）**：尾数只有 10/7 位，每次运算引入约 $10^{-3}\sim10^{-4}$ 的相对误差。
+4. **大数吞噬小数（Swamping）**：$1.0 + 0.0001$ 在低精度下可能仍等于 $1.0$，小步长更新被"吞掉"。这正是为什么**累加/归约/权重更新必须用 FP32**。
+
+吞噬数值演示（FP16）：
+
+```
+ FP16 在 1.0 附近的间隔 = 2^-10 ≈ 0.000977
+   1.0 + 0.0001 → 0.0001 < 半个间隔 → 舍入回 1.0  (更新丢失!)
+   1.0 + 0.001  → 落到 1.0009766 (最近可表示数)   (有损但存活)
+ FP32 在 1.0 附近的间隔 = 2^-23 ≈ 0.00000012 → 0.0001 轻松存活
+```
+
+## 3. AMP 三件套（混合精度训练的标准配方）
+
+```
+        ┌─────────────────── 训练一步 (FP16 AMP) ───────────────────┐
+        │                                                            │
+  FP32 master weight ──cast──▶ FP16 weight                           │
+        ▲                          │                                 │
+        │                     ① autocast: 前向用FP16算子              │
+        │                          ▼                                 │
+        │                       FP16 loss                            │
+        │                          │                                 │
+        │                  ② loss × S (放大, 防梯度下溢)              │
+        │                          ▼                                 │
+        │                   FP16 反向传播 → FP16 梯度(已×S)           │
+        │                          │                                 │
+        │                  ③ 梯度 ÷ S (unscale, 还原真实梯度)         │
+        │                          ▼                                 │
+        │                  ④ 检查 inf/NaN? ─是─▶ 跳过本步, S减半       │
+        │                          │否                               │
+        └─── ⑤ FP32 下 optimizer.step() 更新 master weight ◀─────────┘
+                             (否─连续N步─▶ S翻倍)
+```
+
+三大支柱：
+
+| 支柱 | 作用 | 没有它会怎样 |
+|------|------|-------------|
+| **autocast** | 自动把白名单算子转 FP16/BF16 算，黑名单保 FP32 | 要手动逐算子 cast，易错 |
+| **FP32 主权重副本** | 权重更新在 FP32 累加 | 小梯度被吞噬，模型不收敛 |
+| **Loss Scaling** | 反向前把 loss 放大 S 倍，避免梯度下溢 | FP16 梯度大片变 0 |
+
+> **BF16 路线可省掉 Loss Scaling**（见第 7 节），但主权重副本通常仍保留。
+
+## 4. autocast 的算子分类（白名单 / 黑名单）
+
+autocast 不是无脑全转 FP16，而是**按算子数值敏感性分类**：
+
+```
+┌───────────── 降到 FP16/BF16 (白名单, "算得多又抗误差") ─────────────┐
+│  matmul / linear / addmm        ← 大模型 99% FLOPs 在这里           │
+│  conv1d/2d/3d                                                       │
+│  einsum / bmm                                                       │
+└────────────────────────────────────────────────────────────────────┘
+┌───────────── 保持 FP32 (黑名单, "对误差敏感 / 含归约/含exp") ────────┐
+│  softmax / log_softmax          ← 含 exp，大数易溢出                │
+│  layer_norm / batch_norm        ← 含均值方差的统计归约              │
+│  sum / mean / norm / cumsum     ← 长串累加易吞噬                    │
+│  log / exp / pow                ← 非线性放大误差                    │
+│  loss: cross_entropy / kl_div   ← 直接关系收敛                      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+直觉规则：
+- **矩阵乘类**（计算量大、内部累加器本身常是 FP32）→ 降精度，收益最大、风险最小。Tensor Core 正是吃 FP16/BF16 输入、用 **FP32 累加器**输出。
+- **含 exp/log/归一化/长累加**的算子 → 留 FP32，否则误差被指数级放大或被吞噬。
+
+```
+ Tensor Core 的"低进高出":
+   A(FP16) × B(FP16) ─乘─▶ 部分积 ─累加─▶ C(FP32 累加器) ─▶ 输出
+   ▲ 输入低精度省带宽         ▲ 累加用FP32避免吞噬, 这是硬件帮你保的精度
+```
+
+> autocast 作用域只影响前向；反向自动继承相应精度。可用 `torch.autocast(enabled=False)` 在局部强制 FP32。
+
+## 5. Loss Scaling：把梯度"抬"进可表示区间
+
+**思路**：链式法则下 $\frac{\partial(S\cdot L)}{\partial w}=S\cdot\frac{\partial L}{\partial w}$。把 loss 乘以常数 $S$，所有梯度同比放大 $S$ 倍，原本下溢为 0 的小梯度被抬进 FP16 可表示区间；更新前再除回 $S$，等价于没改变学习率。
+
+```
+ 缩放前: grad = 3e-7  ── FP16 ──▶  0     (死了)
+ ×S=4096: grad = 1.2e-3 ── FP16 ──▶ 1.2e-3 (活了!)
+ step前 ÷4096: 还原 3e-7 ── FP32 累加 ──▶ 正确更新
+```
+
+### 5.1 静态 Loss Scaling
+固定一个 $S$（如 1024 或 4096）。简单，但太小防不住下溢、太大又上溢，需手调。
+
+### 5.2 动态 Loss Scaling（PyTorch `GradScaler` 默认，推荐）
+
+自适应找最大可用 $S$：
+
+```
+ 初始 S = 2^16 = 65536
+ 每一步:
+   ├─ scaled_loss = loss × S
+   ├─ backward()              → 得到 ×S 的梯度
+   ├─ unscale: grad ÷ S
+   ├─ 检查梯度有无 inf/NaN ?
+   │    ├─是→ 本步【跳过 step】, S ← S/2          (太大了, 退一步)
+   │    └─否→ optimizer.step(),
+   │          连续 growth_interval(默认2000)步没溢出 → S ← S×2  (试探更大)
+   └─ 循环
+```
+
+ASCII 时间线（S 像"踩气球"——不停往上顶，碰到溢出就退）：
+
+```
+ S
+ │      ___________            ___________
+ │     /           \          /
+ │ ___/             \________/
+ │/                  ▲跳过这步(检测到inf)
+ └──────────────────┼──────────────────────▶ step
+                    溢出→S减半
+```
+
+**关键点**：检测到 inf/NaN 的那一步**不更新权重**（否则 NaN 会污染主权重），只缩小 $S$ 重来。这保证了训练鲁棒性。
+
+## 6. FP32 主权重副本：对抗"吞噬"
+
+即便有 Loss Scaling，**权重更新**这一步若在 FP16 做仍会失败——因为更新量 $\eta\cdot g$ 常比权重本身小好几个数量级，会被 FP16 吞噬。
+
+```
+ 假设 w=1.0, 学习率η=1e-3, 梯度g=1e-3 → 更新量 = 1e-6
+ ┌ FP16 更新: 1.0 - 1e-6 → 间隔 9.77e-4 → 舍回 1.0   (更新被吞, 永不动!)
+ └ FP32 更新: 1.0 - 1e-6 → 0.999999 (精确)            (正常)
+```
+
+所以标准 AMP 维护**两份权重**：
+
+```
+   FP32 master weight  (优化器状态也在 FP32: m, v 动量/方差)
+        │ cast(只读)
+        ▼
+   FP16 weight   ── 仅用于前向/反向的"算"
+        │ 反向产生
+        ▼
+   FP16 grad ──unscale & cast──▶ FP32 grad ──▶ 在 FP32 里 step() 更新 master
+```
+
+代价：多一份 FP16 权重的显存（见第 8 节算账）。Adam 的一阶/二阶动量本来就建议放 FP32。
+
+## 7. BF16 路线：大模型为什么常常直接上 BF16
+
+BF16 指数位 = FP32（8 位），**动态范围与 FP32 一致**，因此：
+
+```
+ FP16 痛点                          BF16 解法
+ ──────────────────────────────    ─────────────────────────
+ 梯度 < 6e-5 下溢为0 → 需Loss Scale  范围到 1e-38, 几乎不下溢 → 常可免Loss Scale
+ 激活 > 65504 上溢为inf            范围到 3e38, 几乎不上溢
+ 但 FP16 尾数10位, 精度更高          BF16 尾数仅7位, 单步精度更糙
+```
+
+**结论**：
+- **大模型预训练**（GPT/LLaMA/GLM/BLOOM 等）几乎都用 **BF16**——稳定性 >> 单步精度，省去 Loss Scaling 调参之苦。需要 Ampere(A100)/Hopper(H100) 及以上硬件支持。
+- **FP16+Loss Scaling** 更多见于旧卡（V100 无 BF16）、推理、或对精度极敏感的小模型微调。
+
+> BLOOM-176B / GLM-130B 训练经验中都讨论了精度选择，见同目录 `Bloom-176B训练经验.md` / `GLM-130B训练经验.md`。
+
+## 8. 显存账：AMP 到底省多少？（必看）
+
+设模型参数量 $P$。**朴素 FP32 训练**每参数需要：
+
+```
+ FP32 训练 (Adam):
+   权重     4 B
+   梯度     4 B
+   动量 m   4 B
+   方差 v   4 B
+   ─────────────
+   合计    16 B / 参数
+```
+
+**FP16 AMP 训练**（混合精度，含 FP32 主权重）每参数：
+
+```
+   FP16 权重(算用)   2 B
+   FP16 梯度         2 B
+   FP32 主权重       4 B
+   FP32 动量 m       4 B
+   FP32 方差 v       4 B
+   ───────────────────
+   合计             16 B / 参数   ← 模型态没省, 甚至略多!
+```
+
+**反直觉的真相**：AMP **不省"模型状态"显存**（因为多了 FP32 主权重副本），16B/参数 与纯 FP32 持平。
+
+那省在哪？→ **激活值（activations）**：前向中间结果以 FP16 存，**激活显存直接减半**。对长序列大 batch，激活往往是显存主项，所以总显存仍明显下降；同时 Tensor Core 让算力翻倍——**AMP 的主收益是速度+激活显存，而非模型态显存**。
+
+> 真正砍模型态显存要靠 **ZeRO 分片**（[[ai-framework/deepspeed/README]]）：ZeRO-1/2/3 把优化器态/梯度/权重切到 N 张卡，每卡 $16B\cdot P/N$。AMP 与 ZeRO 正交、叠加使用。
+
+## 9. AMP 在分布式中的位置
+
+```
+ 单卡 AMP ──┬── + DDP/ZeRO ──── 数据并行: 各卡同跑AMP, 梯度all-reduce用FP16/BF16减半通信量
+            ├── + 张量并行 ──── 切分的matmul仍在FP16/BF16算 (见 llm-inference/大模型推理张量并行)
+            ├── + 流水线并行 ── 跨stage传的激活用FP16, 通信减半
+            └── + FP8 ───────── 更激进, 仅matmul输入降到FP8, 其余仍BF16 (Hopper, 见 fp8)
+```
+
+要点：
+- **梯度 all-reduce 用低精度** → 通信量减半（与计算通信重叠配合，见 [[llm-optimizer/计算通信重叠]]）。
+- AMP 是 **FP8 训练的前置思维**：FP8 同样"低进高出"，但更激进、需 per-tensor scaling，AMP 的 Loss Scaling 思想被推广为 FP8 的 delayed scaling。
+
+## 10. 工程用法（API 稳定原理，命令以官方为准）
+
+### PyTorch 原生 AMP
+
+```python
+scaler = torch.cuda.amp.GradScaler()          # 动态 Loss Scaling
+for x, y in loader:
+    optimizer.zero_grad()
+    with torch.autocast(device_type='cuda', dtype=torch.float16):  # 或 bfloat16
+        out  = model(x)                       # 白名单算子自动 FP16
+        loss = loss_fn(out, y)                # 黑名单(如 CE)自动留 FP32
+    scaler.scale(loss).backward()             # loss×S, 反向得 ×S 梯度
+    scaler.step(optimizer)                    # 内部 unscale + 查inf + step
+    scaler.update()                           # 调整 S
+```
+
+- 用 `bfloat16` 时通常**不需要 GradScaler**（或设为 no-op）。
+- `scaler.unscale_(optimizer)` 可在裁剪梯度前手动还原（梯度裁剪要在真实尺度上做）。
+
+### DeepSpeed
+在 `ds_config.json` 里配 `"fp16": {"enabled": true, "loss_scale": 0, ...}`（`0` = 动态）或 `"bf16": {"enabled": true}`。与 ZeRO 一键叠加。配置项以官方文档为准。
+
+### Megatron-LM / NVIDIA apex（旧）
+`--fp16` / `--bf16` 开关；apex 的 `amp.initialize(..., opt_level="O1/O2")`（O1=白黑名单混合，O2=几乎全FP16保主权重）。**新项目建议用原生 AMP，apex 仅做兼容性了解**。
+
+## 数值手算：给一个 GPT 类模型算账
+
+设参数量 $P=7\times10^{9}$（7B），用 Adam + FP16 AMP。
+
+**(1) 模型状态显存**（每参数 16 B）：
+
+$$
+M_{\text{state}} = 16 \times 7\times10^{9} \text{ B} = 112\times10^{9}\text{ B} = \frac{112\times10^9}{1024^3}\text{ GiB} \approx 104.3\text{ GiB}
+$$
+
+→ 单张 80GB A100 放不下！必须 ZeRO 分片。用 **ZeRO-2 切到 8 卡**：每卡模型态 $\approx 104.3/8 \approx 13.0$ GiB。
+
+**(2) 激活显存的 AMP 收益**：设某配置下 FP32 激活为 40 GiB，AMP 用 FP16 存激活 → 约 **20 GiB**，省一半。
+
+**(3) Loss Scaling 救活的梯度**：设某梯度 $g=3\times10^{-7}$。
+
+- FP16 最小正规数 $\approx6.1\times10^{-5}$，$g<$ 它 → 直接为 0（死）。
+- 取 $S=4096=2^{12}$：$g\cdot S = 3\times10^{-7}\times4096 = 1.23\times10^{-3}$，远大于 $6.1\times10^{-5}$ → **存活**。
+- step 前 unscale：$1.23\times10^{-3}/4096 = 3\times10^{-7}$，还原无损。
+
+**(4) 动态 S 退避代价**：若某步梯度最大值 $=20$，$S=65536$ 时 $20\times65536=1.3\times10^{6}>65504$ → 上溢 inf → **跳过该步，$S\leftarrow32768$**。损失 1 步，换来后续稳定。连续 2000 步无溢出则 $S$ 翻倍试探。
+
+**(5) Tensor Core 加速比直觉**：A100 FP16 Tensor Core 峰值约 312 TFLOPS，FP32（非TC）约 19.5 TFLOPS → 理论 ~16×；实际受访存/黑名单算子拖累，端到端常见 **2~3×** 训练加速。
+
+## 常见问题（FAQ）
+
+| 问题 | 原因 | 处理 |
+|------|------|------|
+| loss 变 NaN/inf | FP16 上溢，或学习率过大 | 用动态 Loss Scaling；首选 BF16；查异常算子 |
+| loss 不下降、卡住 | 梯度 FP16 下溢为 0 | 开 Loss Scaling 或换 BF16 |
+| 用了 AMP 显存没怎么降 | AMP 不省模型态（有FP32主权重），只省激活 | 叠加 ZeRO/梯度检查点才砍模型态 |
+| BF16 还要 GradScaler 吗 | BF16 范围=FP32，几乎不下溢 | 一般不需要，设 no-op 即可 |
+| 梯度裁剪和 AMP 冲突 | 裁剪要在真实尺度做 | 先 `unscale_` 再 `clip_grad_norm_` |
+| V100 上不能用 BF16 | V100(Volta) 无 BF16 硬件支持 | 用 FP16 + 动态 Loss Scaling |
+| softmax/LN 结果异常 | 误把它们也降到了 FP16 | autocast 默认保 FP32；勿手动强转 |
+| FP16 和 BF16 怎么选 | FP16 精度高范围小，BF16 反之 | 大模型预训练选 BF16；老卡/推理用 FP16 |
+| 多卡训练精度对不齐 | 梯度 all-reduce 低精度累积误差 | 归约用 FP32，或 BF16+主权重 |
+| apex 还要装吗 | PyTorch≥1.6 内置 AMP | 不需要，用 `torch.amp` |
+
+## 🔗 跳转链接
+
+- 浮点格式位级解剖：[[llm-base/distribution-training/FP16-BF16]]
+- 更激进的 8 位训练：[[llm-compression/quantization/fp8]] · [[llm-compression/quantization/量化基础]]
+- 显存/参数账与 FLOPs：[[llm-algo/FLOPs]] · [[llm-algo/transformer/模型架构]]
+- 分布式叠加：[[ai-framework/deepspeed/README]]（ZeRO）· [[ai-framework/megatron-lm/README]] · [[llm-inference/大模型推理张量并行]]
+- 通信优化：[[ai-infra/网络/集合通信原语]] · [[llm-optimizer/计算通信重叠]]
+- 硬件 Tensor Core 原理：[[ai-infra/算力/GPU工作原理]] · [[ai-infra/ai-hardware/CUDA]]
+- 训练总览：[[llm-train/README]]
+- 📍 回到 [[00-知识地图]]
