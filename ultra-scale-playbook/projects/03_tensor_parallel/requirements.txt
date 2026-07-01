@@ -1,0 +1,4 @@
+# 离线核心与多进程 demo 依赖(本机 torch 2.12.0+cpu、gloo 可用)
+torch>=2.0
+pytest>=7.0
+# 真实多卡需 GPU + nccl(把 backend 换成 'nccl'、device 换成 cuda)
