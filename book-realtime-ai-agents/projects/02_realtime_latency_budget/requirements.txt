@@ -1,0 +1,12 @@
+# 实时交互延迟预算项目 · 依赖
+# 全部为本机已装的常见科学计算库，纯 CPU、无需 GPU、无需联网。
+#
+# 说明：核心模型 latency_budget.py 仅用 Python 标准库（dataclasses/typing），
+# 零第三方依赖即可 import 与测试。下列依赖只被 run_demo.py（出图）与测试运行器用到。
+
+matplotlib>=3.8      # run_demo.py 画延迟瀑布图 / 预算分解图（Agg 后端，不弹窗）
+pytest>=8.0          # 运行 tests/ 单元测试
+
+# 可选：numpy / torch 本项目未直接使用，但环境中已安装，列出仅作说明。
+# numpy>=1.26
+# torch>=2.0

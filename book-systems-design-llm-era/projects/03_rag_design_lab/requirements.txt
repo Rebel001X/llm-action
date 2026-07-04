@@ -1,0 +1,8 @@
+# 03_rag_design_lab 依赖（全部本机可跑，不联网/不下模型/不需 key）
+# 说明：核心检索是纯 numpy 手写；torch 仅在演示"可选重排器打分"时用到 CPU 版。
+numpy>=1.26
+matplotlib>=3.8
+pytest>=7.4
+# torch 为可选：本项目只用它做一个极小的 CPU 打分函数；缺失时代码自动降级到 numpy 实现。
+# 若已装 CPU 版 torch（如 2.12.0+cpu）会自动启用，否则不影响任何测试与 demo。
+torch>=2.0 ; python_version >= "3.9"

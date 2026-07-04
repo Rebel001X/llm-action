@@ -1,0 +1,10 @@
+# DDP vs FSDP/ZeRO 显存计算器 —— 依赖
+# 核心计算器(memory_calculator.py)只用 Python 标准库,零第三方依赖。
+# 下面这些仅供 run_demo.py 画图 与 pytest 测试用。
+#
+# 本机已装版本(2026-07,Python 3.13):
+matplotlib>=3.8      # 画柱状图/曲线(Agg 后端,离线)
+numpy>=1.26          # 数值数组
+pytest>=8.0          # 单元测试
+# torch 非必需:计算器不加载真实模型;若想对拍真实占用可选装
+# torch>=2.0         # (可选)CPU 版即可,用于对拍验证

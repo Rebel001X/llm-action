@@ -1,0 +1,8 @@
+# 知识蒸馏最小实现 · 依赖清单
+# 本项目纯 CPU 可跑，无需 GPU、无需联网、无需任何预训练模型。
+# 版本号为「已验证可跑」的下限，更高版本一般也 OK。
+
+torch>=2.0        # 玩具 MLP + 蒸馏损失（CPU 版即可：pip install torch --index-url https://download.pytorch.org/whl/cpu）
+numpy>=1.24       # 网格/画图数据
+matplotlib>=3.7   # run_demo 出图（Agg 后端，无需 GUI）
+pytest>=7.0       # 单元测试

@@ -1,0 +1,14 @@
+# 分布式推理服务吞吐/延迟仿真 —— 依赖
+# 本项目核心引擎(serving_sim.py)与测试(tests/)仅用 Python 标准库,
+# 无需第三方包也能跑 `python -m pytest`。
+# 下列依赖仅供 run_demo.py 出图使用。
+#
+# 安装:  pip install -r requirements.txt
+
+matplotlib>=3.5      # 出图(可视化曲线)。run_demo.py 用 Agg 后端离线出图。
+pytest>=7.0          # 运行测试套件。
+
+# 说明:
+# - numpy 非必需(percentile 用纯 Python 实现,避免强依赖);本机已装亦可。
+# - torch 本项目不依赖(仿真不加载真实模型);本机已装 CPU 版但用不到。
+# - 全程离线:不联网、不下载模型、不需要任何 API key。

@@ -1,0 +1,7 @@
+# K8s 自动扩缩容仿真 · 依赖(全部为纯 CPU、离线可装)
+# 本机已装即可,无需联网下载模型 / 无需 GPU / 无需任何 API key
+numpy>=1.24
+matplotlib>=3.6
+pytest>=7.0
+# 说明:核心仿真只依赖 numpy;matplotlib 仅 run_demo 出图用;pytest 仅测试用。
+# 未使用 torch —— 本项目是"控制/排队"仿真,不涉及神经网络,保持零模型依赖。

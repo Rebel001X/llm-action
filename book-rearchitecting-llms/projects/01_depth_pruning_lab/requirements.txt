@@ -1,0 +1,6 @@
+# 深度剪枝 lab 依赖(全部为本机已装的常见科学计算包,离线可跑)
+# 注:版本用 >= 下限;本机实测环境为 torch 2.12 CPU / numpy 2.3 / matplotlib 3.10 / pytest 7.4 / Python 3.13
+torch>=2.0
+numpy>=1.24
+matplotlib>=3.6
+pytest>=7.0

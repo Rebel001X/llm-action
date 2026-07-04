@@ -1,0 +1,7 @@
+# AI 能耗-碳排-水耗计算器 依赖
+# 核心计算器(carbon_calculator.py)只用 Python 标准库,零第三方依赖。
+# 以下依赖仅供 可视化 demo 与 测试 使用。
+
+matplotlib>=3.7   # run_demo.py 出图(Agg 后端)
+pytest>=7.0       # 单元测试
+# numpy 非必需;本项目核心为纯 Python 算术。若已安装亦无冲突。

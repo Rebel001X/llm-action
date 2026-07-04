@@ -1,0 +1,13 @@
+# LLM 服务 SLO / 指标 harness —— 运行依赖
+#
+# 核心模块 slo_harness.py 只依赖 Python 标准库（heapq / math / random / dataclasses），
+# 下面这些是「测试」与「画图」用到的，本机（Python 3.13）均已预装。
+#
+# 安装：  pip install -r requirements.txt
+
+numpy>=1.24        # 仅测试用：与自实现 percentile 对拍
+matplotlib>=3.7    # run_demo.py 出图（Agg 后端，无需显示器）
+pytest>=7.0        # 跑单元/性质测试
+
+# 说明：本项目**不需要** torch / GPU / 网络 / 任何模型权重。
+# 纯 CPU、秒级跑完、结果可复现（固定 seed）。

@@ -1,0 +1,7 @@
+# 可靠性模式模拟器 —— 依赖
+# 核心库 reliability.py 只用 Python 标准库，零第三方依赖。
+# 下面这些只是"跑测试"和"出图"需要。
+
+pytest>=7.0        # 单元/集成测试
+matplotlib>=3.5    # run_demo.py 出对比图（用 Agg 后端，无需显示器）
+# numpy 非必需：核心库自己实现了 percentile；matplotlib 会自带 numpy。

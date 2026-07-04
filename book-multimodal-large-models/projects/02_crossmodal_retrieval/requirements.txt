@@ -1,0 +1,7 @@
+# 跨模态检索实战项目依赖 (全部为纯 CPU, 无需 GPU / 网络)
+# 本项目核心逻辑只用 numpy; torch 仅作可选对照 (README 附一段等价实现)。
+numpy>=1.24
+matplotlib>=3.7
+pytest>=7.0
+# torch 为可选; 若已装 2.x CPU 版可跑 README 里的对照片段, 不装也不影响主流程。
+# torch>=2.0

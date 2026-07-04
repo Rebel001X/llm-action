@@ -1,0 +1,4 @@
+numpy>=1.24
+matplotlib>=3.5
+pytest>=7.0
+torch>=2.0        # 仅用于 numpy/torch 数值对拍(CPU 即可)

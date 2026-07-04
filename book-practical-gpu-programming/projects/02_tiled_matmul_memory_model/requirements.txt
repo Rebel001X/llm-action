@@ -1,0 +1,12 @@
+# 本项目全程 CPU、离线可跑,无需 GPU / CUDA / 网络。
+# Python 3.10+(本机 3.13 验证通过)
+numpy>=1.24
+matplotlib>=3.6
+pytest>=7.0
+
+# 说明:
+#   - numpy      —— 数值校验(A @ B 作为分块结果的黄金参考)与数组运算
+#   - matplotlib —— run_demo.py 出图(强制 Agg 后端,无需显示器)
+#   - pytest     —— 单元测试
+# torch 非必需:本项目不依赖 torch;若已装 torch(本机 2.12 CPU),
+#   README 中给出一段可选的 torch 对照片段,但核心与测试均只用 numpy。

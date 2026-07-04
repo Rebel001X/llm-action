@@ -1,0 +1,6 @@
+# CLIP 对比学习 Lab —— 依赖(全部离线可用,无需 GPU / 网络 / API key)
+# 本机已装版本供参考;更低版本一般也能跑。
+torch>=2.0        # 纯 CPU 即可(本机 2.12.0+cpu)
+numpy>=1.24       # 数值 / 数组
+matplotlib>=3.7   # run_demo 出图(Agg 后端)
+pytest>=7.0       # 单元测试

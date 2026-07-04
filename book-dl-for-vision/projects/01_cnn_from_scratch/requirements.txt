@@ -1,0 +1,7 @@
+# 本项目依赖（本机已全部安装，离线可跑，无需联网/GPU/模型/key）
+# 版本为开发时实测版本；同大版本一般都能跑。
+numpy>=1.24
+matplotlib>=3.6
+pytest>=7.0
+# torch 仅用于测试里的『数值对拍』，CPU 版即可；核心 cnn_numpy.py 不依赖 torch
+torch>=2.0

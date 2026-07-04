@@ -1,0 +1,5 @@
+# A/B 测试统计实验室 —— 依赖（全部为常见科学计算库，无网络/无 GPU/无 scipy）
+# 本项目刻意"自实现分布函数"，因此不依赖 scipy，只需 numpy + matplotlib + pytest。
+numpy>=1.24
+matplotlib>=3.6
+pytest>=7.0

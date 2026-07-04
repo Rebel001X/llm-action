@@ -1,0 +1,7 @@
+# 并行模式实验室 —— 依赖（均为本机已装、离线可用）
+# 运行： python -m pip install -r requirements.txt
+numpy>=1.24
+matplotlib>=3.7
+pytest>=7.0
+# 说明：本项目用 numpy「模拟」GPU 并行思路，不依赖 CUDA / torch / GPU。
+# torch 仅在延伸阅读中提及，核心代码与测试均不 import torch。

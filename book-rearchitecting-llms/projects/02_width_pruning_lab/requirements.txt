@@ -1,0 +1,13 @@
+# 宽度剪枝实验室 —— 依赖清单（本机全部离线可跑，无需联网/无需 GPU/无需 API key）
+#
+# 说明：版本号是本项目开发&验证时的环境，向下兼容性较好；
+#       实际只依赖 torch(CPU) + matplotlib + pytest 三个核心包。
+#
+# 安装（若尚未安装）：
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install numpy matplotlib pytest
+
+torch>=2.0        # 核心：张量运算、nn.Linear、forward hook（CPU 版即可）
+numpy>=1.24       # torch/matplotlib 的底层依赖
+matplotlib>=3.6   # run_demo.py 出图（用 Agg 后端，无需显示器）
+pytest>=7.0       # 运行 tests/ 测试套件

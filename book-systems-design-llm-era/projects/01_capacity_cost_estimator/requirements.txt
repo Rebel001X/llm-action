@@ -1,0 +1,12 @@
+# LLM 容量 & 成本估算器 —— 依赖清单
+#
+# 核心估算逻辑 estimator.py 只用 Python 标准库（dataclasses/math/enum），零第三方依赖。
+# 下面这些仅供「跑 demo 出图」和「跑测试」使用。
+#
+# 安装：  pip install -r requirements.txt
+# 本机已装版本（供参考）：Python 3.13 / numpy 2.3 / matplotlib 3.10 / pytest 7.4
+
+matplotlib>=3.5      # run_demo.py 出图（Agg 后端，无需显示器）
+pytest>=7.0          # 跑 tests/
+
+# 说明：不需要 numpy / torch / 任何联网或下载模型。全程离线可跑。

@@ -1,0 +1,14 @@
+# GPU 装箱调度仿真 —— 依赖
+# 全部为纯 CPU、离线可用，无需 GPU / 网络 / K8s 集群。
+#
+# 本机实测版本（Python 3.13）：numpy 2.3.0 / matplotlib 3.10.8 / pytest 8.x
+# 这里用宽松下限，方便在旧一点的环境也能装上。
+
+numpy>=1.24
+matplotlib>=3.7
+pytest>=7.0
+
+# 说明：
+# - scheduler.py 核心引擎只用到标准库（dataclasses / heapq / typing），
+#   连 numpy 都不强依赖。numpy 仅 run_demo.py 造随机负载时用到。
+# - torch 不是本项目依赖（本仓库其它项目会用；此项目纯调度仿真用不上）。

@@ -1,0 +1,14 @@
+# 优化技术收益计算器 —— 依赖清单
+# 全部为纯 CPU、离线可用；不需要 GPU、不需要联网、不下载任何模型。
+#
+# 核心计算器 optimization_calculator.py 仅用 Python 标准库（dataclasses / typing），
+# 下面这些依赖只是为了「跑 demo 出图」和「跑测试」。
+
+matplotlib>=3.7      # 画瀑布图 / 显存分解图（用 Agg 后端离线渲染 PNG）
+pytest>=7.0          # 跑单元测试
+
+# 可选：numpy 未被核心逻辑强依赖；本机已装，列出以便复现环境。
+numpy>=1.24
+
+# 说明：本项目在 Python 3.13 + matplotlib 3.10 + numpy 2.3 + pytest 上验证通过。
+# torch 不是必需项（解析模型不需要张量运算），故不列入。

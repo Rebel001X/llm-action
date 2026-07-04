@@ -1,0 +1,4 @@
+# 连续批处理模拟器 —— 仅出图与测试用到第三方库;核心 continuous_batching.py 零依赖(纯标准库)
+numpy>=1.26
+matplotlib>=3.8
+pytest>=8.0

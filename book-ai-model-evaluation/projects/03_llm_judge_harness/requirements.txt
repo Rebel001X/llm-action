@@ -1,0 +1,10 @@
+# LLM-as-a-Judge Harness —— 依赖
+# 本项目 100% 离线可跑:不联网、不下模型、不需要任何 API key。
+# 核心逻辑仅依赖 numpy;matplotlib 仅 run_demo.py 出图用;pytest 跑测试用。
+
+numpy>=1.24        # 一致性指标(kappa/相关/秩)的向量化计算
+matplotlib>=3.6    # run_demo.py 出图(Agg 后端,无需显示器)
+pytest>=7.0        # 单元测试
+
+# 说明:torch 未被本项目直接使用。真实系统里把 MockLLMJudge 换成
+# OpenAIJudge/ClaudeJudge/开源自托管裁判时,才会引入对应 SDK 或推理框架。
