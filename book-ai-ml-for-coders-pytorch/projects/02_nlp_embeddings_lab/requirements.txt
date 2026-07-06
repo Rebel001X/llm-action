@@ -1,0 +1,7 @@
+# CPU 版即可，Windows + Python 3.13 已装
+torch>=2.0
+numpy>=1.24
+# 以下为可选（run_demo 不强依赖，仅在扩展真实数据/画图时用到）
+# scikit-learn>=1.3
+# matplotlib>=3.7
+pytest>=7.0

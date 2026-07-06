@@ -1,0 +1,10 @@
+# 迷你 RAG 实战 —— 依赖
+# 离线默认路径只用到 numpy；其余为"升级到真实 LLM"的可选项。
+
+numpy>=1.24
+pytest>=7.0
+
+# ——以下为可选：用于把离线生成换成真实 LLM / 真实嵌入——
+# requests>=2.28          # generate_with_ollama() 调本地 Ollama 用
+# transformers>=4.40      # generate_with_hf() 调本地/微调 HF 模型用（本环境已装）
+# sentence-transformers   # SentenceTransformerEmbedder 真实句向量用（本环境未装）

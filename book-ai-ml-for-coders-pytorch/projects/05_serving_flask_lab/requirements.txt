@@ -1,0 +1,12 @@
+# 推理服务实验：Flask + TorchServe（对应第 12-13 章）
+# CPU 即可，全部离线可跑
+torch>=2.0        # 模型定义 / 训练 / 推理
+flask>=3.0        # HTTP 推理服务
+requests>=2.28    # client.py 示例客户端（测试不联网、不依赖它）
+pytest>=7.0       # 运行 tests/
+
+# 可选（本项目默认离线合成数据，不需要）：
+# torchserve       # 真正把模型托管为服务（打包 .mar）
+# torch-model-archiver
+# numpy
+# scikit-learn

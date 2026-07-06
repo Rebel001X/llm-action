@@ -1,0 +1,9 @@
+# 本项目只依赖 CPU 版 PyTorch + 常见科学计算栈，全部离线可跑。
+# 版本号为宽松下限；本机实测环境为 torch 2.12.0+cpu / numpy 2.3 / Python 3.13。
+torch>=2.0
+numpy>=1.24
+matplotlib>=3.6
+pytest>=7.0
+
+# 可选（仅当你想加载"真实" FashionMNIST 时才需要，本项目默认离线合成，不需要它）：
+# torchvision>=0.15
