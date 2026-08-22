@@ -183,7 +183,13 @@ def test_weight_quantization_shrinks_the_usable_batch_range():
           for wb in (2.0, 1.0, 0.5)]
     assert all(x is not None for x in cb), cb
     assert cb[0] > cb[1] > cb[2], cb          # 精度越低，交叉点越靠左
-    assert cb[0] / cb[2] > 3.0, cb            # 缩小 3 倍以上
+    # 正文（第 23 篇 §4.1）的两个数字必须**分维度**锁住，否则就是"测试比正文松"：
+    #   只降权重精度 fp16->int4：265 -> 67，约 4.0 倍
+    #   再叠加 KV fp8：        265 -> 52，约 5.1 倍
+    # 原来只锁"> 3 倍"，两个都能过，等于什么也没验证（对抗审稿点名的假对应之一）。
+    assert 3.8 < cb[0] / cb[2] < 4.2, cb                       # 只动权重
+    both = crossover_batch("llama3-70b", "llama3.2-1b", hw, 1024, 4, 3.0, 0.5, 0.5)
+    assert 4.9 < cb[0] / both < 5.3, (cb[0], both)             # 权重 + KV 一起动
 
 
 def test_kv_quantization_also_shrinks_the_range():
@@ -265,3 +271,100 @@ def test_attention_flops_include_layer_count():
     expect = (2 * m["P"] + attn) / hw["peak"]
     assert abs(r["t_cmp"] - expect) < 1e-15, (r["t_cmp"], expect)
     assert attn / (2 * m["P"]) > 0.5, "长上下文下 attention 项应当已经可观"
+
+# ------------------------------------------------ 渐近线定理的前提（对抗审稿补）
+
+def _limit(seqlen, batch=10 ** 6):
+    """batch 极大时的极限加速比。batch 取 1e6 已足够收敛（见下一条测试）。"""
+    return spec_throughput("llama3-70b", "llama3.2-1b", scale(H100, 8),
+                           batch, seqlen, 4, 3.0)["speedup"]
+
+
+def test_batch_cancels_out_at_large_batch():
+    """**batch→∞ 时 batch 会被约掉**：访存项与算力项都正比于 batch。
+
+    所以"极限加速比"是一个只依赖 seqlen 的常数，不是 0。
+    这条是下面两条的前提，也是第 18 篇 §4 原推导漏掉的那一步。
+    """
+    for seqlen in (1024, 4096, 16384):
+        a, b = _limit(seqlen, 10 ** 5), _limit(seqlen, 10 ** 6)
+        assert abs(a - b) / b < 0.01, (seqlen, a, b)
+
+
+def test_asymptote_formula_holds_only_when_baseline_is_compute_bound():
+    """**E[tau]/(gamma+1)*(1-s) 这条渐近线只在基线也 compute-bound 时成立。**
+
+    第 18 篇 §4 初稿把它当成了普适结论。实际上它要求 seqlen 小到让**基线**
+    （n_q=1）也进入 compute 区；本配置下临界 seqlen 约 1499。
+    """
+    hw = scale(H100, 8)
+    ideal = 3.0 / 5                       # E[tau]/(gamma+1)
+    # seqlen=1024 < 1499：基线也 compute-bound -> 渐近线成立
+    r = spec_throughput("llama3-70b", "llama3.2-1b", hw, 10 ** 6, 1024, 4, 3.0)
+    assert r["base_bound"] == "compute"
+    assert abs(r["speedup"] - ideal * (1 - r["t_draft_share"])) < 0.02, r
+    # seqlen=16384：基线是 memory-bound -> 渐近线**不适用**，极限远大于它
+    r2 = spec_throughput("llama3-70b", "llama3.2-1b", hw, 10 ** 6, 16384, 4, 3.0)
+    assert r2["base_bound"] == "memory"
+    assert r2["speedup"] > 2.0 > ideal
+
+
+def test_no_crossover_at_all_above_critical_seqlen():
+    """**seqlen 超过临界值后，batch 再大也不会跌破 1.0 —— 交叉点根本不存在。**
+
+    这直接推翻第 18 篇 §4 推论 1 原来的"交叉点必然出现"。
+    本配置下临界 seqlen 约 2960（见 test_critical_seqlen_is_around_3000）。
+    """
+    assert _limit(4096) > 1.0
+    assert _limit(16384) > 2.0
+    assert _limit(32768) > 2.0
+
+
+def test_crossover_still_exists_at_short_context():
+    """短上下文下交叉点确实存在 —— 原结论在它的适用区间里是对的。"""
+    assert _limit(1024) < 1.0
+    assert _limit(2048) < 1.0
+
+
+def test_critical_seqlen_is_around_3000():
+    """二分定位"极限加速比跨过 1.0"的临界 seqlen，本配置下约 2960。"""
+    lo, hi = 2048, 4096
+    for _ in range(30):
+        mid = (lo + hi) // 2
+        if _limit(mid) < 1.0:
+            lo = mid + 1
+        else:
+            hi = mid
+    assert 2500 < lo < 3500, lo
+
+
+def test_verify_returns_to_memory_bound_at_very_long_context():
+    """seqlen 再大一些，连**验证**都回到 memory 区，极限加速比彻底封在一个常数上。"""
+    hw = scale(H100, 8)
+    r = spec_throughput("llama3-70b", "llama3.2-1b", hw, 10 ** 6, 16384, 4, 3.0)
+    assert r["verify_bound"] == "memory"
+    assert abs(_limit(16384) - _limit(32768)) < 0.01
+
+
+def test_crossover_search_can_be_restricted_to_feasible_batches():
+    """`crossover_batch(require_feasible=True)` 只在**显存装得下**的 batch 里找。
+
+    对抗审稿（2026-08-22）指出：初版 `--quant` 的长上下文六行全打印 ">8192"，
+    而同口径（8×H100=640GB）下最大可行 batch 只有 84–102 —— 扫描区 97.5% 物理不存在。
+    报一个开不起来的 batch，属于口径裸奔。
+    """
+    from speedup import _max_feasible_batch
+    hw = scale(H100, 8)
+    bmax = _max_feasible_batch("llama3-70b", "llama3.2-1b", hw, 16384, 2.0)
+    assert 50 < bmax < 200, bmax
+    # 装得下的最大 batch 确实装得下，再大一个就装不下
+    assert feasible(MODELS["llama3-70b"], hw, bmax, 16384, 2.0, MODELS["llama3.2-1b"])[0]
+    assert not feasible(MODELS["llama3-70b"], hw, bmax + 1, 16384, 2.0, MODELS["llama3.2-1b"])[0]
+    # 可行区间内不翻转
+    assert crossover_batch("llama3-70b", "llama3.2-1b", hw, 16384, 4, 3.0,
+                           2.0, 1.0, require_feasible=True) is None
+    # 短上下文下仍能找到交叉点（且它是可行的）
+    cb = crossover_batch("llama3-70b", "llama3.2-1b", hw, 1024, 4, 3.0,
+                         2.0, 1.0, require_feasible=True)
+    assert cb is not None and feasible(MODELS["llama3-70b"], hw, cb, 1024,
+                                       2.0, MODELS["llama3.2-1b"])[0]

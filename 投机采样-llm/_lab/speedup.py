@@ -212,9 +212,36 @@ def tokens_to_saturate(model: dict, hw: dict, batch: int, seqlen: int,
     return mem / per_token
 
 
+def _max_feasible_batch(target, draft, hw, seqlen, wbytes=2.0, bmax=8192) -> int:
+    """显存装得下的最大 batch（二分）。给报表用，免得报出物理上开不起来的 batch。"""
+    lo, hi = 1, bmax
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if feasible(MODELS[target], hw, mid, seqlen, wbytes, MODELS[draft])[0]:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
 def crossover_batch(target, draft, hw, seqlen, gamma, accept_len,
-                    wbytes=2.0, kv_scale=1.0, bmax=8192) -> int | None:
-    """二分找加速比跌破 1.0 的最小 batch（找不到返回 None）。"""
+                    wbytes=2.0, kv_scale=1.0, bmax=8192,
+                    require_feasible: bool = False) -> int | None:
+    """二分找加速比跌破 1.0 的最小 batch（找不到返回 None）。
+
+    require_feasible=True 时，只在**显存装得下**的 batch 范围内找 —— 否则会报出
+    物理上根本开不起来的 batch。初版没有这个开关，于是 `--quant` 的长上下文行
+    全部打印 ">8192"，而同口径下最大可行 batch 只有一两百（2026-08-22 对抗审稿指出）。
+    """
+    if require_feasible:
+        lo_f, hi_f = 1, bmax
+        while lo_f < hi_f:
+            mid = (lo_f + hi_f + 1) // 2
+            if feasible(MODELS[target], hw, mid, seqlen, wbytes, MODELS[draft])[0]:
+                lo_f = mid
+            else:
+                hi_f = mid - 1
+        bmax = lo_f
     lo, hi = 1, bmax
     if spec_throughput(target, draft, hw, hi, seqlen, gamma, accept_len,
                        wbytes, kv_scale)["speedup"] >= 1.0:
@@ -274,10 +301,16 @@ def _quant():
         for kvname, kvs in (("fp16", 1.0), ("fp8", 0.5)):
             for seqlen in (1024, 16384):
                 r1 = spec_throughput("llama3-70b", "llama3.2-1b", hw, 1, seqlen, 4, 3.0, wb, kvs)
-                cb = crossover_batch("llama3-70b", "llama3.2-1b", hw, seqlen, 4, 3.0, wb, kvs)
+                # 只在**显存装得下**的 batch 范围内找交叉点 —— 否则会报出物理上开不起来的 batch。
+                # 初版没做这件事，长上下文六行全打印 ">8192"，而同口径最大可行 batch 只有一两百
+                # （2026-08-22 对抗审稿指出的口径裸奔）。
+                cb = crossover_batch("llama3-70b", "llama3.2-1b", hw, seqlen, 4, 3.0, wb, kvs,
+                                     require_feasible=True)
+                bmax = crossover_batch.__globals__["_max_feasible_batch"](
+                    "llama3-70b", "llama3.2-1b", hw, seqlen, wb)
+                tag = str(cb) if cb else "无（可行区间内不翻转，最大可行 batch=%d）" % bmax
                 print("%-14s %-9s %-13d %-13.1f %-11.3f %-14s"
-                      % (wname, kvname, seqlen, r1["base_tps"], r1["speedup"],
-                         str(cb) if cb else ">8192"))
+                      % (wname, kvname, seqlen, r1["base_tps"], r1["speedup"], tag))
     print()
     print("读法（三条，第一条与「量化和投机可以叠加」的直觉相反）：")
     print("  1) **权重量化会缩小投机采样的可用区间**：seqlen=1024 下，fp16 的交叉点在 batch 三百多，")

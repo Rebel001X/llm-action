@@ -97,6 +97,75 @@ def test_qps_counts_as_load_caliber():
     assert "QPS" in verify.BATCH_TOKENS
 
 
+# ---- 铁律二的表格豁免：一个数字的主语在**它那一列的表头**里 --------------------
+#
+# 起因：第 21 篇 §6.3「等收益线」那张表，第三列整列是"草稿成本 $c$ 相对基准的倍数"，
+# 主语是成本不是速度，但表格行本身只剩 `| 0.80 | 0.0442 | **2.21×** | 8 | 3.1989 |`，
+# 按行看不出主语。豁免的判据与护栏见 verify.py 里 NON_SPEED_LEFT 上方的注释。
+
+COST_TABLE = [
+    "### 6.3 等收益线",
+    "",
+    "| 目标 $\\alpha$ | 允许的最大 $c$ | 相对基准的**成本倍数** | 该点的 $\\gamma$ | 达成的加速比 |",
+    "|---|---|---|---|---|",
+    "| 0.80 | 0.0442 | **2.21×** | 8 | 3.1989 |",
+    "| 0.85 | 0.0752 | **3.76×** | 8 | 3.1989 |",
+]
+
+SPEED_TABLE = [
+    "### 某篇 §1 实测表",
+    "",
+    "| 方法 | 加速比 |",
+    "|---|---|",
+    "| EAGLE-3 | **2.83×** |",
+    "| DFlash | 1.6× |",
+]
+
+# 列头点名了非速度主语，**但同一行出现了速度词** —— 行级护栏优先，不许豁免。
+MIXED_TABLE = [
+    "### 某篇 §2 混合表",
+    "",
+    "| 方法 | 相对基准的成本倍数 | 端到端加速 |",
+    "|---|---|---|",
+    "| A | **2.21×** | 快 |",
+]
+
+
+def _row_flagged(lines: list, idx: int) -> bool:
+    hdr = verify.table_header_cells(lines, idx)
+    return bool(verify.speedup_matches(
+        verify.strip_for_rules(lines[idx]), hdr, lines[idx]))
+
+
+@pytest.mark.parametrize("idx", [4, 5])
+def test_cost_multiple_column_is_exempt(idx):
+    """列头写明是"成本倍数"，整列主语不是速度 -> 豁免。"""
+    assert not _row_flagged(COST_TABLE, idx), COST_TABLE[idx]
+
+
+@pytest.mark.parametrize("idx", [4, 5])
+def test_speedup_column_is_still_flagged(idx):
+    """列头就叫"加速比"，表头里的速度词让豁免失效 -> 必须仍被抓。"""
+    assert _row_flagged(SPEED_TABLE, idx), SPEED_TABLE[idx]
+
+
+def test_speed_word_in_row_defeats_column_exemption():
+    """同一行只要出现速度词，列头的非速度主语也救不了它。"""
+    assert _row_flagged(MIXED_TABLE, 4)
+
+
+def test_table_header_lookup_stops_at_blank_line():
+    """向上找表头时遇到空行/标题就放弃，不会张冠李戴上一张表的表头。"""
+    lines = ["| a | b |", "|---|---|", "| 1 | 2 |", "", "散文行 加速 3.2×。"]
+    assert verify.table_header_cells(lines, 4) == []
+
+
+def test_strip_for_rules_preserves_offsets():
+    """列号是按原始行里的 `|` 数出来的，所以 strip 必须**等长**。"""
+    raw = "| [[04-拒绝采样修正-无损性的完整证明]] | `code` | 2.21× |"
+    assert len(verify.strip_for_rules(raw)) == len(raw)
+
+
 # ---- 全库现状：这两条铁律必须保持 0 -------------------------------------------
 
 def test_repo_has_no_rule_warnings():

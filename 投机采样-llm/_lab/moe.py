@@ -12,7 +12,10 @@ Red Hat 2026-04 报告 gpt-oss-120b（MoE + MXFP4）+ EAGLE3 在**并发 200** �
         E[激活专家数] = E * (1 - (1 - k/E)^N)
     N 小时线性涨，N 大时贴住 E 不动。
   - 每个 token 的算力只走 k 个专家，与 E 无关：
-        FLOPs/token = 2 * (P_dense + k * P_expert)
+        FLOPs/token = 2 * (P_dense + k * P_expert) + 4 * L * seqlen * attn_dim
+    ⚠ attention 项要用 **n_heads x head_dim**，不是 d_model。稠密 Llama 系两者恰好相等，
+      但 MoE 上不等（gpt-oss 4096 vs 2880；DeepSeek-MLA 20480 vs 7168），
+      用 d_model 会**低估算力 1.4~2.9 倍**，方向是让投机看起来更好。2026-08-22 对抗审稿查出并修正。
 
 于是投机采样把 token 数乘上 (gamma+1) 这件事，在 MoE 上有**两个相反的后果**：
 
@@ -49,6 +52,7 @@ MOE_MODELS = {
     #   于是高估了访存 -> 让它看起来更 memory-bound -> 对投机偏乐观。
     "gpt-oss-120b": dict(P_total=117e9, P_dense=1.49e9, n_experts=128, top_k=4,
                          layers=36, d_model=2880, kv_per_tok=2 * 36 * 512 * 2,
+                         attn_dim=64 * 64,          # 64 头 x head_dim 64 = 4096 != d_model
                          P_active=5.1e9),
     # 61 层 / hidden 7168 / 256 路由专家 top-8（另有 1 个常开共享专家，计入 P_dense）
     # ⚠ MLA：KV cache 存的是**一个联合压缩潜向量**，不是分开的 K 和 V。
@@ -58,6 +62,9 @@ MOE_MODELS = {
     # P_dense 由官方 37B 激活反解：P_dense + 8*(671-P_dense)/256 = 37 -> P_dense ≈ 17.0e9
     "deepseek-v3": dict(P_total=671e9, P_dense=17.0e9, n_experts=256, top_k=8,
                         layers=61, d_model=7168, kv_per_tok=61 * 576 * 2,
+                        # MLA：QK 每头 qk_nope(128)+qk_rope(64)=192，PV 每头 v_head_dim=128，共 128 头
+                        # 4*attn_dim = 2*(128*192) + 2*(128*128) -> attn_dim = 20480
+                        attn_dim=20480,
                         P_active=37e9),
 }
 
@@ -106,7 +113,7 @@ def fwd_time_moe(m: dict, hw: dict, batch: int, seqlen: int, q_per_seq: int,
     mem = (weight_bytes(m, n_q, bytes_per_param)
            + batch * seqlen * m["kv_per_tok"] * kv_scale)
     # 算力：每 token 只过 active_params，外加 attention 项（要乘层数，见 speedup.py 的勘误）
-    flops = n_q * (2 * active_params(m) + 4 * m["layers"] * seqlen * m["d_model"])
+    flops = n_q * (2 * active_params(m) + 4 * m["layers"] * seqlen * m["attn_dim"])
     t_mem, t_cmp = mem / hw["bw"], flops / hw["peak"]
     return dict(t=max(t_mem, t_cmp), t_mem=t_mem, t_cmp=t_cmp,
                 bound="memory" if t_mem >= t_cmp else "compute",
@@ -121,7 +128,7 @@ def tokens_to_saturate_moe(m: dict, hw: dict, batch: int, seqlen: int,
     注意这是个**不动点**问题：塞的 token 越多，激活的专家越多，访存也越多，
     额度本身会往上抬。这里用迭代求不动点（单调有界，几步就收敛）。
     """
-    per_token = (2 * active_params(m) + 4 * m["layers"] * seqlen * m["d_model"]) / hw["peak"]
+    per_token = (2 * active_params(m) + 4 * m["layers"] * seqlen * m["attn_dim"]) / hw["peak"]
     n = float(batch)
     for _ in range(60):
         mem = (weight_bytes(m, n, bytes_per_param)

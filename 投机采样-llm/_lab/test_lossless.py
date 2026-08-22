@@ -190,3 +190,32 @@ def test_chunk_length_bounds():
         for _ in range(2000):
             c = speculative_step(tgt, drf, 0, gamma, rng)
             assert 1 <= len(c) <= gamma + 1
+
+
+def test_residual_fallback_is_live_and_correct():
+    """`residual_dist` 的兜底分支：初稿 docstring 的三句话全错，这条测真相。
+
+    初稿说"p==q 时残差永远用不到，并在测试里断言这条路不会被走到"——
+      ① 引的 `test_spec.py` 不存在（在本文件）；
+      ② "永远用不到"不对；
+      ③ 从来没有那样的测试。
+    但对抗审稿给的反面说法（"一定会被走到"）**也不完全对**。实测 1000 组
+    (seed, state) 上 `1-beta(p,p)` 的符号：**正 236 / 负 109 / 恰好 0 655**。
+    也就是说：它是**浮点噪声，符号两边都可能**，恰好为 0 的只占三分之二。
+    正 -> 拒绝分支被走到、用上兜底；负或 0 -> 跳过。**两种情况结果都对。**
+    """
+    import numpy as np
+    signs = {"pos": 0, "neg": 0, "zero": 0}
+    for seed in range(200):
+        m = ToyMarkov(5, seed=seed)
+        for st in range(5):
+            r = 1.0 - beta_overlap(m.dist(st), m.dist(st))
+            signs["pos" if r > 0 else ("neg" if r < 0 else "zero")] += 1
+    assert signs["pos"] > 100, signs        # 确实有"会被走到"的情形
+    assert signs["zero"] > 100, signs       # 也确实有"用不到"的情形
+    # 兜底返回的是合法分布
+    tgt = ToyMarkov(5, seed=0, temp=1.0)
+    r = residual_dist(tgt.dist(0), tgt.dist(0))
+    assert abs(r.sum() - 1.0) < 1e-12 and r.min() >= 0
+    # 无论走哪条分支，端到端分布仍精确等于 p
+    assert max_pointwise_error(tgt, tgt, 0, 3, 3) < EPS

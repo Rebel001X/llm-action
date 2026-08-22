@@ -121,6 +121,8 @@ $$
 | Vicuna-7B 加速比 | **2.18×** | **2.83×** |
 | **口径代价（关键）** | 骨干权重**未改** → 骨干分布仍是原模型的 $p$ | 骨干权重**被改了** → 相对**原始模型**已经不是 L1，无论验收判据用什么 |
 
+（**本小节两张表里的 2.18× / 2.83× 口径同 §2.3**：**batch size = 1**（论文："Our experiments primarily focus on scenarios with a batch size of one"）、MT-Bench、5 头 + 64 节点稀疏树、度量是 wall-clock latency 的 speedup、**基线是 HuggingFace 默认实现**；硬件正文未逐字给出。这几项缺一都不能横比，见 §7.3。）
+
 **Medusa-2 的代价必须说清楚，因为它在社区里几乎没人提。** 论文 Table 2（Vicuna-7B，MT-Bench，GPT-4 评分）：
 
 | | Baseline | Direct Fine-tuning | Medusa-1 | Medusa-2 |
@@ -246,7 +248,7 @@ Medusa 的头 0（原 LM head）学 $p_1$，头 1 学 $p_2$ 的**边缘**（它�
 
 > 这条推论值得单独记住：**"Medusa 必须配树"与"Medusa 的头互相独立"是同一件事的两面。** 树在这里买的不是额外收益，是在补一个结构性亏空。这也解释了为什么 EAGLE 系可以用更小的树拿到更高的接受长度（[[13-EAGLE三代-特征级自回归的演进]]）。
 
-**但树不是万能的补丁。** 本库 [[16-树形草稿与树注意力-mask构造与验证]] §5.3 用实测给了边界：**宽度值不值钱，取决于边际覆盖率增益 $c_k-c_1$，而不是"草稿好不好"。** 上面这个例子里 $c_2-c_1=+0.5$，宽度买得到东西；而当草稿是**整体跑偏**（$c_2=c_1$）时，无论预算多大链都不输（`_lab/test_tree.py::test_width_is_worthless_without_marginal_coverage`）。多模态碰撞属于前者，能被宽度救；drafter 与 target 脱节属于后者，宽度救不了。
+**但树不是万能的补丁。** 本库 [[16-树形草稿与树注意力-mask构造与验证]] §5.3 用实测给了边界：**宽度值不值钱，取决于边际覆盖率增益 $c_k-c_1$，而不是"草稿好不好"。** 上面这个例子里 $c_2-c_1=+0.5$，宽度买得到东西；而当草稿是**整体跑偏**（$c_2=c_1$）时，无论预算多大链都不输（`_lab/test_tree.py::test_budget_needed_grows_as_the_gain_shrinks`）。多模态碰撞属于前者，能被宽度救；drafter 与 target 脱节属于后者，宽度救不了。
 
 ---
 
@@ -270,7 +272,7 @@ test_raising_threshold_makes_bias_worse_not_better # 阈值 0.05→0.20→0.50�
 ```python
 # _lab/test_tree.py
 test_tree_attention_equals_per_chain               # 4 种树形状，最大逐元素误差 4.441e-16
-test_width_is_worthless_without_marginal_coverage  # 边际覆盖增益为 0 时，任何预算下链都不输
+test_budget_needed_grows_as_the_gain_shrinks  # 边际覆盖增益**极小**时，现实预算内链都不输 （2026-08-22 更正：初稿的「增益为 0」是显示精度假象，真实约 $10^{-5}$；$c_k>c_1$ 恒成立，判据是「增益多大 vs 预算多大」）
 ```
 
 **(c) 更轻的草稿把保本线压下去**（§2.3、§4）
@@ -322,7 +324,7 @@ flowchart TD
 
 ### 7.3 基线是 HuggingFace 默认实现
 
-论文 §3.1 逐字："The baseline is the **default** Huggingface implementation."。这意味着 2.18× / 2.83× 的分母是一个**未经引擎优化**的实现。换成 vLLM / TensorRT-LLM 这类分母，overhead 的相对占比会变大、加速比会缩水。**这不是论文的错**（它写清楚了），但它决定了这些倍数不能直接搬到生产语境里读（[[20-主流引擎实现-vLLM与SGLang与TensorRTLLM]]）。
+论文 §3.1 逐字："The baseline is the **default** Huggingface implementation."。这意味着 2.18× / 2.83×（口径同 §2.3：**batch size = 1**、MT-Bench、单卡、wall-clock latency）的分母是一个**未经引擎优化**的实现。换成 vLLM / TensorRT-LLM 这类分母，overhead 的相对占比会变大、加速比会缩水。**这不是论文的错**（它写清楚了），但它决定了这些倍数不能直接搬到生产语境里读（[[20-主流引擎实现-vLLM与SGLang与TensorRTLLM]]）。
 
 ### 7.4 "五个头就够了"是一条被低估的自陈上界
 
@@ -481,7 +483,8 @@ $$
 - `_lab/test_caliber.py::test_zero_threshold_reproduces_draft_distribution` —— 阈值取 0 时输出分布就是草稿分布（误差 $<10^{-12}$），给出 §3.5 那条"偏差上界 = 你其实在用草稿模型"的量化。
 - `_lab/test_caliber.py::test_raising_threshold_makes_bias_worse_not_better` —— **验证 §3.5 与自测题 2 的反直觉结论**：阈值 0.05→0.20→0.50，偏差单调变大，因为补偿路径与判据不匹配。
 - `_lab/test_tree.py::test_tree_attention_equals_per_chain` —— 树拍平一次前向 == 每条根到叶路径各跑一次，四种树形状误差 $<10^{-12}$（支撑 §3.3 "本篇不重复机制"的那个指路）。
-- `_lab/test_tree.py::test_width_is_worthless_without_marginal_coverage` —— **验证 §5.2 末尾那条边界**：边际覆盖率增益为 0 时，任何预算下加宽度都买不到东西 —— 树能救"多模态碰撞"，救不了"整体跑偏"。
+- `_lab/test_tree.py::test_budget_needed_grows_as_the_gain_shrinks` —— **验证 §5.2 末尾那条边界**：边际覆盖率增益**极小**时，加宽要到 $2^{31}$ 量级预算才兑现得了 —— 树能救"多模态碰撞"，救不了"整体跑偏"。
+  （**2026-08-22 更正**：初稿说的"增益为 0"其实是显示精度造成的假象，真实增益约 $10^{-5}$；$c_k>c_1$ 恒成立，正确判据是"增益多大 vs 预算多大"。详见第 16 篇 §5.3 与其勘误。）
 - `_lab/test_speedup.py::test_lighter_draft_lowers_breakeven` —— **验证 §2.3 与 §4 的动机**：同一目标模型（llama3-70b，4×H100，batch 8，seqlen 1024，$\gamma=4$），把独立小模型草稿换成轻量草稿头，保本接受长度从 **1.0764** 降到 **1.0343**。
 - 可复跑：
   - `cd _lab && python -m pytest -q test_caliber.py test_tree.py test_speedup.py` —— 本次实跑，上述 6 条（`test_tree_attention_equals_per_chain` 含 4 组参数，共 9 个用例）全绿

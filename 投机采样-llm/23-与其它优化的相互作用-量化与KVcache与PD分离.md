@@ -79,7 +79,7 @@ graph LR
 三条读法：
 
 1. **bs=1 的加速比几乎不变（2.795–2.802）。** 只看小 batch 的基准测试，会得出"量化和投机完全兼容"的结论 —— 这正是这个坑难被发现的原因。
-2. **可用 batch 区间从 265 塌到 52，缩小 5.1 倍。** 权重量化砍掉访存，前向更早进 compute 区，"验证免费"更早失效（`_lab/test_speedup.py::test_weight_quantization_shrinks_the_usable_batch_range`）。
+2. **可用 batch 区间大幅缩小，但要分清是哪一维在起作用**（这句初稿说得含混，2026-08-22 经对抗审稿改准）：**只降权重精度** fp16→int4，交叉点 265→67，缩小 **4.0 倍**；**再叠加 KV fp8**，进一步到 52，合计 **5.1 倍**。机制都是砍掉访存、让前向更早进 compute 区，于是"验证免费"更早失效（`_lab/test_speedup.py::test_weight_quantization_shrinks_the_usable_batch_range` 现已把两个维度**分别**锁住 —— 原来只锁">3 倍"，两个数都能过，等于没验证）。
 3. **但量化让基线本身快了 4 倍**（189.4 → 755.6 tok/s）。
 
 第 3 条决定了正确的比较方式：
@@ -201,9 +201,9 @@ batch=1、$\gamma=4$ 时，基线只激活 4.0 个专家，投机的 5 个 token
 | 模型 | 权重精度 | batch=1 | batch=64 | batch=200 |
 |---|---|---|---|---|
 | llama3-70b（稠密） | fp16 | 291 | 334 | 428 |
-| gpt-oss-120b | MXFP4≈4.25bit | **1 726** | **1 858** | **2 144** |
-| gpt-oss-120b | fp16 | 6 508 | 6 640 | 6 926 |
-| deepseek-v3 | fp8 | 2 585 | 2 603 | 2 641 |
+| gpt-oss-120b | MXFP4≈4.25bit | **1 697** | **1 828** | **2 108** |
+| gpt-oss-120b | fp16 | 6 400 | 6 530 | 6 811 |
+| deepseek-v3 | fp8 | 2 478 | 2 495 | 2 531 |
 
 > **规格勘误（2026-08-22）**：DeepSeek-V3 那一行初稿把 KV 按「分开的 K 和 V」算成 $2\times61\times512\times2$ 字节，但它用的是 **MLA —— KV cache 存的是一个联合压缩潜向量**，每层每 token 只有 `kv_lora_rank(512) + qk_rope_head_dim(64) = 576` 个元素，正确值是 $61\times576\times2=70\,272$ 字节（原值比正确值高出约 78%）；同时 $P_{\text{dense}}$ 由 13.0B 改为 17.0B —— 旧值反推出的激活参数量只有 33.6B，与官方公布的 37B 对不上。两处都已核 `config.json` 修正，表中为修正后的值。
 >
@@ -218,14 +218,14 @@ batch=1、$\gamma=4$ 时，基线只激活 4.0 个专家，投机的 5 个 token
 | batch | 1 | 8 | 32 | 128 | 200 | 512 | 1024 | 2048 |
 |---|---|---|---|---|---|---|---|---|
 | 访存比（投机/基线） | 3.546 | 3.003 | 1.515 | 1.015 | 1.001 | 1.000 | 1.000 | 1.000 |
-| 加速比 | **0.804** ⚠ | **0.949** ⚠ | 1.881 | 2.808 | **2.846** | 2.850 | 2.156 | 1.676 |
+| 加速比 | **0.804** ⚠ | **0.949** ⚠ | 1.881 | 2.808 | **2.846** | 2.850 | 2.120 | 1.648 |
 
 > **MoE 上小 batch 是投机解码最不划算的区间，与稠密模型恰好相反**（稠密的最优就在 batch=1，见 [[18-batch与吞吐-收益衰减曲线]]）。
-> 而在稠密 70B 早已跌破 1.0 的 batch=1024 上，MoE 仍有 2.16×（`_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense`、`::test_moe_outlasts_dense_by_an_order_of_magnitude`）。
+> 而在稠密 70B 早已跌破 1.0 的 batch=1024 上，MoE 仍有 2.12×（`_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense`、`::test_moe_still_profitable_where_dense_already_lost`）。
 
 #### 这解释了那个反例
 
-本库调研记录到 Red Hat 于 2026-04 报告 gpt-oss-120b（MoE + MXFP4）+ EAGLE3 在**并发 200** 时仍有约 +20% 吞吐 —— 此前本库只能把它当成"未建模的例外"标着。现在机制清楚了：并发 200 时专家已经激活满（127.8/128），访存比回到 1.001，而 $N_{\text{free}}\approx2\,144$ 远大于 $200\times5=1\,000$，**验证仍在 memory 区，仍然免费**（`_lab/test_moe.py::test_moe_still_profitable_at_concurrency_200`）。
+本库调研记录到 Red Hat 于 2026-04 报告 gpt-oss-120b（MoE + MXFP4）+ EAGLE3 在**并发 200** 时仍有约 +20% 吞吐 —— 此前本库只能把它当成"未建模的例外"标着。现在机制清楚了：并发 200 时专家已经激活满（127.8/128），访存比回到 1.001，而 $N_{\text{free}}\approx2\,108$ 远大于 $200\times5=1\,000$，**验证仍在 memory 区，仍然免费**（`_lab/test_moe.py::test_moe_still_profitable_at_concurrency_200`）。
 
 模型给出 2.85× 而报告是 +20%，差距很大 —— 因为本模型忽略了路由开销、专家并行的 all-to-all 通信、以及真实 $E[\tau]$ 低于 3.0。**方向一致、量级不可直接比**，引用时要说清这一点。
 
@@ -235,7 +235,7 @@ batch=1、$\gamma=4$ 时，基线只激活 4.0 个专家，投机的 5 个 token
 
 | | 与投机采样的关系 | 机制 | 该怎么办 |
 |---|---|---|---|
-| 权重量化 (fp8/int4) | **强竞争** | 砍访存 → 可用 batch 区间缩小 5.1 倍 | 比绝对吞吐，不比加速比 |
+| 权重量化 (fp8/int4) | **强竞争** | 砍访存 → 可用 batch 区间缩小 4.0 倍（叠加 KV fp8 共 5.1 倍） | 比绝对吞吐，不比加速比 |
 | KV 量化 / GQA / MLA | **竞争**（长上下文下更强） | 砍 KV 流量 | 引用长上下文结论时核对 KV 结构 |
 | 加大 batch | **强竞争** | 占用涨得比额度快 | 按 batch 动态开关 |
 | chunked prefill | **强竞争** | 直接抢同一份额度 | chunk 大小、batch、γ 一起定 |
@@ -279,7 +279,7 @@ def crossover_batch(target, draft, hw, seqlen, gamma, accept_len, wbytes=2.0, kv
 
 本篇结论在下列情况下不适用：
 
-1. **MoE 的路由开销与专家并行通信**：§4.7 的模型只算了权重访存与算力主项，未计路由 gating、all-to-all 通信、专家负载不均。这些都让真实收益低于模型值（模型给 2.85× 而公开报告是 +20%）。
+1. **MoE 的路由开销与专家并行通信**：§4.7 的模型只算了权重访存与算力主项，未计路由 gating、all-to-all 通信、专家负载不均。这些都让真实收益低于模型值（模型给 2.85× 而公开报告是 +20%）。**这两个数的口径**：模型那格是 §4.7 的 gpt-oss-120b、8×H100 TP=8、seqlen=1024、$\gamma=4$、$E[\tau]=3.0$、草稿开销占迭代 5%，**batch = 200 时 2.846、batch = 512 时 2.850**；Red Hat 那个 +20% 是 **并发 200** 下的实测吞吐。**同一个并发点上模型高估了一倍以上**，这正是本条失效条件要说的事。
 2. **硬件的带宽/算力比大幅变化时**：屋脊点 $\text{peak}/\text{BW}$ 是所有结论的基准。若某代硬件带宽增长快于算力，屋脊点左移，memory-bound 区变大，投机采样的可用区间会重新变宽 —— 本篇的所有交叉点都要重算。
 3. **优化目标是延迟而非吞吐时**：本篇（与第 18 篇）的交叉点按吞吐定义。按 P99 TPOT 定义时结论可能不同。
 4. **草稿侧结构特殊时**：本篇假设草稿是一个小的稠密模型。若草稿是单层草稿头（EAGLE 类），其访存与算力占比都很小，§4.3 的额度占用只由 $\gamma+1$ 决定，草稿侧的开销可忽略 —— 结论方向不变但数值不同。
@@ -333,7 +333,7 @@ def crossover_batch(target, draft, hw, seqlen, gamma, accept_len, wbytes=2.0, kv
 - `_lab/test_moe.py::test_penalty_vanishes_at_moderate_batch` —— 后果一的边界：batch=200 时访存比回到 1。
 - `_lab/test_moe.py::test_moe_free_budget_far_exceeds_dense` —— 后果二：MoE 免费额度是同量级稠密的 5 倍以上。
 - `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense` —— 后果三：MoE 的最优 batch 不在 1，与稠密相反。
-- `_lab/test_moe.py::test_moe_outlasts_dense_by_an_order_of_magnitude` —— batch=1024 时稠密已亏而 MoE 仍赚。
+- `_lab/test_moe.py::test_moe_still_profitable_where_dense_already_lost` —— batch=1024 时稠密已亏而 MoE 仍赚。
 - `_lab/test_moe.py::test_moe_still_profitable_at_concurrency_200` —— 解释 Red Hat 那个反例的机制。
 - `_lab/test_moe.py::test_expert_decomposition_is_self_consistent` —— MoE 规格自洽（稠密部分 + top_k 专家 = 官方激活参数量）。
 - `_lab/test_speedup.py::test_long_context_still_no_crossover_even_quantized` —— 长上下文下即使 int4+fp8 KV，扫到 batch 8192 仍未见交叉点。

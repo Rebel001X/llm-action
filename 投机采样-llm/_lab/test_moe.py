@@ -89,10 +89,37 @@ def test_moe_sweet_spot_is_mid_batch_unlike_dense():
     assert max(d, key=d.get) == 1, d
 
 
-def test_moe_outlasts_dense_by_an_order_of_magnitude():
-    """MoE 在稠密模型早已翻转的 batch 上仍然盈利。"""
+def test_moe_still_profitable_where_dense_already_lost():
+    """MoE 在稠密模型早已翻转的 batch 上仍然盈利。
+
+    原名 test_moe_outlasts_dense_by_an_order_of_magnitude 被对抗审稿点名"名不副实"：
+    函数名说"差一个数量级"，断言却只锁了"一个 <1 一个 >1"。改名并把倍数也锁上。
+    """
     hw = scale(H100, 8)
     from speedup import spec_throughput
     dense_1024 = spec_throughput("llama3-70b", "llama3.2-1b", hw, 1024, 1024, 4, 3.0)["speedup"]
     moe_1024 = moe_spec_speedup("gpt-oss-120b", hw, 1024, 1024, 4, 3.0, 0.53)["speedup"]
     assert dense_1024 < 1.0 < moe_1024, (dense_1024, moe_1024)
+    assert moe_1024 / dense_1024 > 3.5, (dense_1024, moe_1024)
+
+
+def test_attention_flops_use_head_dim_not_d_model():
+    """回归：attention 浮点数必须用 **n_heads × head_dim**，不是 d_model。
+
+    稠密 Llama 系两者恰好相等（64×128=8192=d_model），所以 speedup.py 用 d_model 没错；
+    但 MoE 上不等 —— gpt-oss 是 4096 vs 2880、DeepSeek-MLA 是 20480 vs 7168，
+    用 d_model 会**低估算力** 1.42×／2.86×，方向是让投机看起来更好。
+    这条由 2026-08-22 的对抗审稿查出，与此前"漏乘层数 L"是同一类错误的另一个维度。
+    """
+    for name, m in MOE_MODELS.items():
+        assert m["attn_dim"] != m["d_model"], name       # MoE 上二者本就不该相等
+        assert m["attn_dim"] > 0
+    g = MOE_MODELS["gpt-oss-120b"]
+    assert g["attn_dim"] == 64 * 64
+    assert g["attn_dim"] / g["d_model"] == pytest.approx(4096 / 2880, rel=1e-9)
+    # 算力项确实用了 attn_dim
+    hw = scale(H100, 8)
+    s_long = 32768
+    r = fwd_time_moe(g, hw, 1, s_long, 1, 0.53)
+    expect = (2 * active_params(g) + 4 * g["layers"] * s_long * g["attn_dim"]) / hw["peak"]
+    assert r["t_cmp"] == pytest.approx(expect, rel=1e-12)

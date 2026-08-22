@@ -24,13 +24,17 @@ verify.py —— 全库自检：把五条铁律变成可执行的检查，而不
      它豁免的是哪一类句子、以及为什么那类句子不适用该铁律。反例测试见
      `_lab/test_verify_rules.py`（正例必须仍被抓，对照组必须被豁免）。
 
-已知的**假阴性**（2026-08-22 发现，尚未修，改动面太大需单独一轮）：
-  SPEEDUP_PAT 里的 `[×xX]\b` 对 `×` 这个符号要求右邻是词字符，
+2026-08-22 **已修**的一个假阴性（留档，因为它是本库最贵的一课）：
+  SPEEDUP_PAT 原来写作 `[×xX]\b`，对 `×` 这个符号要求右邻是词字符，
   于是 `加速 3.2×，` `1.9×（最差）` `2.4× vs` 这类**× 后面跟标点或空格**的写法
-  一律漏检 —— 而这正是本库表格里最常见的写法。把 `\b` 去掉（改成 `(?:×|[xX]\b|倍…)`）
-  实测会新增 63 处 WARN（多数是表格行，口径写在几行之外的表注里，属于窗口太窄而非真裸奔）。
-  **要动这一条，必须连同"batch 口径的上下文窗口按小节而不是按 ±6 行取"一起改，
-  并逐条复核那 63 处**，不能只把正则放宽了事。
+  一律漏检 —— 而那正是本库表格里最常见的写法（全库 894 处 `N.N×` 只命中 1 处，漏 99.9%）。
+  修法是三件事一起做，缺一不可：
+    ① 去掉 `\b`（乘号形态改由 MULT_NOT_TIMES 单独兜）；
+    ② 口径窗口从固定 ±6 行改成**所在小节**（口径常写在小节开头或表注里）；
+    ③ 逐条复核修完后暴出的 27 处，A 类补口径 / B 类加豁免 / C 类留 WARN（见 _meta/建库审计.md）。
+  **教训**：在这之前 `test_repo_has_no_rule_warnings` 一直是绿的 —— 它守的是一个
+  **本身就漏检的检查器**。"全绿"只能证明检查器没报警，不能证明库是干净的；
+  所以本文件的每条豁免都必须在 test_verify_rules.py 里同时钉住"正例仍被抓"。
 """
 from __future__ import annotations
 
@@ -67,7 +71,11 @@ MENTION_PAT = re.compile(r"[\"“”「『]无损性?[\"“”」』]")
 MENTION_VERB = re.compile(r"讲成|说成|措辞|到底|这个词|叫做|称为|写成|读成")
 
 # --- 铁律二：加速比 ----------------------------------------------------------
-SPEEDUP_PAT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s*(?:[×xX]\b|倍(?!数|率))")
+# 2026-08-22 修一个**假阴性**（对抗审稿实测）：原来是 `[×xX]\b`，要求 × 右邻是词字符，
+# 于是 `加速 3.2×，`、`1.9×（最差）`、`2.4× vs` 这类 **× 后跟标点或空格**的写法全部漏检 ——
+# 而那正是本库表格里最常见的写法（全库 894 处 `N.N×` 只命中 1 处，漏 99.9%）。
+# 现在不再要求右邻是词字符；乘号形态（4×A100、8×7B）由 MULT_NOT_TIMES 单独兜住。
+SPEEDUP_PAT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s*(?:[×xX]|倍(?!数|率))")
 # QPS 与"并发"是同一件事的两种写法：给了 QPS 的来源（如 vLLM 官方博客）
 # 就是给了负载口径，不算裸奔。
 BATCH_TOKENS = ("batch", "bs=", "BS=", "批大小", "并发", "bs ", "Batch", "QPS", "qps")
@@ -77,7 +85,9 @@ BATCH_TOKENS = ("batch", "bs=", "BS=", "批大小", "并发", "bs ", "Batch", "Q
 #
 # (a) `N×M` 里的 × 是**乘号**不是"倍"：4×A100（卡数）、Mixtral 8×7B（专家数×规模）、
 #     41×8 命中矩阵（矩阵尺寸）。判据：× 右边紧跟数字或型号（大写字母开头）。
-#     真加速比的 × 右边是标点或中文（"1.5×，"、"2.8x 的"），不会被误伤。
+#     真加速比的右邻不是数字也不是型号（"2.8x 的"、"1.25X"），不会被误伤。
+#     （"1.5×，"这种右邻是标点的，是上面那条**已知假阴性**，SPEEDUP_PAT 根本没匹配到，
+#     轮不到这条豁免。）
 MULT_NOT_TIMES = re.compile(r"[×xX]\s*(?:\d|[A-Z])")
 # (b) 材料代称：按标题里的数字给一份材料起名，如"NVIDIA 3.6x 博客"。
 #     这是在**指代一份材料**，不是本库在报一个加速比（该文的口径评点另有专节）。
@@ -89,6 +99,14 @@ MATERIAL_ALIAS = re.compile(r"[×xX]\s*(?:那篇|这篇)?\s*(?:博客|文章|一
 #     左右两侧用的词表不同，这是必须的：中文里主语在倍数**左边**（"参数量…10 倍"、
 #     "差 2.5 倍"），只有名词能跟在倍数**右边**（"8 倍数据量"）。
 #     若右侧也认"差"，"…那条线 4.6 倍的差距"就会被误豁免（反例测试钉住了这一条）。
+#     2026-08-22 补一条**表格内的主语位置**：在 markdown 表里，一个数字的主语不在同一行的
+#     左边，而在**它那一列的表头**（如「相对基准的**成本倍数**」那一列，整列都是草稿成本 $c$
+#     的倍数，不是速度）。所以 (c) 的左侧线索里额外算上**匹配所在列的表头单元格**。
+#     两条护栏保证它不会放过真违规：
+#       ① 只取**匹配所在那一列**的表头，不取整行表头 —— 否则同表里只要有一列叫"加速比"，
+#          整张表都会被那三个字牵着走（那正好是反过来的错）；
+#       ② 表头单元格里只要出现任何速度类词，就**一律不豁免**（与同行的判定同权），
+#          所以 `| 加速比 | 2.8× |` 这种列头永远抓得到。
 NON_SPEED_LEFT = ("差", "相差", "波动", "乘了", "vs", "参数量", "数据量", "显存",
                   "预算", "成本", "lr", "学习率", "分母", "分子", "字节")
 NON_SPEED_RIGHT = ("参数量", "数据量", "显存", "预算", "学习率", "字节")
@@ -96,6 +114,28 @@ SPEED_WORDS = ("加速", "提速", "吞吐", "throughput", "tok/s", "tokens/s", 
                "TPOT", "TTFT", "延迟", "latency", "speedup", "speed",
                "接受长度", "接受 token", "acceptance", "快", "慢",
                "wall-clock", "walltime", "ms/t")
+
+
+HEADING = re.compile(r"^#{1,6}\s")
+
+
+def section_of(lines: list, idx: int) -> list:
+    """第 idx 行（0-based）所在的小节：上一个 markdown 标题到下一个标题之间。
+
+    铁律二用它当口径窗口 —— 口径声明常写在小节开头（"口径：batch=…"）或表注里，
+    固定 ±N 行会把长表的中后部全判成"裸奔"。按小节取才符合作者的书写习惯。
+    """
+    start = 0
+    for j in range(idx, -1, -1):
+        if HEADING.match(lines[j]):
+            start = j
+            break
+    end = len(lines)
+    for j in range(idx + 1, len(lines)):
+        if HEADING.match(lines[j]):
+            end = j
+            break
+    return lines[start:end]
 
 
 def caliber_exempt_line(raw: str, line: str) -> bool:
@@ -107,8 +147,47 @@ def caliber_exempt_line(raw: str, line: str) -> bool:
     return False
 
 
-def speedup_matches(line: str) -> list:
-    """铁律二：返回本行里**真正算加速比**的倍数（剔除 (a)(b)(c) 三类假阳性）。"""
+TABLE_SEP = re.compile(r"^\s*\|?[\s:|-]*-{2,}[\s:|-]*\|?\s*$")
+
+
+def _split_cells(row: str) -> list:
+    return [c.strip() for c in row.strip().strip("|").split("|")]
+
+
+def table_header_cells(lines: list, idx: int) -> list:
+    """第 idx 行（0-based）若是 markdown 表的**数据行**，返回表头各单元格；否则 []。
+
+    表头 = 分隔行 `|---|---|` 的上一行。向上查找时遇到空行或标题就放弃
+    （说明已经离开这张表），因此不会把上一张表的表头张冠李戴。
+    """
+    if "|" not in lines[idx] or TABLE_SEP.match(lines[idx]):
+        return []
+    for j in range(idx - 1, max(-1, idx - 200), -1):
+        ln = lines[j]
+        if not ln.strip() or HEADING.match(ln):
+            return []
+        if "|" in ln and TABLE_SEP.match(ln):
+            if j - 1 >= 0 and "|" in lines[j - 1]:
+                return _split_cells(lines[j - 1])
+            return []
+    return []
+
+
+def _column_of(line: str, pos: int) -> int:
+    """匹配落在表格的第几列（0-based）。要求 line 与原始行**等长**，
+    这正是 strip_for_rules 用等长空白替换的理由。"""
+    return line[:pos].count("|") - 1
+
+
+def speedup_matches(line: str, headers: list | None = None,
+                    raw: str | None = None) -> list:
+    """铁律二：返回本行里**真正算加速比**的倍数（剔除 (a)(b)(c) 三类假阳性）。
+
+    headers 给的是本行所在表的表头单元格列表（见 table_header_cells），
+    raw 是**未经 strip_for_rules 的原始行**（列分隔符 `|` 只在它里面还在）。
+    两者都给了，(c) 的"主语"判定才会额外看**匹配所在那一列的表头**；
+    否则退化成原来的纯按行判定，行为与加这条豁免之前完全一致。
+    """
     out = []
     for m in SPEEDUP_PAT.finditer(line):
         rest = line[m.end() - 1:]              # 从 ×/倍 这个字符本身起算
@@ -116,10 +195,15 @@ def speedup_matches(line: str) -> list:
             continue
         if MATERIAL_ALIAS.match(rest):         # (b) 材料代称
             continue
+        head = ""
+        if headers and raw is not None and len(raw) == len(line):
+            ci = _column_of(raw, m.start())
+            if 0 <= ci < len(headers):
+                head = headers[ci]
         left, right = line[max(0, m.start() - 20):m.start()], line[m.end():m.end() + 12]
-        if ((any(c in left for c in NON_SPEED_LEFT)      # (c) 非速度主语
+        if ((any(c in head + left for c in NON_SPEED_LEFT)   # (c) 非速度主语
              or any(c in right for c in NON_SPEED_RIGHT))
-                and not any(w in line for w in SPEED_WORDS)):
+                and not any(w in line + " " + head for w in SPEED_WORDS)):
             continue
         out.append(m)
     return out
@@ -157,9 +241,14 @@ def strip_for_rules(line: str) -> str:
     踩过的坑：双链的**文件名**里含"无损"二字（如 [[04-拒绝采样修正-无损性的完整证明]]），
     会被铁律一的检查大量误判成"未标口径的无损"。行内代码同理。
     这是自检器自身的假阳性，不是被检对象的问题 —— 修检查器，不是修正文。
+
+    **等长替换**：挖掉的部分用同样长度的空白填回，而不是塌缩成一个空格。
+    这样处理后的行与原始行**逐字符对齐**，铁律二才能把一个匹配的偏移量换算回
+    "它在表格的第几列"（见 _column_of / table_header_cells）。
     """
-    line = re.sub(r"\[\[[^\]]*\]\]", " ", line)   # 双链整体挖掉
-    line = re.sub(r"`[^`]*`", " ", line)            # 行内代码挖掉
+    blank = lambda m: " " * len(m.group(0))
+    line = re.sub(r"\[\[[^\]]*\]\]", blank, line)   # 双链整体挖掉
+    line = re.sub(r"`[^`]*`", blank, line)          # 行内代码挖掉
     line = line.replace("|", " ")                   # 表格分隔符
     return line
 
@@ -295,9 +384,10 @@ def check_rules(verbose=True):
                 ctx = " ".join(strip_for_rules(x) for x in lines[max(0, i - 4):i + 3])
                 if not any(t in ctx for t in CALIBER_TOKENS):
                     warn_lossless.append((p.name, i, raw.strip()[:70]))
-            # 铁律二
-            if speedup_matches(line):
-                ctx = " ".join(strip_for_rules(x) for x in lines[max(0, i - 6):i + 6])
+            if speedup_matches(line, table_header_cells(lines, i - 1), raw):
+                # 口径窗口 = **所在小节**（上一个标题到下一个标题），而不是固定 ±N 行。
+                # 理由：口径声明通常写在小节开头或表注里，固定窗口会把整张长表判成裸奔。
+                ctx = " ".join(strip_for_rules(x) for x in section_of(lines, i - 1))
                 if not any(t in ctx for t in BATCH_TOKENS):
                     warn_speedup.append((p.name, i, raw.strip()[:70]))
     if verbose:

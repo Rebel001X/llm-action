@@ -35,10 +35,18 @@ def residual_dist(p: np.ndarray, q: np.ndarray) -> np.ndarray:
     """被拒绝后重采样用的分布 p' = norm(max(0, p - q))。
 
     这是社区最高频写错的一处：拒绝之后**不能**直接从 p 重采，
-    必须从残差分布采，否则输出分布有偏（见 test_spec.py::test_naive_resample_is_biased）。
+    必须从残差分布采，否则输出分布有偏
+    （见 `test_lossless.py::test_naive_resample_is_biased`）。
 
-    退化情形：p == q 时 max(0,p-q) 全 0，此时接受概率恒为 1，残差分布永远用不到；
-    为了让函数总是返回合法分布，这里退回 p（并在测试里断言这条路不会被走到）。
+    退化情形与兜底分支（2026-08-22 对抗审稿更正，初稿这三句都写错了）：
+      初稿说"p == q 时残差永远用不到，并在测试里断言这条路不会被走到"。**三处都不对**：
+      ① 引的文件名是 `test_spec.py`，本库根本没有这个文件（在 `test_lossless.py`）；
+      ② "永远用不到"不成立：1 - sum(min(p,p)) 是浮点噪声，**符号两边都可能**。
+         实测 1000 组 (seed, state)：正 236 / 负 109 / 恰好 0 只有 655。
+         为正时拒绝分支真的会被走到，这个兜底是**承重的活代码**，不是装饰；
+      ③ 从来没有过"断言这条路不会被走到"的测试。
+    现在的实现语义：sum(max(0,p-q)) <= 0 时退回 p。此时 p 与 q 逐点相等（两者都是分布），
+    退回 p 与退回 q 等价，结果仍然正确 —— 见 test_lossless.py::test_residual_fallback_is_live_and_correct。
     """
     r = np.maximum(0.0, p - q)
     s = r.sum()

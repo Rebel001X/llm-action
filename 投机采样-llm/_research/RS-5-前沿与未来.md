@@ -397,7 +397,7 @@ vllm-ascend release notes（<https://docs.vllm.ai/projects/ascend/zh-cn/main/use
 
 这是用户点名要问的「用线上流量持续训练草稿头」的直接答案。
 
-- **arXiv:2602.06932（2026-02）**，**ICML 2026**；项目页 <https://aurora-spec-ai.github.io/>；博客 <https://www.together.ai/blog/aurora>；代码 **github.com/togethercomputer/aurora**
+- **arXiv:2602.06932（2026-02）**，~~ICML 2026~~ ※ 2026-08-22 复核：arXiv Comments/Journal-ref 均为空、Together AI 博客亦未提会议，**会议未查证**；项目页 <https://aurora-spec-ai.github.io/>；博客 <https://www.together.ai/blog/aurora>；代码 **github.com/togethercomputer/aurora**
 - **作者**：Junxiong Wang, Fengxiang Bie, Jisen Li, Zelei Shao, Yubo Wang, Yinghui Liu, Qingyang Wu, Avner May, Sri Yanamandra, Ce Zhang, **Tri Dao**, **Percy Liang**, Ben Athiwaratkun, Shuaiwen Leon Song, Zhongzhu Zhou, Chenfeng Xu, Xiaoxia Wu。主机构 **Together AI**（含 Stanford / CMU 等）。
 
 **机制（新增了什么）**：把在线 speculator 学习**重述成异步强化学习问题**。
@@ -1322,7 +1322,7 @@ MLSys 2026 明确点名 "prior evaluations rely on research prototypes and unrea
 | 2601.21622 | 2026-01 | StarSD | §11.5 |
 | 2602.01469 | 2026-02 | P-EAGLE 论文 | §2.3 |
 | 2602.06036 | 2026-02 | **DFlash** | §3.1 |
-| 2602.06932 | 2026-02 | **Aurora**（ICML 2026） | §5.3 |
+| 2602.06932 | 2026-02 | **Aurora**（会议未查证，见 §5.3 复核） | §5.3 |
 | 2602.16052 | 2026-02 | MoE-Spec | §8.1 |
 | 2602.23881 | 2026-02 | **LK Losses**（ICML 2026，Nebius） | §5.4 |
 | 2603.01639 | 2026-03 | Learning to Draft（ICLR 2026） | §7.3 |

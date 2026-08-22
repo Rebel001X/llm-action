@@ -8,7 +8,9 @@ $$
 \frac{E[\tau]}{\gamma+1}\times\big(1-\text{草稿开销占比}\big)\ <\ 1
 $$
 
-这个极限**恒小于 1**，而且**调参救不了** —— 即使把接受长度顶到理论上限 $\gamma+1$，也只能勉强打平。所以"投机解码在大 batch 下会亏"不是工程没做好，是算术。
+这个极限**恒小于 1**，而且**调参救不了** —— 即使把接受长度顶到理论上限 $\gamma+1$，也只能勉强打平。
+
+**但这条渐近线有一个前提，本篇初稿把它漏了（2026-08-22 经对抗审稿查出并补上）**：它要求**基线前向也进入 compute-bound 区**。batch 足够大时访存项与算力项**都正比于 batch，batch 被约掉**，于是谁主导只由 seqlen 决定。本篇配置下 seqlen 超过约 **2 960** 时，**交叉点根本不存在** —— batch 加到 $10^6$ 加速比仍是 2.14。所以正确的表述是：**短上下文下"投机解码在大 batch 会亏"是算术，长上下文下它根本不成立**。详见 §4.6。
 
 ---
 
@@ -97,15 +99,65 @@ $$
 
 **三条推论，逐条都很硬**：
 
-1. **$\text{TPS}_{\text{spec}}$ 与 batch 无关**（batch 被约掉了）—— 投机吞吐在 compute 区**封顶**，而基线吞吐也封顶但在更高的位置。所以交叉点必然出现，只是早晚。
-2. **$E[\tau]/(\gamma+1)\le 1$ 恒成立**（$\tau$ 的上界就是 $\gamma+1$），再乘上 $(1-s)<1$，**极限严格小于 1**。
+1. **$\text{TPS}_{\text{spec}}$ 与 batch 无关**（batch 被约掉了）—— 投机吞吐在 compute 区**封顶**。
+2. **$E[\tau]/(\gamma+1)\le 1$ 恒成立**（$\tau$ 的上界就是 $\gamma+1$），再乘上 $(1-s)<1$，**在本节的前提下极限严格小于 1**。
 3. **$E[\tau]/(\gamma+1)$ 就是"算力有效利用率"**：你让目标模型算了 $\gamma+1$ 个位置，只有 $E[\tau]$ 个变成了产出，其余是**为了买信息而故意浪费的算力**。memory 区里这份浪费不要钱，compute 区里它按全价收费。
 
 > **一句话总结机制**：投机采样是拿"算力"去买"延迟"。算力免费时（memory-bound）这笔交易稳赚；算力开始收费时（compute-bound），你买的东西一分没变，价格却涨到了全价。
 
+### 4.6 上面那条推导漏了一个前提（2026-08-22 修正）
+
+**本篇初稿在这里犯了一个错，必须原样交代。** §4 开头写的是"设已深入 compute 区（算力项主导）"，然后把**基线**也按 compute 区的公式写成 $\text{TPS}_{\text{base}}=\text{peak}/F$。**这一步偷偷多用了一个前提**：基线前向也得是 compute-bound。
+
+为什么这是个真前提？把 batch 很大时的两项写出来：
+
+$$
+T_{\text{mem}}\approx\frac{\text{batch}\cdot\text{seqlen}\cdot\text{kv}}{\text{BW}},
+\qquad
+T_{\text{cmp}}=\frac{\text{batch}\cdot n_q\cdot F}{\text{peak}}
+$$
+
+（权重项 $Pb$ 与 batch 无关，batch 大时可忽略。）**两项都正比于 batch，batch 被约掉了。** 于是"谁主导"由一个**与 batch 无关**的比值决定：
+
+$$
+\frac{T_{\text{cmp}}}{T_{\text{mem}}}=\frac{n_q\,F}{\text{seqlen}\cdot\text{kv}}\cdot\frac{\text{BW}}{\text{peak}}
+=\frac{n_q\,(2P+4L\,\text{seqlen}\,d_{\text{model}})}{\text{seqlen}\cdot\text{kv}\cdot(\text{peak}/\text{BW})}
+\tag{4.5}
+$$
+
+（记号说明：$F$ 里的 attention 项严格说是 $4L\,	ext{seqlen}\cdot n_h d_h$，本篇的 llama3-70b 恰好 $n_h d_h=64	imes128=8192=d_{	ext{model}}$，两者相等；**MoE 上不相等**，见 [[23-与其它优化的相互作用-量化与KVcache与PD分离]] §4.7 与 `_lab/moe.py`。）
+
+令 (4.5) 等于 1 解出临界 seqlen，本篇配置（llama3-70b，8×H100，$\gamma=4$）：
+
+| | 临界 seqlen | 含义 |
+|---|---|---|
+| $n_q=1$（基线） | **1 499** | 超过它，**基线**无论 batch 多大都留在 memory 区 |
+| $n_q=\gamma+1=5$（验证） | **8 437** | 超过它，**验证**也无论 batch 多大都留在 memory 区 |
+
+于是 batch$\to\infty$ 的极限加速比按 seqlen 分成三段（复跑：见 §6 的 `_limit()`）：
+
+| seqlen | 基线 / 验证 | batch$\to\infty$ 极限加速比 |
+|---|---|---|
+| 512 | compute / compute | 0.584 |
+| 1 024 | compute / compute | **0.569** ← §4 那条渐近线，只在这一段成立 |
+| 1 499 | compute / compute | 0.556 |
+| 2 048 | memory / compute | 0.732 |
+| **2 960** | memory / compute | **1.000** ← 极限跨过 1 的临界点 |
+| 4 096 | memory / compute | 1.295 |
+| 8 192 | memory / compute | 2.104 |
+| 8 437 起 | memory / memory | **2.143（此后恒定）** |
+
+**三条修正后的结论**：
+
+1. **(4.1) 那条渐近线 $E[\tau]/(\gamma+1)(1-s)$ 只在 seqlen $<1\,499$ 时成立**（那时基线也 compute-bound）。§5 的 seqlen=1024 表正落在这一段，所以它的 0.566 与预测吻合 —— 那不是普适验证，是**区间内**的验证。
+2. **seqlen $>2\,960$ 时交叉点根本不存在。** 不是"翻转点很远"，是**没有翻转点**：batch 加到 $10^6$，加速比仍是 2.14 并且已经收敛（`_lab/test_speedup.py::test_batch_cancels_out_at_large_batch`）。
+3. 所以推论 1 原来的"交叉点必然出现，只是早晚"**是错的**，正确说法是：**短上下文下必然出现；长上下文下不会出现。**
+
+**这条为什么值得单独写出来**：本库其实**早就有它的反证** —— `_lab/test_speedup.py::test_long_context_still_no_crossover_even_quantized` 断言的就是"长上下文下扫到 batch 8192 都没有交叉点"。**测试对了，正文的一般化说过头了。** 这提醒了一件事：`--tests` 只检查"引用的测试存在"，**不检查"正文的一般化没有超出测试覆盖的范围"** —— 后者只能靠人（或对抗审稿）看出来。
+
 ---
 
-## 5. 实测表
+## 5. 模型输出表（解析模型，非硬件实测）
 
 口径（**全表统一，不可与其它来源的数字横比**）：target = llama3-70b，draft = llama3.2-1b，$\gamma=4$，$E[\tau]=3.0$ 固定，fp16 权重与 KV，硬件 **8×H100 SXM5（TP=8，带宽/算力/容量按 8 倍线性放大，忽略通信）**，报的是**吞吐**（tokens/s，全 batch 合计）。70B fp16 权重 141 GB，单卡 80 GB 装不下，故必须多卡。**本模型忽略 TP 通信、norm/softmax、kernel launch 与调度，是乐观上界，真实翻转点只会更早。**
 
@@ -127,7 +179,7 @@ $$
 
 **请盯住"投机 tok/s"那一列**：从 batch=128 到 batch=1024，batch 涨了 8 倍，投机吞吐只从 30 368 涨到 31 166（**+2.6%**）—— 它封顶了，正如 (4.1) 推论 1 所言。而基线从 18 628 涨到 55 016（**+195%**），一路把投机甩在身后。
 
-再验一次 (4.1)：$E[\tau]/(\gamma+1)=3.0/5=0.600$，草稿占比 $s=5.6\%$，预测极限 $0.600\times0.944=\mathbf{0.566}$ —— 与表中 batch=1024 的实测值**完全一致**（`_lab/test_speedup.py::test_compute_bound_asymptote_equals_wasted_compute_ratio`）。
+再验一次 (4.1)（**注意 seqlen=1024 落在 §4.6 的适用区间内**）：$E[\tau]/(\gamma+1)=3.0/5=0.600$，草稿占比 $s=5.6\%$，预测极限 $0.600\times0.944=\mathbf{0.566}$ —— 与表中 batch=1024 的实测值**完全一致**（`_lab/test_speedup.py::test_compute_bound_asymptote_equals_wasted_compute_ratio`）。
 
 ### seqlen = 16384（长上下文）
 
@@ -139,9 +191,16 @@ $$
 | 128 | — | — | — | — | — | 900 GB **装不下** |
 | ≥256 | — | — | — | — | — | 1 656 GB+ **装不下** |
 
-**这一段不翻转。** 长上下文的 KV 读把前向死死钉在 memory 区，验证依旧近乎白送。但它换来另一个约束：**显存装不下大 batch**。
+**这一段不翻转 —— 而且不是"翻转点够不着"，是根本没有翻转点。**
 
-于是流行说法"投机解码在大 batch 下没用"必须补上前提：**条件是短上下文**。长上下文场景下投机采样在能装下的全部 batch 范围内都是赚的（`_lab/test_speedup.py::test_long_context_keeps_speedup_at_large_batch`），只是那个范围本身被显存卡死（`::test_long_context_large_batch_may_not_fit`）。这条与 MagicDec 等工作的结论方向一致，详见 [[22-长上下文下的投机采样]]。
+初稿在这里把不翻转归因成"显存装不下大 batch"，**那个归因是错的**（2026-08-22 修正）。按 §4.6，seqlen=16384 远超临界值 8 437，验证前向**无论 batch 多大都留在 memory 区**：把 batch 放到 $10^6$（早已远超任何硬件能装下的规模），极限加速比仍是 **2.143** 并且已收敛。**显存是另一条独立的约束，不是不翻转的原因。**
+
+两件事要分开说：
+
+- **物理上**：seqlen $>2\,960$ 时交叉点不存在（`_lab/test_speedup.py::test_no_crossover_at_all_above_critical_seqlen`）。
+- **工程上**：能开多大 batch 另受显存限制（表中 batch$\ge$128 装不下，`::test_long_context_large_batch_may_not_fit`）。
+
+于是流行说法"投机解码在大 batch 下没用"必须补上前提：**条件是短上下文（本配置下 seqlen $\lesssim3\,000$）**。这条与 MagicDec 等工作的结论方向一致，详见 [[22-长上下文下的投机采样]]。
 
 ---
 
@@ -180,7 +239,7 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 ## 8. 失效条件（本篇结论本身什么时候不适用）
 
 1. **优化目标是延迟而非吞吐时**：见 §7 第 1 条，结论可能相反。
-2. **长上下文时**：§5 第二张表，不翻转（但受显存约束）。
+2. **长上下文时**：seqlen 超过临界值（本配置约 2 960）后**交叉点不存在**，§4 的渐近线整条不适用（§4.6）。显存是另一条独立约束，别把两者混为一谈。
 3. **一批请求难度不齐时**：本模型假设整批共享同一个 $E[\tau]$。真实系统里一批里既有简单续写也有复杂推理，**同步验证意味着整批要等最慢的那条**，实际接受长度比单条平均值更低。这条会让真实曲线比本表更差，属于本模型**没有覆盖**的恶化因素。
 4. **量化改变账本时**：权重量化到 int4 会把访存项砍到 1/4，屋脊点右移，**翻转点提前**（更容易 compute-bound）；KV cache 量化则相反地缓解长上下文的访存压力。见 [[23-与其它优化的相互作用-量化与KVcache与PD分离]]。
 5. **MoE 模型 —— 有一个真实反例，必须写明。** 有效激活参数远小于总参数，访存与算力的比值整个变了：路由使得"每 token 的算力"按激活参数算，而"权重读取"在大 batch 下趋近全量，两者的比值远比稠密模型友好。本库调研（`_research/RS-2-社区讲解盘点与评点.md`）记录到 Red Hat 于 2026-04 报告，在 **gpt-oss-120b（MoE + MXFP4 量化）+ EAGLE3** 上并发到 **200 仍有约 +20% 吞吐** —— 这与本篇稠密模型的曲线方向相反。
@@ -189,15 +248,15 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 
    **2026-08-22 补**：本库已把 MoE 单独建模（`_lab/moe.py`），结论是**两头都和本篇相反**：
    MoE 上 batch=1 时投机反而**亏**（0.804×，因为 5 个 token 激活了 18.8 个专家而基线只激活 4 个，多读 3.6 倍权重），
-   而在本篇稠密 70B 早已跌到 0.566× 的 batch=1024 上，MoE 仍有 **2.16×**。
+   而在本篇稠密 70B 早已跌到 0.566× 的 batch=1024 上，MoE 仍有 **2.12×**。
    完整推导与四张表见 [[23-与其它优化的相互作用-量化与KVcache与PD分离]] §4.7，
-   测试见 `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense` 与 `::test_moe_outlasts_dense_by_an_order_of_magnitude`。
+   测试见 `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense` 与 `::test_moe_still_profitable_where_dense_already_lost`。
 
 ---
 
 ## 9. 自测题
 
-1. 为什么 compute 区里"投机吞吐与 batch 无关"？用 §4 的推导说明。
+1. 为什么 compute 区里"投机吞吐与 batch 无关"？用 §4 的推导说明。**追问**：基线吞吐是不是也与 batch 无关？什么条件下是、什么条件下不是？
    <details><summary>答案要点</summary>compute 区里 $T_{\text{verify}}\propto\text{batch}\cdot(\gamma+1)$，而吞吐 $=\text{batch}\cdot E[\tau]/T_{\text{iter}}$，batch 在分子分母同时出现被约掉。物理含义：算力已经打满，产出速率由"每份算力能换几个 token"决定，与并发数无关。</details>
 
 2. 某团队把 $\gamma$ 从 4 降到 2 来"减少大 batch 下的浪费"。假设 $E[\tau]$ 相应从 3.0 降到 2.0，compute 极限下的加速比会变好吗？
@@ -229,6 +288,10 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 
 ### 本篇验证
 
+- `_lab/test_speedup.py::test_asymptote_formula_holds_only_when_baseline_is_compute_bound` —— **§4.6 的核心**：渐近线只在基线也 compute-bound（seqlen<1499）时成立，seqlen=16384 时极限反而 >2。
+- `_lab/test_speedup.py::test_batch_cancels_out_at_large_batch` —— batch 被约掉，极限是只依赖 seqlen 的常数。
+- `_lab/test_speedup.py::test_no_crossover_at_all_above_critical_seqlen`、`::test_crossover_still_exists_at_short_context`、`::test_critical_seqlen_is_around_3000` —— 三段式的边界。
+- `_lab/test_speedup.py::test_verify_returns_to_memory_bound_at_very_long_context` —— seqlen>8437 后极限恒定。
 - `_lab/test_speedup.py::test_compute_bound_asymptote_equals_wasted_compute_ratio` —— **验证 §4 的 (4.1)**：compute 极限下加速比 = $E[\tau]/(\gamma+1)\times(1-s)$，实测 0.566 与预测吻合到 0.01 以内。
 - `_lab/test_speedup.py::test_spec_throughput_saturates_while_baseline_keeps_climbing` —— 验证推论 1：batch 涨 8 倍，投机吞吐涨不到 10%，基线涨超过 150%。
 - `_lab/test_speedup.py::test_higher_accept_length_raises_but_cannot_save_asymptote` —— 验证推论 2：$E[\tau]$ 顶到 $\gamma+1$ 也只能打平偏亏。
@@ -237,7 +300,7 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 - `_lab/test_speedup.py::test_long_context_keeps_speedup_at_large_batch` —— 长上下文下不翻转。
 - `_lab/test_speedup.py::test_long_context_large_batch_may_not_fit` —— 但受显存约束。
 - `_lab/test_speedup.py::test_verify_stops_being_free_in_compute_bound_region` —— compute 区里验证时间随 query token 数线性涨（机制）。
-- `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense`、`::test_moe_outlasts_dense_by_an_order_of_magnitude` —— **本篇结论的适用边界**：MoE 上最优区间不在小 batch，且能一直赚到稠密早已翻转的 batch。
+- `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense`、`::test_moe_still_profitable_where_dense_already_lost` —— **本篇结论的适用边界**：MoE 上最优区间不在小 batch，且能一直赚到稠密早已翻转的 batch。
 - 可复跑：`python _lab/speedup.py --batch` —— §5 的两张实测表
 
 ### 本篇勘误记录
@@ -250,6 +313,16 @@ $4\,s\,d_{\text{model}}$，**漏乘了层数 $L$**（正确为 $4L\,s\,d_{\text{
 （如 batch=256 从 1.038 变为 1.020），**交叉点位置与 §4 的渐近线结论均未改变**；
 seqlen=16384 的可行行仍全部落在 memory 区，结论不变。
 回归测试：`_lab/test_speedup.py::test_attention_flops_include_layer_count`。
+
+**第二处勘误（2026-08-22，对抗审稿查出）**：§4 的渐近线推导**漏写了一个前提** —— 它要求基线前向也 compute-bound。
+初稿据此在 §1 与推论 1 里把"交叉点必然出现""极限恒小于 1"写成了普适结论，
+而实际上 seqlen 超过约 2 960 时交叉点根本不存在（batch 加到 $10^6$ 仍是 2.14×）。
+§4.6 已补齐推导与三段式的极限表，§1、§5、§8 的相应表述已改。
+本库其实早有反证（`::test_long_context_still_no_crossover_even_quantized`）——**测试是对的，正文的一般化说过头了**。
+新增 6 条回归测试锁住修正后的结论：`::test_batch_cancels_out_at_large_batch`、
+`::test_asymptote_formula_holds_only_when_baseline_is_compute_bound`、
+`::test_no_crossover_at_all_above_critical_seqlen`、`::test_crossover_still_exists_at_short_context`、
+`::test_critical_seqlen_is_around_3000`、`::test_verify_returns_to_memory_bound_at_very_long_context`。
 
 ### 本篇来源
 

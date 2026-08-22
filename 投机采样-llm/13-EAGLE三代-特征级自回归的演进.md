@@ -202,7 +202,7 @@ $L_{\text{reg}}=\text{Smooth-}L_1(f_{i+1},\ \hat f_{i+1})$ 是**特征回归损�
 
 ### 3.6 EAGLE-3 之后
 
-**EAGLE 3.1**（2026-05，vLLM 官方 blog，加 FC normalization 与 post-norm 治 attention drift）、其学术版 **Attention Drift**（**2026-05**，arXiv:2605.09992）、**P-EAGLE**（**2026-02**，arXiv:2602.01469，Amazon + NVIDIA，把自回归 drafter 改成一次前向出 $K$ 个 token）——这三条都在 [[24-前沿进展-2025到2026]] 展开，本篇不重复。
+**EAGLE 3.1**（2026-05，vLLM 官方 blog，加 FC normalization 与 post-norm 治 attention drift）、其学术版 **Attention Drift**（**2026-05**，arXiv:2605.09992）、**P-EAGLE**（**2026-02**，arXiv:2602.01469，机构**未查证**，把自回归 drafter 改成一次前向出 $K$ 个 token）——这三条都在 [[24-前沿进展-2025到2026]] 展开，本篇不重复。
 
 ---
 
@@ -446,7 +446,8 @@ $E[\tau]/(\gamma+1)\le 1$ 恒成立，再乘 $(1-s)<1$，**极限严格小于 1�
 - `_lab/test_accept.py::test_optimal_gamma_decreases_with_cost` —— 验证 §2.1 的核心断言：**草稿成本 $c$ 越小，最优 $\gamma^*$ 越大**（对 $\alpha\in\{0.6,0.8,0.9\}$、$c\in\{0.02,0.05,0.1,0.2,0.4\}$ 全部检查单调性）。这条是 EAGLE 整条线「压 $c$」动机的数学基础。
 - `_lab/test_accept.py::test_optimal_gamma_increases_with_alpha` —— 验证另一半：接受率越高，可用的 $\gamma$ 越长。EAGLE 靠隐状态条件化把 $\alpha$ 抬上去，收益走的就是这条通道。
 - `_lab/test_tree.py::test_chain_beats_tree_at_small_budget` 与 `_lab/test_tree.py::test_tree_beats_chain_at_large_budget` —— 验证 §3.2 的断言：**最优树形状随预算翻转**，因此静态树必然在某些配置下次优。这是 EAGLE-2 动态树的存在理由。
-- `_lab/test_tree.py::test_width_is_worthless_without_marginal_coverage` —— 验证「草稿不准就该加宽树」是错的：边际覆盖率增益为 0 时，无论预算多大链都赢。这解释了 EAGLE-2 为什么必须用**标定过的置信度**来决定扩展方向，而不是无脑加宽。
+- `_lab/test_tree.py::test_budget_needed_grows_as_the_gain_shrinks` —— 验证「草稿不准就该加宽树」是错的：边际覆盖增益**极小**时，现实预算内链都赢。这解释了 EAGLE-2 为什么必须用**标定过的置信度**来决定扩展方向，而不是无脑加宽。 （2026-08-22 更正：初稿的「增益为 0」是显示精度假象，真实约 $10^{-5}$；$c_k>c_1$ 恒成立，判据是「增益多大 vs 预算多大」）
+  （**2026-08-22 更正**：初稿说的"增益为 0"其实是显示精度造成的假象，真实增益约 $10^{-5}$；$c_k>c_1$ 恒成立，正确判据是"增益多大 vs 预算多大"。详见第 16 篇 §5.3 与其勘误。）
 - `_lab/test_speedup.py::test_lighter_draft_lowers_breakeven` —— 验证 §5.2 的保本线表：把草稿从 1.24B 独立模型换成 1 层草稿头，$E[\tau]$ 的保本线从 1.07 降到 1.03（batch=1）。
 - `_lab/test_speedup.py::test_compute_bound_asymptote_equals_wasted_compute_ratio` —— 验证 F2 的算术：compute-bound 区的加速比极限等于 $\frac{E[\tau]}{\gamma+1}(1-s)$，**严格小于 1**。这条钉死了「改进草稿质量不能消除交叉点，只能右移」。
 - 可复跑：
