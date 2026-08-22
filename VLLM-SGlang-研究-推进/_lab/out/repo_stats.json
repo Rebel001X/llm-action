@@ -1,0 +1,2519 @@
+{
+  "engines": {
+    "dynamo": {
+      "kernels": {
+        "cuda_examples": [
+          "lib/kvbm-kernels/cuda/tensor_kernels.cu",
+          "lib/llm/src/kernels/block_copy.cu"
+        ],
+        "cuda_files": 2,
+        "files_mentioning_cutlass": 0,
+        "triton_examples": [],
+        "triton_jit_files": 0
+      },
+      "languages": [
+        {
+          "code": 756315,
+          "files": 103,
+          "lang": "JSON",
+          "lines": 756357
+        },
+        {
+          "code": 461707,
+          "files": 1186,
+          "lang": "Rust",
+          "lines": 608542
+        },
+        {
+          "code": 326793,
+          "files": 1453,
+          "lang": "Python",
+          "lines": 414353
+        },
+        {
+          "code": 118092,
+          "files": 360,
+          "lang": "Go",
+          "lines": 143773
+        },
+        {
+          "code": 132035,
+          "files": 653,
+          "lang": "YAML",
+          "lines": 141891
+        },
+        {
+          "code": 63979,
+          "files": 597,
+          "lang": "Markdown",
+          "lines": 97956
+        },
+        {
+          "code": 14500,
+          "files": 186,
+          "lang": "Shell",
+          "lines": 21072
+        },
+        {
+          "code": 14856,
+          "files": 42,
+          "lang": "TypeScript",
+          "lines": 18023
+        },
+        {
+          "code": 4726,
+          "files": 60,
+          "lang": "TOML",
+          "lines": 6173
+        },
+        {
+          "code": 1740,
+          "files": 11,
+          "lang": "Protobuf",
+          "lines": 5045
+        },
+        {
+          "code": 501,
+          "files": 4,
+          "lang": "JavaScript",
+          "lines": 4356
+        },
+        {
+          "code": 860,
+          "files": 2,
+          "lang": "CUDA",
+          "lines": 1329
+        },
+        {
+          "code": 1050,
+          "files": 6,
+          "lang": "C++",
+          "lines": 1290
+        },
+        {
+          "code": 304,
+          "files": 2,
+          "lang": "C",
+          "lines": 427
+        },
+        {
+          "code": 149,
+          "files": 4,
+          "lang": "C/C++ header",
+          "lines": 243
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-22T03:47:18Z",
+        "label": "NVIDIA Dynamo",
+        "name": "dynamo",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\dynamo",
+        "remote": "https://github.com/ai-dynamo/dynamo.git (zipball)",
+        "sha": "2a6da14c83617f5412caba5777dbf0e2399e9c5f",
+        "sha_short": "2a6da14c"
+      },
+      "top_dirs": [
+        {
+          "dir": "container/compliance",
+          "files": 61,
+          "lines": 652930
+        },
+        {
+          "dir": "lib/llm",
+          "files": 497,
+          "lines": 359818
+        },
+        {
+          "dir": "components/src",
+          "files": 861,
+          "lines": 234088
+        },
+        {
+          "dir": "deploy/operator",
+          "files": 429,
+          "lines": 212101
+        },
+        {
+          "dir": "docs/fern",
+          "files": 341,
+          "lines": 85800
+        },
+        {
+          "dir": "lib/kv-router",
+          "files": 146,
+          "lines": 84117
+        },
+        {
+          "dir": "lib/runtime",
+          "files": 165,
+          "lines": 75570
+        },
+        {
+          "dir": "lib/bindings",
+          "files": 177,
+          "lines": 51942
+        },
+        {
+          "dir": "lib/kvbm-engine",
+          "files": 81,
+          "lines": 30718
+        },
+        {
+          "dir": "lib/mocker",
+          "files": 71,
+          "lines": 26428
+        },
+        {
+          "dir": "lib/kvbm-logical",
+          "files": 64,
+          "lines": 23875
+        },
+        {
+          "dir": "tests/fault_tolerance",
+          "files": 63,
+          "lines": 21840
+        },
+        {
+          "dir": "lib/gpu_memory_service",
+          "files": 108,
+          "lines": 20098
+        },
+        {
+          "dir": "dev/observability",
+          "files": 28,
+          "lines": 18934
+        },
+        {
+          "dir": "examples/backends",
+          "files": 196,
+          "lines": 18567
+        },
+        {
+          "dir": "lib/bench",
+          "files": 44,
+          "lines": 18520
+        },
+        {
+          "dir": ".agents/skills",
+          "files": 70,
+          "lines": 15990
+        },
+        {
+          "dir": "lib/kvbm-physical",
+          "files": 42,
+          "lines": 13587
+        },
+        {
+          "dir": "deploy/inference-gateway",
+          "files": 38,
+          "lines": 12196
+        },
+        {
+          "dir": "lib/sidecar",
+          "files": 65,
+          "lines": 12154
+        }
+      ],
+      "totals": {
+        "files_counted": 4669,
+        "lines_counted": 2220830,
+        "python_src_lines": 193827,
+        "python_test_lines": 215985,
+        "test_to_src_ratio": 1.114
+      }
+    },
+    "ktransformers": {
+      "kernels": {
+        "cuda_examples": [
+          "archive/csrc/custom_marlin/gptq_marlin/gptq_marlin.cu",
+          "archive/csrc/custom_marlin/gptq_marlin/gptq_marlin.cuh",
+          "archive/csrc/custom_marlin/gptq_marlin/gptq_marlin_dtypes.cuh",
+          "archive/csrc/custom_marlin/gptq_marlin/gptq_marlin_repack.cu",
+          "archive/csrc/ktransformers_ext/cuda/custom_gguf/dequant.cu",
+          "archive/csrc/ktransformers_ext/cuda/gptq_marlin/gptq_marlin.cu",
+          "archive/csrc/ktransformers_ext/cuda/gptq_marlin/gptq_marlin.cuh",
+          "archive/csrc/ktransformers_ext/cuda/gptq_marlin/gptq_marlin_dtypes.cuh",
+          "archive/kt-sft/csrc/custom_marlin/gptq_marlin/gptq_marlin.cu",
+          "archive/kt-sft/csrc/custom_marlin/gptq_marlin/gptq_marlin.cuh",
+          "archive/kt-sft/csrc/custom_marlin/gptq_marlin/gptq_marlin_dtypes.cuh",
+          "archive/kt-sft/csrc/custom_marlin/gptq_marlin/gptq_marlin_repack.cu",
+          "archive/kt-sft/csrc/ktransformers_ext/cuda/custom_gguf/dequant.cu",
+          "archive/kt-sft/csrc/ktransformers_ext/cuda/gptq_marlin/gptq_marlin.cu",
+          "archive/kt-sft/csrc/ktransformers_ext/cuda/gptq_marlin/gptq_marlin.cuh"
+        ],
+        "cuda_files": 21,
+        "files_mentioning_cutlass": 8,
+        "triton_examples": [
+          "archive/kt-sft/ktransformers/ktransformers_ext/triton/fp8gemm.py",
+          "archive/kt-sft/ktransformers/operators/triton_attention.py",
+          "archive/kt-sft/ktransformers/operators/triton_attention_prefill.py",
+          "archive/ktransformers/ktransformers_ext/triton/fp8gemm.py",
+          "archive/ktransformers/operators/triton_attention.py",
+          "archive/ktransformers/operators/triton_attention_prefill.py",
+          "kt-kernel/scripts/convert_cpu_weights.py",
+          "kt-kernel/scripts/convert_cpu_weights_ds4.py"
+        ],
+        "triton_jit_files": 8
+      },
+      "languages": [
+        {
+          "code": 143087,
+          "files": 618,
+          "lang": "Python",
+          "lines": 181351
+        },
+        {
+          "code": 53760,
+          "files": 180,
+          "lang": "C/C++ header",
+          "lines": 79910
+        },
+        {
+          "code": 50163,
+          "files": 14,
+          "lang": "JSON",
+          "lines": 50169
+        },
+        {
+          "code": 36685,
+          "files": 166,
+          "lang": "C++",
+          "lines": 47489
+        },
+        {
+          "code": 10395,
+          "files": 21,
+          "lang": "CUDA",
+          "lines": 14429
+        },
+        {
+          "code": 8741,
+          "files": 97,
+          "lang": "Markdown",
+          "lines": 14273
+        },
+        {
+          "code": 8517,
+          "files": 79,
+          "lang": "YAML",
+          "lines": 9875
+        },
+        {
+          "code": 2237,
+          "files": 18,
+          "lang": "Shell",
+          "lines": 3305
+        },
+        {
+          "code": 1378,
+          "files": 28,
+          "lang": "TypeScript",
+          "lines": 1512
+        },
+        {
+          "code": 386,
+          "files": 16,
+          "lang": "JavaScript",
+          "lines": 422
+        },
+        {
+          "code": 273,
+          "files": 7,
+          "lang": "TOML",
+          "lines": 341
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-21T17:53:58+08:00",
+        "label": "KTransformers",
+        "name": "ktransformers",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\ktransformers",
+        "remote": "https://github.com/kvcache-ai/ktransformers.git",
+        "sha": "95009ea6856c0799e517e93cb12be5e8494bc7ce",
+        "sha_short": "95009ea6"
+      },
+      "top_dirs": [
+        {
+          "dir": "archive/kt-sft",
+          "files": 342,
+          "lines": 105925
+        },
+        {
+          "dir": "archive/ktransformers",
+          "files": 244,
+          "lines": 81039
+        },
+        {
+          "dir": "kt-kernel/operators",
+          "files": 105,
+          "lines": 61576
+        },
+        {
+          "dir": "kt-kernel/python",
+          "files": 64,
+          "lines": 32449
+        },
+        {
+          "dir": "archive/csrc",
+          "files": 158,
+          "lines": 28852
+        },
+        {
+          "dir": "archive/third_party",
+          "files": 34,
+          "lines": 26873
+        },
+        {
+          "dir": "kt-kernel/examples",
+          "files": 38,
+          "lines": 12719
+        },
+        {
+          "dir": "kt-kernel/test",
+          "files": 48,
+          "lines": 11715
+        },
+        {
+          "dir": "doc/en",
+          "files": 57,
+          "lines": 8314
+        },
+        {
+          "dir": "kt-kernel/bench",
+          "files": 24,
+          "lines": 7268
+        },
+        {
+          "dir": "kt-kernel/scripts",
+          "files": 13,
+          "lines": 5792
+        },
+        {
+          "dir": "kt-kernel",
+          "files": 8,
+          "lines": 4163
+        },
+        {
+          "dir": "kt-kernel/cuda",
+          "files": 12,
+          "lines": 3975
+        },
+        {
+          "dir": "docker",
+          "files": 4,
+          "lines": 2402
+        },
+        {
+          "dir": "doc/zh",
+          "files": 14,
+          "lines": 2228
+        },
+        {
+          "dir": "kt-kernel/cpu_backend",
+          "files": 15,
+          "lines": 1767
+        },
+        {
+          "dir": "third_party/llamafile",
+          "files": 30,
+          "lines": 1749
+        },
+        {
+          "dir": "archive",
+          "files": 11,
+          "lines": 1553
+        },
+        {
+          "dir": "kt-kernel/demo",
+          "files": 7,
+          "lines": 1480
+        },
+        {
+          "dir": "<root>",
+          "files": 9,
+          "lines": 719
+        }
+      ],
+      "totals": {
+        "files_counted": 1244,
+        "lines_counted": 403076,
+        "python_src_lines": 152237,
+        "python_test_lines": 29114,
+        "test_to_src_ratio": 0.191
+      }
+    },
+    "lightllm": {
+      "kernels": {
+        "cuda_examples": [],
+        "cuda_files": 0,
+        "files_mentioning_cutlass": 0,
+        "triton_examples": [
+          "lightllm/common/basemodel/triton_kernel/add_in_place.py",
+          "lightllm/common/basemodel/triton_kernel/alibi_att/context_flashattention_nopad.py",
+          "lightllm/common/basemodel/triton_kernel/alibi_att/token_attention_nopad_att1.py",
+          "lightllm/common/basemodel/triton_kernel/alibi_att/token_attention_nopad_reduceV.py",
+          "lightllm/common/basemodel/triton_kernel/alibi_att/token_attention_nopad_softmax.py",
+          "lightllm/common/basemodel/triton_kernel/alibi_att/token_flashattention_nopad.py",
+          "lightllm/common/basemodel/triton_kernel/atomic_event.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/gqa/flash_decoding/gqa_flash_decoding_stage1.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/gqa/flash_decoding/gqa_flash_decoding_stage2.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/gqa/flash_decoding/gqa_flash_decoding_vsm.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/gqa/gqa_decode_flashattention_nopad.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/int4kv/int4kv_flash_decoding_stage1.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/int8kv/int8kv_flash_decoding_diverse_stage1.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/int8kv/int8kv_flash_decoding_diverse_stage2.py",
+          "lightllm/common/basemodel/triton_kernel/att/decode_att/int8kv/int8kv_flash_decoding_diverse_stage3.py"
+        ],
+        "triton_jit_files": 129
+      },
+      "languages": [
+        {
+          "code": 104088,
+          "files": 952,
+          "lang": "Python",
+          "lines": 128043
+        },
+        {
+          "code": 8177,
+          "files": 208,
+          "lang": "JSON",
+          "lines": 8177
+        },
+        {
+          "code": 4730,
+          "files": 41,
+          "lang": "reST",
+          "lines": 7539
+        },
+        {
+          "code": 2456,
+          "files": 21,
+          "lang": "Markdown",
+          "lines": 3615
+        },
+        {
+          "code": 749,
+          "files": 42,
+          "lang": "Shell",
+          "lines": 1141
+        },
+        {
+          "code": 46,
+          "files": 5,
+          "lang": "YAML",
+          "lines": 56
+        },
+        {
+          "code": 3,
+          "files": 1,
+          "lang": "TOML",
+          "lines": 3
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-21T06:29:48Z",
+        "label": "LightLLM",
+        "name": "lightllm",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\lightllm",
+        "remote": "https://github.com/ModelTC/lightllm.git (zipball)",
+        "sha": "87881ae7ca9aa774db744ad38df22c95d80c0eb0",
+        "sha_short": "87881ae7"
+      },
+      "top_dirs": [
+        {
+          "dir": "lightllm/common",
+          "files": 453,
+          "lines": 37915
+        },
+        {
+          "dir": "lightllm/server",
+          "files": 168,
+          "lines": 34076
+        },
+        {
+          "dir": "lightllm/models",
+          "files": 335,
+          "lines": 22819
+        },
+        {
+          "dir": "test/advanced_config",
+          "files": 13,
+          "lines": 7303
+        },
+        {
+          "dir": "lightllm/utils",
+          "files": 47,
+          "lines": 6552
+        },
+        {
+          "dir": "unit_tests/common",
+          "files": 42,
+          "lines": 5396
+        },
+        {
+          "dir": "test/benchmark",
+          "files": 13,
+          "lines": 5244
+        },
+        {
+          "dir": "docs/CN",
+          "files": 25,
+          "lines": 4561
+        },
+        {
+          "dir": "docs/EN",
+          "files": 26,
+          "lines": 4557
+        },
+        {
+          "dir": "test/test_api",
+          "files": 15,
+          "lines": 4449
+        },
+        {
+          "dir": "unit_tests/server",
+          "files": 15,
+          "lines": 2102
+        },
+        {
+          "dir": "test/kernel",
+          "files": 7,
+          "lines": 2032
+        },
+        {
+          "dir": "skills/test_model",
+          "files": 14,
+          "lines": 1994
+        },
+        {
+          "dir": "format_out/grammer",
+          "files": 11,
+          "lines": 1632
+        },
+        {
+          "dir": "test/performance",
+          "files": 5,
+          "lines": 1463
+        },
+        {
+          "dir": "lightllm/distributed",
+          "files": 6,
+          "lines": 1349
+        },
+        {
+          "dir": "test/acc",
+          "files": 16,
+          "lines": 1347
+        },
+        {
+          "dir": "test/start_scripts",
+          "files": 20,
+          "lines": 650
+        },
+        {
+          "dir": "test/format_out",
+          "files": 5,
+          "lines": 554
+        },
+        {
+          "dir": "unit_tests/models",
+          "files": 9,
+          "lines": 496
+        }
+      ],
+      "totals": {
+        "files_counted": 1270,
+        "lines_counted": 148574,
+        "python_src_lines": 103709,
+        "python_test_lines": 24334,
+        "test_to_src_ratio": 0.235
+      }
+    },
+    "llama.cpp": {
+      "kernels": {
+        "cuda_examples": [
+          "ggml/src/ggml-cuda/acc.cu",
+          "ggml/src/ggml-cuda/acc.cuh",
+          "ggml/src/ggml-cuda/add-id.cu",
+          "ggml/src/ggml-cuda/add-id.cuh",
+          "ggml/src/ggml-cuda/allreduce.cu",
+          "ggml/src/ggml-cuda/allreduce.cuh",
+          "ggml/src/ggml-cuda/arange.cu",
+          "ggml/src/ggml-cuda/arange.cuh",
+          "ggml/src/ggml-cuda/argmax.cu",
+          "ggml/src/ggml-cuda/argmax.cuh",
+          "ggml/src/ggml-cuda/argsort.cu",
+          "ggml/src/ggml-cuda/argsort.cuh",
+          "ggml/src/ggml-cuda/binbcast.cu",
+          "ggml/src/ggml-cuda/binbcast.cuh",
+          "ggml/src/ggml-cuda/clamp.cu"
+        ],
+        "cuda_files": 273,
+        "files_mentioning_cutlass": 1,
+        "triton_examples": [],
+        "triton_jit_files": 0
+      },
+      "languages": [
+        {
+          "code": 330604,
+          "files": 629,
+          "lang": "C++",
+          "lines": 437312
+        },
+        {
+          "code": 153204,
+          "files": 353,
+          "lang": "C/C++ header",
+          "lines": 225712
+        },
+        {
+          "code": 55376,
+          "files": 94,
+          "lang": "C",
+          "lines": 74545
+        },
+        {
+          "code": 54976,
+          "files": 213,
+          "lang": "Python",
+          "lines": 69892
+        },
+        {
+          "code": 34881,
+          "files": 401,
+          "lang": "TypeScript",
+          "lines": 52925
+        },
+        {
+          "code": 32345,
+          "files": 273,
+          "lang": "CUDA",
+          "lines": 43496
+        },
+        {
+          "code": 25225,
+          "files": 15,
+          "lang": "JavaScript",
+          "lines": 38180
+        },
+        {
+          "code": 21310,
+          "files": 13,
+          "lang": "JSON",
+          "lines": 21331
+        },
+        {
+          "code": 13061,
+          "files": 120,
+          "lang": "Markdown",
+          "lines": 19573
+        },
+        {
+          "code": 6696,
+          "files": 74,
+          "lang": "Shell",
+          "lines": 9023
+        },
+        {
+          "code": 154,
+          "files": 4,
+          "lang": "TOML",
+          "lines": 197
+        },
+        {
+          "code": 146,
+          "files": 3,
+          "lang": "YAML",
+          "lines": 191
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-22T09:44:22+02:00",
+        "label": "llama.cpp",
+        "name": "llama.cpp",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\llama.cpp",
+        "remote": "https://github.com/ggml-org/llama.cpp.git",
+        "sha": "2c6b141efb3b0868fd39d3cae73f69606e1d654c",
+        "sha_short": "2c6b141e"
+      },
+      "top_dirs": [
+        {
+          "dir": "ggml/src",
+          "files": 819,
+          "lines": 364133
+        },
+        {
+          "dir": "tools/ui",
+          "files": 428,
+          "lines": 110392
+        },
+        {
+          "dir": "vendor/miniaudio",
+          "files": 1,
+          "lines": 95864
+        },
+        {
+          "dir": "src",
+          "files": 63,
+          "lines": 54966
+        },
+        {
+          "dir": "tests",
+          "files": 56,
+          "lines": 45555
+        },
+        {
+          "dir": "src/models",
+          "files": 151,
+          "lines": 38382
+        },
+        {
+          "dir": "tools/server",
+          "files": 71,
+          "lines": 34611
+        },
+        {
+          "dir": "common",
+          "files": 55,
+          "lines": 33589
+        },
+        {
+          "dir": "tools/mtmd",
+          "files": 75,
+          "lines": 29271
+        },
+        {
+          "dir": "vendor/nlohmann",
+          "files": 2,
+          "lines": 25713
+        },
+        {
+          "dir": "vendor/cpp-httplib",
+          "files": 2,
+          "lines": 21843
+        },
+        {
+          "dir": "conversion",
+          "files": 89,
+          "lines": 20377
+        },
+        {
+          "dir": "gguf-py/gguf",
+          "files": 17,
+          "lines": 16638
+        },
+        {
+          "dir": "vendor/stb",
+          "files": 1,
+          "lines": 7988
+        },
+        {
+          "dir": "scripts",
+          "files": 35,
+          "lines": 7960
+        },
+        {
+          "dir": "vendor/hash",
+          "files": 10,
+          "lines": 7826
+        },
+        {
+          "dir": "common/jinja",
+          "files": 14,
+          "lines": 6349
+        },
+        {
+          "dir": "ggml/include",
+          "files": 22,
+          "lines": 4685
+        },
+        {
+          "dir": "docs/backend",
+          "files": 17,
+          "lines": 4511
+        },
+        {
+          "dir": "examples",
+          "files": 10,
+          "lines": 4143
+        }
+      ],
+      "totals": {
+        "files_counted": 2192,
+        "lines_counted": 992377,
+        "python_src_lines": 58859,
+        "python_test_lines": 11033,
+        "test_to_src_ratio": 0.187
+      }
+    },
+    "lmdeploy": {
+      "kernels": {
+        "cuda_examples": [
+          "src/turbomind/comm/cuda_ipc/allgather.cu",
+          "src/turbomind/comm/cuda_ipc/allreduce.cu",
+          "src/turbomind/comm/cuda_ipc/broadcast.cu",
+          "src/turbomind/comm/cuda_ipc/cuda_ipc_comm.cu",
+          "src/turbomind/comm/cuda_ipc/fused_allreduce.cu",
+          "src/turbomind/comm/cuda_ipc/fused_allreduce_ex.cu",
+          "src/turbomind/comm/cuda_ipc/multimem.cuh",
+          "src/turbomind/comm/cuda_ipc/semaphore.cuh",
+          "src/turbomind/comm/nccl/nccl.cu",
+          "src/turbomind/comm/test_comm.cu",
+          "src/turbomind/kernels/activation.cu",
+          "src/turbomind/kernels/activation_kernels.cu",
+          "src/turbomind/kernels/apply_token_bitmask_inplace_cuda.cu",
+          "src/turbomind/kernels/attention/attention.cu",
+          "src/turbomind/kernels/attention/cp_utils.cu"
+        ],
+        "cuda_files": 130,
+        "files_mentioning_cutlass": 29,
+        "triton_examples": [
+          "lmdeploy/pytorch/backends/cuda/gated_delta_rule.py",
+          "lmdeploy/pytorch/check_env/triton_custom_add.py",
+          "lmdeploy/pytorch/kernels/cuda/activation.py",
+          "lmdeploy/pytorch/kernels/cuda/apply_rotary_pos_emb.py",
+          "lmdeploy/pytorch/kernels/cuda/awq_kernels.py",
+          "lmdeploy/pytorch/kernels/cuda/bitonic_topk.py",
+          "lmdeploy/pytorch/kernels/cuda/blocked_fp8_fused_moe.py",
+          "lmdeploy/pytorch/kernels/cuda/blocked_gemm_fp8.py",
+          "lmdeploy/pytorch/kernels/cuda/copy_packed_cache.py",
+          "lmdeploy/pytorch/kernels/cuda/ds_index.py",
+          "lmdeploy/pytorch/kernels/cuda/dsa_indexer_preprocess.py",
+          "lmdeploy/pytorch/kernels/cuda/dsv4/hc_prepost.py",
+          "lmdeploy/pytorch/kernels/cuda/fill_kv_cache.py",
+          "lmdeploy/pytorch/kernels/cuda/flashattention.py",
+          "lmdeploy/pytorch/kernels/cuda/flatten_kv_cache.py"
+        ],
+        "triton_jit_files": 34
+      },
+      "languages": [
+        {
+          "code": 173530,
+          "files": 910,
+          "lang": "Python",
+          "lines": 215408
+        },
+        {
+          "code": 33017,
+          "files": 283,
+          "lang": "C/C++ header",
+          "lines": 45300
+        },
+        {
+          "code": 24581,
+          "files": 130,
+          "lang": "CUDA",
+          "lines": 32144
+        },
+        {
+          "code": 16337,
+          "files": 87,
+          "lang": "C++",
+          "lines": 21810
+        },
+        {
+          "code": 11862,
+          "files": 121,
+          "lang": "Markdown",
+          "lines": 17495
+        },
+        {
+          "code": 4556,
+          "files": 92,
+          "lang": "YAML",
+          "lines": 4734
+        },
+        {
+          "code": 1301,
+          "files": 2,
+          "lang": "JSON",
+          "lines": 1301
+        },
+        {
+          "code": 438,
+          "files": 12,
+          "lang": "Shell",
+          "lines": 580
+        },
+        {
+          "code": 323,
+          "files": 12,
+          "lang": "reST",
+          "lines": 420
+        },
+        {
+          "code": 20,
+          "files": 1,
+          "lang": "TOML",
+          "lines": 22
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-21T22:31:54+08:00",
+        "label": "LMDeploy",
+        "name": "lmdeploy",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\lmdeploy",
+        "remote": "https://github.com/InternLM/lmdeploy.git",
+        "sha": "1263d5cd889b7ad500e85b8eb20401327a4516ab",
+        "sha_short": "1263d5cd"
+      },
+      "top_dirs": [
+        {
+          "dir": "lmdeploy/pytorch",
+          "files": 444,
+          "lines": 101330
+        },
+        {
+          "dir": "src/turbomind",
+          "files": 501,
+          "lines": 99732
+        },
+        {
+          "dir": "tests/pytorch",
+          "files": 80,
+          "lines": 27965
+        },
+        {
+          "dir": "lmdeploy/serve",
+          "files": 78,
+          "lines": 12405
+        },
+        {
+          "dir": "tests/test_lmdeploy",
+          "files": 53,
+          "lines": 11542
+        },
+        {
+          "dir": "autotest/interface",
+          "files": 18,
+          "lines": 10519
+        },
+        {
+          "dir": "autotest/utils",
+          "files": 20,
+          "lines": 8824
+        },
+        {
+          "dir": "docs/en",
+          "files": 64,
+          "lines": 8022
+        },
+        {
+          "dir": "docs/zh_cn",
+          "files": 61,
+          "lines": 7753
+        },
+        {
+          "dir": "lmdeploy/turbomind",
+          "files": 40,
+          "lines": 7435
+        },
+        {
+          "dir": "tests/turbomind",
+          "files": 33,
+          "lines": 6981
+        },
+        {
+          "dir": "benchmark",
+          "files": 13,
+          "lines": 5838
+        },
+        {
+          "dir": "lmdeploy",
+          "files": 14,
+          "lines": 5150
+        },
+        {
+          "dir": "lmdeploy/vl",
+          "files": 38,
+          "lines": 4861
+        },
+        {
+          "dir": "autotest/configs",
+          "files": 79,
+          "lines": 4230
+        },
+        {
+          "dir": "lmdeploy/lite",
+          "files": 33,
+          "lines": 3633
+        },
+        {
+          "dir": "autotest/tools",
+          "files": 15,
+          "lines": 2051
+        },
+        {
+          "dir": "lmdeploy/cli",
+          "files": 7,
+          "lines": 1880
+        },
+        {
+          "dir": "autotest/evaluate",
+          "files": 5,
+          "lines": 1738
+        },
+        {
+          "dir": "lmdeploy/monitoring",
+          "files": 5,
+          "lines": 1355
+        }
+      ],
+      "totals": {
+        "files_counted": 1650,
+        "lines_counted": 339214,
+        "python_src_lines": 155986,
+        "python_test_lines": 59422,
+        "test_to_src_ratio": 0.381
+      }
+    },
+    "mlc-llm": {
+      "kernels": {
+        "cuda_examples": [],
+        "cuda_files": 0,
+        "files_mentioning_cutlass": 0,
+        "triton_examples": [],
+        "triton_jit_files": 0
+      },
+      "languages": [
+        {
+          "code": 59588,
+          "files": 389,
+          "lang": "Python",
+          "lines": 70189
+        },
+        {
+          "code": 12867,
+          "files": 44,
+          "lang": "C++",
+          "lines": 16967
+        },
+        {
+          "code": 3771,
+          "files": 25,
+          "lang": "reST",
+          "lines": 5818
+        },
+        {
+          "code": 2441,
+          "files": 41,
+          "lang": "C/C++ header",
+          "lines": 5723
+        },
+        {
+          "code": 351,
+          "files": 11,
+          "lang": "Shell",
+          "lines": 453
+        },
+        {
+          "code": 200,
+          "files": 15,
+          "lang": "Markdown",
+          "lines": 296
+        },
+        {
+          "code": 251,
+          "files": 14,
+          "lang": "JSON",
+          "lines": 251
+        },
+        {
+          "code": 122,
+          "files": 1,
+          "lang": "TOML",
+          "lines": 177
+        },
+        {
+          "code": 115,
+          "files": 2,
+          "lang": "JavaScript",
+          "lines": 149
+        },
+        {
+          "code": 97,
+          "files": 4,
+          "lang": "YAML",
+          "lines": 143
+        },
+        {
+          "code": 61,
+          "files": 1,
+          "lang": "TypeScript",
+          "lines": 74
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-17T13:41:45-07:00",
+        "label": "MLC-LLM",
+        "name": "mlc-llm",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\mlc-llm",
+        "remote": "https://github.com/mlc-ai/mlc-llm.git",
+        "sha": "9fa644f54b04983adea4d0168f49fc6af4a893ba",
+        "sha_short": "9fa644f5"
+      },
+      "top_dirs": [
+        {
+          "dir": "python/mlc_llm",
+          "files": 322,
+          "lines": 59274
+        },
+        {
+          "dir": "cpp/serve",
+          "files": 50,
+          "lines": 17101
+        },
+        {
+          "dir": "tests/python",
+          "files": 54,
+          "lines": 9766
+        },
+        {
+          "dir": "docs/deploy",
+          "files": 8,
+          "lines": 2349
+        },
+        {
+          "dir": "cpp/json_ffi",
+          "files": 8,
+          "lines": 2105
+        },
+        {
+          "dir": "docs/compilation",
+          "files": 5,
+          "lines": 1582
+        },
+        {
+          "dir": "cpp/support",
+          "files": 14,
+          "lines": 1354
+        },
+        {
+          "dir": "cpp/tokenizers",
+          "files": 4,
+          "lines": 1158
+        },
+        {
+          "dir": "docs/install",
+          "files": 5,
+          "lines": 899
+        },
+        {
+          "dir": "<root>",
+          "files": 6,
+          "lines": 594
+        },
+        {
+          "dir": "examples/rest",
+          "files": 9,
+          "lines": 559
+        },
+        {
+          "dir": "docs/get_started",
+          "files": 2,
+          "lines": 548
+        },
+        {
+          "dir": "cpp/multi_gpu",
+          "files": 2,
+          "lines": 427
+        },
+        {
+          "dir": "cpp/metadata",
+          "files": 2,
+          "lines": 270
+        },
+        {
+          "dir": "docs",
+          "files": 4,
+          "lines": 224
+        },
+        {
+          "dir": "docs/microserving",
+          "files": 1,
+          "lines": 205
+        },
+        {
+          "dir": "android/mlc4j",
+          "files": 2,
+          "lines": 187
+        },
+        {
+          "dir": "ios",
+          "files": 2,
+          "lines": 144
+        },
+        {
+          "dir": "docs/community",
+          "files": 2,
+          "lines": 141
+        },
+        {
+          "dir": "python",
+          "files": 1,
+          "lines": 141
+        }
+      ],
+      "totals": {
+        "files_counted": 547,
+        "lines_counted": 100240,
+        "python_src_lines": 59516,
+        "python_test_lines": 10673,
+        "test_to_src_ratio": 0.179
+      }
+    },
+    "mooncake": {
+      "kernels": {
+        "cuda_examples": [
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_api.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_combine_official.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_combine_reduce_epilogue.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_combine_utils.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_comm.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_compiled.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_dispatch_copy_epilogue.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_dispatch_deterministic_prologue.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_dispatch_official.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_exception.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_hybrid_combine_official.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_hybrid_dispatch_official.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_launch.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_layout.cuh",
+          "mooncake-ep/include/elastic/mooncake_ep_elastic_math.cuh"
+        ],
+        "cuda_files": 38,
+        "files_mentioning_cutlass": 0,
+        "triton_examples": [],
+        "triton_jit_files": 0
+      },
+      "languages": [
+        {
+          "code": 237757,
+          "files": 553,
+          "lang": "C++",
+          "lines": 301147
+        },
+        {
+          "code": 75190,
+          "files": 410,
+          "lang": "C/C++ header",
+          "lines": 119480
+        },
+        {
+          "code": 52954,
+          "files": 193,
+          "lang": "Python",
+          "lines": 63986
+        },
+        {
+          "code": 21063,
+          "files": 144,
+          "lang": "Markdown",
+          "lines": 33129
+        },
+        {
+          "code": 7103,
+          "files": 38,
+          "lang": "CUDA",
+          "lines": 9987
+        },
+        {
+          "code": 7270,
+          "files": 39,
+          "lang": "Shell",
+          "lines": 8855
+        },
+        {
+          "code": 3971,
+          "files": 18,
+          "lang": "Go",
+          "lines": 5277
+        },
+        {
+          "code": 3030,
+          "files": 19,
+          "lang": "Rust",
+          "lines": 4405
+        },
+        {
+          "code": 1908,
+          "files": 15,
+          "lang": "JSON",
+          "lines": 1910
+        },
+        {
+          "code": 211,
+          "files": 5,
+          "lang": "TOML",
+          "lines": 276
+        },
+        {
+          "code": 168,
+          "files": 7,
+          "lang": "YAML",
+          "lines": 210
+        },
+        {
+          "code": 165,
+          "files": 1,
+          "lang": "C",
+          "lines": 195
+        },
+        {
+          "code": 30,
+          "files": 1,
+          "lang": "JavaScript",
+          "lines": 38
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-22T13:12:18+08:00",
+        "label": "Mooncake",
+        "name": "mooncake",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\mooncake",
+        "remote": "https://github.com/kvcache-ai/Mooncake.git",
+        "sha": "3b5a594133958449a1feaf1c9e0fc1b553e34a28",
+        "sha_short": "3b5a5941"
+      },
+      "top_dirs": [
+        {
+          "dir": "mooncake-transfer-engine/tent",
+          "files": 219,
+          "lines": 85136
+        },
+        {
+          "dir": "mooncake-store/tests",
+          "files": 140,
+          "lines": 82187
+        },
+        {
+          "dir": "mooncake-store/src",
+          "files": 115,
+          "lines": 78393
+        },
+        {
+          "dir": "mooncake-transfer-engine/src",
+          "files": 75,
+          "lines": 47138
+        },
+        {
+          "dir": "mooncake-store/include",
+          "files": 164,
+          "lines": 45527
+        },
+        {
+          "dir": "docs/source",
+          "files": 115,
+          "lines": 29383
+        },
+        {
+          "dir": "mooncake-transfer-engine/tests",
+          "files": 60,
+          "lines": 20792
+        },
+        {
+          "dir": "mooncake-transfer-engine/include",
+          "files": 102,
+          "lines": 19938
+        },
+        {
+          "dir": "mooncake-wheel/tests",
+          "files": 31,
+          "lines": 13574
+        },
+        {
+          "dir": "mooncake-wheel/mooncake",
+          "files": 22,
+          "lines": 13390
+        },
+        {
+          "dir": "mooncake-store/benchmarks",
+          "files": 20,
+          "lines": 12456
+        },
+        {
+          "dir": "mooncake-pg/src",
+          "files": 13,
+          "lines": 9197
+        },
+        {
+          "dir": "mooncake-integration/store",
+          "files": 8,
+          "lines": 9148
+        },
+        {
+          "dir": "scripts",
+          "files": 16,
+          "lines": 8259
+        },
+        {
+          "dir": "mooncake-reshard/tests",
+          "files": 29,
+          "lines": 6848
+        },
+        {
+          "dir": "mooncake-transfer-engine/example",
+          "files": 19,
+          "lines": 6605
+        },
+        {
+          "dir": "mooncake-ep/include",
+          "files": 26,
+          "lines": 6387
+        },
+        {
+          "dir": "mooncake-reshard/python",
+          "files": 29,
+          "lines": 5780
+        },
+        {
+          "dir": "mooncake-pg/include",
+          "files": 18,
+          "lines": 4132
+        },
+        {
+          "dir": "mooncake-pg/tests",
+          "files": 11,
+          "lines": 3956
+        }
+      ],
+      "totals": {
+        "files_counted": 1443,
+        "lines_counted": 548895,
+        "python_src_lines": 30573,
+        "python_test_lines": 33413,
+        "test_to_src_ratio": 1.093
+      }
+    },
+    "sglang": {
+      "kernels": {
+        "cuda_examples": [
+          "python/sglang/kernels/aot/csrc/allreduce/custom_all_reduce.cu",
+          "python/sglang/kernels/aot/csrc/allreduce/custom_all_reduce.cuh",
+          "python/sglang/kernels/aot/csrc/allreduce/custom_all_reduce_hip.cuh",
+          "python/sglang/kernels/aot/csrc/allreduce/quick_all_reduce.cu",
+          "python/sglang/kernels/aot/csrc/allreduce/quick_all_reduce.cuh",
+          "python/sglang/kernels/aot/csrc/attention/cutlass_mla_kernel.cu",
+          "python/sglang/kernels/aot/csrc/attention/merge_attn_states.cu",
+          "python/sglang/kernels/aot/csrc/attention/vertical_slash_index.cu",
+          "python/sglang/kernels/aot/csrc/cutlass_extensions/gemm/cutlass_gemm_caller.cuh",
+          "python/sglang/kernels/aot/csrc/cutlass_extensions/gemm/fp8_gemm_sm90_dispatch.cuh",
+          "python/sglang/kernels/aot/csrc/elementwise/activation.cu",
+          "python/sglang/kernels/aot/csrc/elementwise/concat_mla.cu",
+          "python/sglang/kernels/aot/csrc/elementwise/copy.cu",
+          "python/sglang/kernels/aot/csrc/elementwise/deepseek_v4_topk.cu",
+          "python/sglang/kernels/aot/csrc/elementwise/dsv4_norm_rope.cu"
+        ],
+        "cuda_files": 246,
+        "files_mentioning_cutlass": 78,
+        "triton_examples": [
+          "benchmark/kernels/deepseek/benchmark_deepgemm_fp8_group_gemm.py",
+          "benchmark/kernels/elementwise/benchmark_concat_mla.py",
+          "benchmark/kernels/scheduler_batch/benchmark_get_last_loc_triton.py",
+          "benchmark/kernels/scheduler_batch/benchmark_write_req_to_token_pool_triton.py",
+          "python/sglang/_platform_stubs.py",
+          "python/sglang/kernels/aot/benchmark/bench_moe_align_block_size.py",
+          "python/sglang/kernels/aot/benchmark/bench_sum_scale.py",
+          "python/sglang/kernels/aot/tests/test_merge_state_v2.py",
+          "python/sglang/kernels/aot/tests/test_moe_align.py",
+          "python/sglang/kernels/ops/activation/softcap.py",
+          "python/sglang/kernels/ops/attention/dcp_kernels.py",
+          "python/sglang/kernels/ops/attention/decode_attention.py",
+          "python/sglang/kernels/ops/attention/deepseek_v4_rope.py",
+          "python/sglang/kernels/ops/attention/dsa/cp_split.py",
+          "python/sglang/kernels/ops/attention/dsa/dequant_k_cache.py"
+        ],
+        "triton_jit_files": 249
+      },
+      "languages": [
+        {
+          "code": 1525838,
+          "files": 5750,
+          "lang": "Python",
+          "lines": 1859684
+        },
+        {
+          "code": 116728,
+          "files": 434,
+          "lang": "Rust",
+          "lines": 156078
+        },
+        {
+          "code": 75057,
+          "files": 246,
+          "lang": "CUDA",
+          "lines": 98845
+        },
+        {
+          "code": 94690,
+          "files": 588,
+          "lang": "JSON",
+          "lines": 94696
+        },
+        {
+          "code": 20103,
+          "files": 93,
+          "lang": "C/C++ header",
+          "lines": 28105
+        },
+        {
+          "code": 18404,
+          "files": 158,
+          "lang": "Markdown",
+          "lines": 27278
+        },
+        {
+          "code": 17943,
+          "files": 52,
+          "lang": "C++",
+          "lines": 23874
+        },
+        {
+          "code": 8158,
+          "files": 77,
+          "lang": "Shell",
+          "lines": 11160
+        },
+        {
+          "code": 5944,
+          "files": 22,
+          "lang": "Go",
+          "lines": 7598
+        },
+        {
+          "code": 3534,
+          "files": 71,
+          "lang": "YAML",
+          "lines": 4703
+        },
+        {
+          "code": 2818,
+          "files": 4,
+          "lang": "JavaScript",
+          "lines": 3049
+        },
+        {
+          "code": 1958,
+          "files": 35,
+          "lang": "TOML",
+          "lines": 2395
+        },
+        {
+          "code": 328,
+          "files": 2,
+          "lang": "Protobuf",
+          "lines": 520
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-22T15:35:55+08:00",
+        "label": "SGLang",
+        "name": "sglang",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\sglang",
+        "remote": "https://github.com/sgl-project/sglang.git",
+        "sha": "15a439832054c1809a2bf59f7b94bf9dd71de282",
+        "sha_short": "15a43983"
+      },
+      "top_dirs": [
+        {
+          "dir": "python/sglang",
+          "files": 4435,
+          "lines": 1543126
+        },
+        {
+          "dir": "test/registered",
+          "files": 1714,
+          "lines": 411046
+        },
+        {
+          "dir": "sgl-model-gateway/src",
+          "files": 172,
+          "lines": 63156
+        },
+        {
+          "dir": "test/manual",
+          "files": 256,
+          "lines": 47043
+        },
+        {
+          "dir": "experimental/sgl-router",
+          "files": 154,
+          "lines": 44639
+        },
+        {
+          "dir": ".claude/skills",
+          "files": 94,
+          "lines": 29359
+        },
+        {
+          "dir": "scripts/ci",
+          "files": 100,
+          "lines": 25659
+        },
+        {
+          "dir": "sgl-model-gateway/tests",
+          "files": 57,
+          "lines": 24053
+        },
+        {
+          "dir": "rust/sglang-server",
+          "files": 55,
+          "lines": 20607
+        },
+        {
+          "dir": "sgl-model-gateway/bindings",
+          "files": 65,
+          "lines": 19946
+        },
+        {
+          "dir": "benchmark/kernels",
+          "files": 46,
+          "lines": 15056
+        },
+        {
+          "dir": "sgl-model-gateway/e2e_test",
+          "files": 61,
+          "lines": 14360
+        },
+        {
+          "dir": "benchmark/hicache",
+          "files": 13,
+          "lines": 5114
+        },
+        {
+          "dir": "scripts/ci_monitor",
+          "files": 3,
+          "lines": 4104
+        },
+        {
+          "dir": "rust/sglang-mm",
+          "files": 22,
+          "lines": 3859
+        },
+        {
+          "dir": "benchmark/bench_linear_attention",
+          "files": 10,
+          "lines": 3799
+        },
+        {
+          "dir": "rust/sglang-grpc",
+          "files": 13,
+          "lines": 3029
+        },
+        {
+          "dir": "examples/frontend_language",
+          "files": 32,
+          "lines": 2530
+        },
+        {
+          "dir": "examples/runtime",
+          "files": 30,
+          "lines": 2513
+        },
+        {
+          "dir": "sgl-model-gateway/benches",
+          "files": 7,
+          "lines": 2359
+        }
+      ],
+      "totals": {
+        "files_counted": 7532,
+        "lines_counted": 2317985,
+        "python_src_lines": 1254674,
+        "python_test_lines": 605010,
+        "test_to_src_ratio": 0.482
+      }
+    },
+    "tensorrt-llm": {
+      "kernels": {
+        "cuda_examples": [
+          "cpp/cmake/utils/detect_cuda_arch.cu",
+          "cpp/include/tensorrt_llm/deep_gemm/compiler.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/fp8_gemm.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/fp8_gemm_impl.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/jit_utils.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/mma_utils.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/nvrtc_cutlass.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/nvrtc_std.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/runtime.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/scheduler.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/tma_utils.cuh",
+          "cpp/include/tensorrt_llm/deep_gemm/utils.cuh",
+          "cpp/kernels/fmha_v2/src/convert.cu",
+          "cpp/kernels/fmha_v2/src/softmax_bf16.cu",
+          "cpp/kernels/fmha_v2/src/softmax_fp16.cu"
+        ],
+        "cuda_files": 429,
+        "files_mentioning_cutlass": 285,
+        "triton_examples": [
+          ".claude/skills/kernel-tileir-optimization/scripts/classify_kernel.py",
+          "tensorrt_llm/_torch/attention_backend/sparse/deepseek_v4/kernels.py",
+          "tensorrt_llm/_torch/attention_backend/sparse/dsa/kernels.py",
+          "tensorrt_llm/_torch/attention_backend/sparse/minimax_m3/triton_kernels.py",
+          "tensorrt_llm/_torch/attention_backend/sparse/rocket/kernels.py",
+          "tensorrt_llm/_torch/attention_backend/triton_prefill.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/attention/triton_attention.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/fla/delta_rule/fused_recurrent.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/fla/delta_rule/wy_fast.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/fla/gdn_gating.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/fused_moe/triton_moe.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/fused_moe/triton_routing.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/mla/triton_mla.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/normalization/triton_fused_add_rms_norm_quant_fp8.py",
+          "tensorrt_llm/_torch/auto_deploy/custom_ops/normalization/triton_rms_norm.py"
+        ],
+        "triton_jit_files": 91
+      },
+      "languages": [
+        {
+          "code": 1085225,
+          "files": 2974,
+          "lang": "Python",
+          "lines": 1396739
+        },
+        {
+          "code": 299036,
+          "files": 776,
+          "lang": "C/C++ header",
+          "lines": 405295
+        },
+        {
+          "code": 142765,
+          "files": 481,
+          "lang": "Markdown",
+          "lines": 202157
+        },
+        {
+          "code": 144581,
+          "files": 448,
+          "lang": "C++",
+          "lines": 193087
+        },
+        {
+          "code": 117136,
+          "files": 429,
+          "lang": "CUDA",
+          "lines": 160905
+        },
+        {
+          "code": 57776,
+          "files": 813,
+          "lang": "YAML",
+          "lines": 61489
+        },
+        {
+          "code": 20160,
+          "files": 75,
+          "lang": "JSON",
+          "lines": 20179
+        },
+        {
+          "code": 4467,
+          "files": 82,
+          "lang": "Shell",
+          "lines": 6697
+        },
+        {
+          "code": 2462,
+          "files": 33,
+          "lang": "TOML",
+          "lines": 2709
+        },
+        {
+          "code": 1487,
+          "files": 2,
+          "lang": "JavaScript",
+          "lines": 1693
+        },
+        {
+          "code": 665,
+          "files": 24,
+          "lang": "reST",
+          "lines": 998
+        },
+        {
+          "code": 160,
+          "files": 1,
+          "lang": "C",
+          "lines": 250
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-22T04:50:28Z",
+        "label": "TensorRT-LLM",
+        "name": "tensorrt-llm",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\tensorrt-llm",
+        "remote": "https://github.com/NVIDIA/TensorRT-LLM.git (zipball)",
+        "sha": "75b023cd12506cec43470549d919335cbfa9c9dc",
+        "sha_short": "75b023cd"
+      },
+      "top_dirs": [
+        {
+          "dir": "tensorrt_llm/_torch",
+          "files": 1003,
+          "lines": 570375
+        },
+        {
+          "dir": "cpp/tensorrt_llm",
+          "files": 1249,
+          "lines": 546899
+        },
+        {
+          "dir": "tests/unittest",
+          "files": 1043,
+          "lines": 484641
+        },
+        {
+          "dir": "<root>",
+          "files": 19,
+          "lines": 116128
+        },
+        {
+          "dir": "cpp/kernels",
+          "files": 173,
+          "lines": 105978
+        },
+        {
+          "dir": "tests/integration",
+          "files": 355,
+          "lines": 88388
+        },
+        {
+          "dir": "cpp/tests",
+          "files": 156,
+          "lines": 86665
+        },
+        {
+          "dir": "docs/source",
+          "files": 180,
+          "lines": 41922
+        },
+        {
+          "dir": ".claude/skills",
+          "files": 193,
+          "lines": 40946
+        },
+        {
+          "dir": "tests/scripts",
+          "files": 243,
+          "lines": 39795
+        },
+        {
+          "dir": "cpp/include",
+          "files": 113,
+          "lines": 34910
+        },
+        {
+          "dir": "tensorrt_llm/serve",
+          "files": 57,
+          "lines": 30527
+        },
+        {
+          "dir": "scripts/attribution",
+          "files": 36,
+          "lines": 18664
+        },
+        {
+          "dir": "jenkins/scripts",
+          "files": 68,
+          "lines": 17081
+        },
+        {
+          "dir": "tests/microbenchmarks",
+          "files": 40,
+          "lines": 14395
+        },
+        {
+          "dir": "tensorrt_llm/llmapi",
+          "files": 18,
+          "lines": 14217
+        },
+        {
+          "dir": "tensorrt_llm/runtime",
+          "files": 38,
+          "lines": 13416
+        },
+        {
+          "dir": "tensorrt_llm/scaffolding",
+          "files": 59,
+          "lines": 12834
+        },
+        {
+          "dir": "examples/scaffolding",
+          "files": 71,
+          "lines": 11696
+        },
+        {
+          "dir": "tensorrt_llm/executor",
+          "files": 28,
+          "lines": 10973
+        }
+      ],
+      "totals": {
+        "files_counted": 6138,
+        "lines_counted": 2452198,
+        "python_src_lines": 792216,
+        "python_test_lines": 603872,
+        "test_to_src_ratio": 0.762
+      }
+    },
+    "tgi": {
+      "kernels": {
+        "cuda_examples": [
+          "backends/trtllm/cmake/utils/detect_cuda_arch.cu",
+          "server/custom_kernels/custom_kernels/fused_attention_cuda.cu",
+          "server/custom_kernels/custom_kernels/fused_bloom_attention_cuda.cu",
+          "server/exllama_kernels/exllama_kernels/cu_compat.cuh",
+          "server/exllama_kernels/exllama_kernels/cuda_buffers.cu",
+          "server/exllama_kernels/exllama_kernels/cuda_buffers.cuh",
+          "server/exllama_kernels/exllama_kernels/cuda_func/column_remap.cu",
+          "server/exllama_kernels/exllama_kernels/cuda_func/column_remap.cuh",
+          "server/exllama_kernels/exllama_kernels/cuda_func/q4_matmul.cu",
+          "server/exllama_kernels/exllama_kernels/cuda_func/q4_matmul.cuh",
+          "server/exllama_kernels/exllama_kernels/cuda_func/q4_matrix.cu",
+          "server/exllama_kernels/exllama_kernels/cuda_func/q4_matrix.cuh",
+          "server/exllama_kernels/exllama_kernels/hip_compat.cuh",
+          "server/exllama_kernels/exllama_kernels/matrix.cuh",
+          "server/exllama_kernels/exllama_kernels/util.cuh"
+        ],
+        "cuda_files": 31,
+        "files_mentioning_cutlass": 0,
+        "triton_examples": [
+          "server/text_generation_server/layers/attention/flash_attn_triton.py",
+          "server/text_generation_server/layers/gptq/custom_autotune.py",
+          "server/text_generation_server/layers/gptq/triton.py",
+          "server/text_generation_server/models/metadata_kernels.py"
+        ],
+        "triton_jit_files": 4
+      },
+      "languages": [
+        {
+          "code": 88426,
+          "files": 380,
+          "lang": "Python",
+          "lines": 108900
+        },
+        {
+          "code": 44355,
+          "files": 206,
+          "lang": "JSON",
+          "lines": 44355
+        },
+        {
+          "code": 18113,
+          "files": 64,
+          "lang": "Rust",
+          "lines": 23443
+        },
+        {
+          "code": 3488,
+          "files": 55,
+          "lang": "Markdown",
+          "lines": 5364
+        },
+        {
+          "code": 3259,
+          "files": 31,
+          "lang": "CUDA",
+          "lines": 4610
+        },
+        {
+          "code": 662,
+          "files": 18,
+          "lang": "TOML",
+          "lines": 734
+        },
+        {
+          "code": 500,
+          "files": 5,
+          "lang": "C++",
+          "lines": 708
+        },
+        {
+          "code": 296,
+          "files": 6,
+          "lang": "C/C++ header",
+          "lines": 543
+        },
+        {
+          "code": 299,
+          "files": 2,
+          "lang": "Protobuf",
+          "lines": 525
+        },
+        {
+          "code": 302,
+          "files": 7,
+          "lang": "Shell",
+          "lines": 353
+        },
+        {
+          "code": 180,
+          "files": 3,
+          "lang": "YAML",
+          "lines": 203
+        },
+        {
+          "code": 114,
+          "files": 2,
+          "lang": "JavaScript",
+          "lines": 188
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-03-21T20:34:22+09:00",
+        "label": "TGI",
+        "name": "tgi",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\tgi",
+        "remote": "https://github.com/huggingface/text-generation-inference.git",
+        "sha": "b4adbf2f6e2e721280bd0ea5f91d70f7d033f5ed",
+        "sha_short": "b4adbf2f"
+      },
+      "top_dirs": [
+        {
+          "dir": "server/text_generation_server",
+          "files": 143,
+          "lines": 54458
+        },
+        {
+          "dir": "integration-tests/models",
+          "files": 273,
+          "lines": 43895
+        },
+        {
+          "dir": "backends/gaudi",
+          "files": 114,
+          "lines": 38607
+        },
+        {
+          "dir": "router/src",
+          "files": 13,
+          "lines": 9921
+        },
+        {
+          "dir": "docs/source",
+          "files": 42,
+          "lines": 4054
+        },
+        {
+          "dir": "assets",
+          "files": 1,
+          "lines": 3999
+        },
+        {
+          "dir": "backends/v3",
+          "files": 12,
+          "lines": 3880
+        },
+        {
+          "dir": "server/exllamav2_kernels",
+          "files": 20,
+          "lines": 3100
+        },
+        {
+          "dir": "server/tests",
+          "files": 13,
+          "lines": 3076
+        },
+        {
+          "dir": "clients/python",
+          "files": 12,
+          "lines": 2482
+        },
+        {
+          "dir": "docs",
+          "files": 2,
+          "lines": 2473
+        },
+        {
+          "dir": "launcher/src",
+          "files": 3,
+          "lines": 2450
+        },
+        {
+          "dir": "backends/neuron",
+          "files": 22,
+          "lines": 2259
+        },
+        {
+          "dir": "backends/v2",
+          "files": 9,
+          "lines": 2222
+        },
+        {
+          "dir": "backends/trtllm",
+          "files": 17,
+          "lines": 2136
+        },
+        {
+          "dir": "benchmark/src",
+          "files": 7,
+          "lines": 1596
+        },
+        {
+          "dir": "server/exllama_kernels",
+          "files": 15,
+          "lines": 1504
+        },
+        {
+          "dir": "backends/client",
+          "files": 9,
+          "lines": 1258
+        },
+        {
+          "dir": "backends/llamacpp",
+          "files": 7,
+          "lines": 1165
+        },
+        {
+          "dir": "<root>",
+          "files": 11,
+          "lines": 1005
+        }
+      ],
+      "totals": {
+        "files_counted": 779,
+        "lines_counted": 189926,
+        "python_src_lines": 98255,
+        "python_test_lines": 10645,
+        "test_to_src_ratio": 0.108
+      }
+    },
+    "tokasaurus": {
+      "kernels": {
+        "cuda_examples": [],
+        "cuda_files": 0,
+        "files_mentioning_cutlass": 0,
+        "triton_examples": [],
+        "triton_jit_files": 0
+      },
+      "languages": [
+        {
+          "code": 9577,
+          "files": 45,
+          "lang": "Python",
+          "lines": 12656
+        },
+        {
+          "code": 273,
+          "files": 4,
+          "lang": "Markdown",
+          "lines": 504
+        },
+        {
+          "code": 51,
+          "files": 1,
+          "lang": "TOML",
+          "lines": 55
+        },
+        {
+          "code": 4,
+          "files": 1,
+          "lang": "JSON",
+          "lines": 4
+        }
+      ],
+      "ref": {
+        "commit_date": "2025-08-19T12:45:09-07:00",
+        "label": "Tokasaurus",
+        "name": "tokasaurus",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\tokasaurus",
+        "remote": "https://github.com/ScalingIntelligence/tokasaurus.git",
+        "sha": "726890525a97f6ab156224f60f1e75e4f0db1f59",
+        "sha_short": "72689052"
+      },
+      "top_dirs": [
+        {
+          "dir": "tokasaurus/manager",
+          "files": 9,
+          "lines": 3823
+        },
+        {
+          "dir": "tokasaurus/model",
+          "files": 11,
+          "lines": 3698
+        },
+        {
+          "dir": "tokasaurus/benchmarks",
+          "files": 8,
+          "lines": 1574
+        },
+        {
+          "dir": "tokasaurus/server",
+          "files": 4,
+          "lines": 1338
+        },
+        {
+          "dir": "tests",
+          "files": 6,
+          "lines": 1251
+        },
+        {
+          "dir": "tokasaurus",
+          "files": 5,
+          "lines": 881
+        },
+        {
+          "dir": "<root>",
+          "files": 4,
+          "lines": 338
+        },
+        {
+          "dir": "logs",
+          "files": 1,
+          "lines": 149
+        },
+        {
+          "dir": "tokasaurus/scripts",
+          "files": 2,
+          "lines": 91
+        },
+        {
+          "dir": "contributing",
+          "files": 1,
+          "lines": 76
+        }
+      ],
+      "totals": {
+        "files_counted": 51,
+        "lines_counted": 13219,
+        "python_src_lines": 11405,
+        "python_test_lines": 1251,
+        "test_to_src_ratio": 0.11
+      }
+    },
+    "vllm": {
+      "kernels": {
+        "cuda_examples": [
+          "csrc/attention/attention_generic.cuh",
+          "csrc/attention/dtype_bfloat16.cuh",
+          "csrc/attention/dtype_float16.cuh",
+          "csrc/attention/dtype_float32.cuh",
+          "csrc/attention/dtype_fp8.cuh",
+          "csrc/custom_all_gather_reduce_scatter.cuh",
+          "csrc/custom_all_reduce.cuh",
+          "csrc/custom_collective_common.cuh",
+          "csrc/custom_quickreduce.cu",
+          "csrc/cutlass_extensions/cute_utils.cuh",
+          "csrc/cutlass_extensions/vllm_custom_types.cuh",
+          "csrc/cutlass_extensions/vllm_type_utils.cuh",
+          "csrc/libtorch_stable/activation_kernels.cu",
+          "csrc/libtorch_stable/async_util.cuh",
+          "csrc/libtorch_stable/attention/attention_utils.cuh"
+        ],
+        "cuda_files": 169,
+        "files_mentioning_cutlass": 79,
+        "triton_examples": [
+          "benchmarks/kernels/benchmark_silu_mul_fp8_quant.py",
+          "tests/compile/passes/ir/test_inplace_functionalization.py",
+          "tests/jit_monitor/test_hooks_gpu.py",
+          "tests/kernels/helion/test_register.py",
+          "tests/kernels/mamba/test_memcpy_u64_tiled.py",
+          "tests/test_triton_utils.py",
+          "vllm/_xpu_ops.py",
+          "vllm/distributed/kv_transfer/kv_connector/v1/hf3fs/utils/gather_scatter_helper.py",
+          "vllm/kernels/triton/qkv_padded_fp8_quant.py",
+          "vllm/lora/ops/triton_ops/fp8_kernel_utils.py",
+          "vllm/lora/ops/triton_ops/fused_moe_lora_fp8_op.py",
+          "vllm/lora/ops/triton_ops/fused_moe_lora_op.py",
+          "vllm/lora/ops/triton_ops/kernel_utils.py",
+          "vllm/lora/ops/triton_ops/lora_expand_fp8_op.py",
+          "vllm/lora/ops/triton_ops/lora_expand_op.py"
+        ],
+        "triton_jit_files": 202
+      },
+      "languages": [
+        {
+          "code": 1149219,
+          "files": 4294,
+          "lang": "Python",
+          "lines": 1437931
+        },
+        {
+          "code": 157052,
+          "files": 646,
+          "lang": "JSON",
+          "lines": 157056
+        },
+        {
+          "code": 86137,
+          "files": 309,
+          "lang": "Rust",
+          "lines": 109867
+        },
+        {
+          "code": 52267,
+          "files": 169,
+          "lang": "CUDA",
+          "lines": 70442
+        },
+        {
+          "code": 28501,
+          "files": 285,
+          "lang": "Markdown",
+          "lines": 44253
+        },
+        {
+          "code": 23525,
+          "files": 88,
+          "lang": "C/C++ header",
+          "lines": 32312
+        },
+        {
+          "code": 17334,
+          "files": 43,
+          "lang": "C++",
+          "lines": 22847
+        },
+        {
+          "code": 15560,
+          "files": 132,
+          "lang": "Shell",
+          "lines": 21176
+        },
+        {
+          "code": 15684,
+          "files": 289,
+          "lang": "YAML",
+          "lines": 17579
+        },
+        {
+          "code": 866,
+          "files": 23,
+          "lang": "TOML",
+          "lines": 985
+        },
+        {
+          "code": 262,
+          "files": 2,
+          "lang": "Protobuf",
+          "lines": 388
+        },
+        {
+          "code": 107,
+          "files": 6,
+          "lang": "JavaScript",
+          "lines": 148
+        }
+      ],
+      "ref": {
+        "commit_date": "2026-08-22T05:11:44Z",
+        "label": "vLLM",
+        "name": "vllm",
+        "path": "C:\\Users\\jianm\\Desktop\\llm-action\\VLLM-SGlang-研究-推进\\_src\\vllm",
+        "remote": "https://github.com/vllm-project/vllm.git",
+        "sha": "7ca49fbe4bab019e55d57cdc4b7fd3d55c67c1a6",
+        "sha_short": "7ca49fbe"
+      },
+      "top_dirs": [
+        {
+          "dir": "vllm/model_executor",
+          "files": 1339,
+          "lines": 424532
+        },
+        {
+          "dir": "tests/v1",
+          "files": 411,
+          "lines": 149220
+        },
+        {
+          "dir": "vllm/v1",
+          "files": 360,
+          "lines": 148226
+        },
+        {
+          "dir": "rust/src",
+          "files": 358,
+          "lines": 114299
+        },
+        {
+          "dir": "tests/kernels",
+          "files": 262,
+          "lines": 93398
+        },
+        {
+          "dir": "vllm/models",
+          "files": 195,
+          "lines": 77076
+        },
+        {
+          "dir": "vllm/kernels",
+          "files": 33,
+          "lines": 69744
+        },
+        {
+          "dir": "csrc/libtorch_stable",
+          "files": 184,
+          "lines": 69144
+        },
+        {
+          "dir": "tests/entrypoints",
+          "files": 260,
+          "lines": 62540
+        },
+        {
+          "dir": "vllm/distributed",
+          "files": 138,
+          "lines": 54754
+        },
+        {
+          "dir": "tests/models",
+          "files": 215,
+          "lines": 42631
+        },
+        {
+          "dir": "vllm/entrypoints",
+          "files": 211,
+          "lines": 40549
+        },
+        {
+          "dir": "csrc/cpu",
+          "files": 71,
+          "lines": 38110
+        },
+        {
+          "dir": "vllm/transformers_utils",
+          "files": 115,
+          "lines": 25669
+        },
+        {
+          "dir": "benchmarks/kernels",
+          "files": 69,
+          "lines": 20873
+        },
+        {
+          "dir": "tests/parser",
+          "files": 29,
+          "lines": 19048
+        },
+        {
+          "dir": "vllm",
+          "files": 22,
+          "lines": 17717
+        },
+        {
+          "dir": "tests/tool_parsers",
+          "files": 45,
+          "lines": 17692
+        },
+        {
+          "dir": "tests/distributed",
+          "files": 52,
+          "lines": 17023
+        },
+        {
+          "dir": "tests/compile",
+          "files": 64,
+          "lines": 16538
+        }
+      ],
+      "totals": {
+        "files_counted": 6286,
+        "lines_counted": 1914984,
+        "python_src_lines": 932277,
+        "python_test_lines": 505654,
+        "test_to_src_ratio": 0.542
+      }
+    }
+  }
+}

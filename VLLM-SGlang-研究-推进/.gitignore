@@ -1,0 +1,7 @@
+# 引擎源码 clone —— 只用于本地取证，不入库（体积大 & 上游有各自 license）
+_src/
+__pycache__/
+.pytest_cache/
+*.pyc
+verify_out.txt
+*.log

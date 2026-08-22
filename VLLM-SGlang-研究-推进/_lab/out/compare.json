@@ -1,0 +1,4596 @@
+{
+  "chat_field_matrix": [
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "_DEFAULT_SAMPLING_PARAMS",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "_grammar_from_parser",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "field": "_loaded_defaults",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "add_generation_prompt",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "add_special_tokens",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "agent_hierarchy",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "allowed_token_ids",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "bad_words",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "best_of",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "bootstrap_host",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "bootstrap_port",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "bootstrap_room",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "cache_salt",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "field": "character_settings",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "chat_template",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "chat_template_kwargs",
+      "is_openai_standard": false,
+      "n": 5
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "field": "continue_final_message",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "conversation_params",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "custom_logit_processor",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "custom_params",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "data_parallel_rank",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "field": "debug_config",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "disagg_prefill_dp_rank",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "disaggregated_params",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "do_preprocess",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "field": "do_sample",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "documents",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "early_stopping",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "ebnf",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "ec_transfer_params",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "echo",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "enable_thinking",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "extra_key",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "frequency_penalty",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "field": "function_call",
+      "is_openai_standard": true,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "ignore_eos",
+      "is_openai_standard": false,
+      "n": 5
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "image_data",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "images_config",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "include_reasoning",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "include_stop_str_in_output",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "field": "input_ids",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "kv_transfer_params",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "length_penalty",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "logit_bias",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "logprob_token_ids",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "logprobs",
+      "is_openai_standard": true,
+      "n": 5
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "lora_path",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "lora_request",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "max_completion_tokens",
+      "is_openai_standard": true,
+      "n": 5
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "max_dynamic_patch",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "vllm"
+      ],
+      "field": "max_tokens",
+      "is_openai_standard": true,
+      "n": 5
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "media_io_kwargs",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "messages",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "min_dynamic_patch",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "min_new_tokens",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "min_p",
+      "is_openai_standard": false,
+      "n": 4
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "min_tokens",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "mm_processor_kwargs",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "model",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "n",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "no_stop_trim",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "field": "parallel_tool_calls",
+      "is_openai_standard": true,
+      "n": 4
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "presence_penalty",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "priority",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "prompt_ignore_length",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "prompt_logprobs",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "prompt_token_ids",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "prompt_token_ids_b64",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "reasoning_effort",
+      "is_openai_standard": true,
+      "n": 5
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "regex",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "repetition_detection",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "repetition_ngram_size",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "repetition_ngram_threshold",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "repetition_penalty",
+      "is_openai_standard": false,
+      "n": 5
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "request_id",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "response_format",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "return_assistant_tokens_mask",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "return_cached_tokens_details",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "return_hidden_states",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "field": "return_logprob",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "return_meta_info",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "return_prompt_text",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "return_prompt_token_ids",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "field": "return_routed_experts",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "return_sampling_mask",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "return_spec_tokens_details",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "field": "return_token_ids",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "return_token_offsets",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "return_tokens_as_token_ids",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "rid",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "field": "role_settings",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "routed_dp_rank",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "routed_experts_prompt_start",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "routed_experts_start_len",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "seed",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "lightllm",
+        "sglang"
+      ],
+      "field": "separate_reasoning",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "field": "session_id",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "session_params",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "skip_special_tokens",
+      "is_openai_standard": false,
+      "n": 4
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "spaces_between_special_tokens",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "stop",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "stop_regex",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "stop_token_ids",
+      "is_openai_standard": false,
+      "n": 3
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "stream",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "stream_interval",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "stream_options",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "lightllm",
+        "sglang"
+      ],
+      "field": "stream_reasoning",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "structured_outputs",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "task",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "temperature",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "thinking_token_budget",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "tool_choice",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "tools",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "top_k",
+      "is_openai_standard": false,
+      "n": 5
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "top_logprobs",
+      "is_openai_standard": true,
+      "n": 5
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "top_p",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "field": "top_p_min",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "truncate_prompt_tokens",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "truncation_side",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "use_audio_in_video",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "use_beam_search",
+      "is_openai_standard": false,
+      "n": 2
+    },
+    {
+      "engines": [
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "field": "user",
+      "is_openai_standard": true,
+      "n": 6
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "field": "video_config",
+      "is_openai_standard": false,
+      "n": 1
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "field": "vllm_xargs",
+      "is_openai_standard": false,
+      "n": 1
+    }
+  ],
+  "chat_request": {
+    "lightllm": {
+      "class": "ChatCompletionRequest",
+      "engine_specific": [
+        "_loaded_defaults",
+        "character_settings",
+        "chat_template_kwargs",
+        "do_sample",
+        "ignore_eos",
+        "repetition_penalty",
+        "role_settings",
+        "separate_reasoning",
+        "stream_reasoning",
+        "top_k"
+      ],
+      "fields": [
+        "_loaded_defaults",
+        "character_settings",
+        "chat_template_kwargs",
+        "do_sample",
+        "frequency_penalty",
+        "function_call",
+        "ignore_eos",
+        "logit_bias",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "repetition_penalty",
+        "response_format",
+        "role_settings",
+        "seed",
+        "separate_reasoning",
+        "stop",
+        "stream",
+        "stream_options",
+        "stream_reasoning",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p",
+        "user"
+      ],
+      "file": "lightllm/server/api_models.py",
+      "line": 191,
+      "missing_vs_openai": [
+        "audio",
+        "functions",
+        "logprobs",
+        "metadata",
+        "modalities",
+        "prediction",
+        "service_tier",
+        "store",
+        "top_logprobs"
+      ],
+      "n_fields": 31,
+      "openai_standard": [
+        "frequency_penalty",
+        "function_call",
+        "logit_bias",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p",
+        "user"
+      ]
+    },
+    "lmdeploy": {
+      "class": "ChatCompletionRequest",
+      "engine_specific": [
+        "chat_template_kwargs",
+        "do_preprocess",
+        "enable_thinking",
+        "ignore_eos",
+        "image_data",
+        "include_stop_str_in_output",
+        "input_ids",
+        "media_io_kwargs",
+        "min_new_tokens",
+        "min_p",
+        "mm_processor_kwargs",
+        "repetition_ngram_size",
+        "repetition_ngram_threshold",
+        "repetition_penalty",
+        "return_logprob",
+        "return_routed_experts",
+        "return_token_ids",
+        "session_id",
+        "skip_special_tokens",
+        "spaces_between_special_tokens",
+        "top_k"
+      ],
+      "fields": [
+        "chat_template_kwargs",
+        "do_preprocess",
+        "enable_thinking",
+        "frequency_penalty",
+        "ignore_eos",
+        "image_data",
+        "include_stop_str_in_output",
+        "input_ids",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "media_io_kwargs",
+        "messages",
+        "min_new_tokens",
+        "min_p",
+        "mm_processor_kwargs",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "repetition_ngram_size",
+        "repetition_ngram_threshold",
+        "repetition_penalty",
+        "response_format",
+        "return_logprob",
+        "return_routed_experts",
+        "return_token_ids",
+        "seed",
+        "session_id",
+        "skip_special_tokens",
+        "spaces_between_special_tokens",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ],
+      "file": "lmdeploy/serve/openai/protocol.py",
+      "line": 171,
+      "missing_vs_openai": [
+        "audio",
+        "function_call",
+        "functions",
+        "metadata",
+        "modalities",
+        "prediction",
+        "service_tier",
+        "store"
+      ],
+      "n_fields": 43,
+      "openai_standard": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ]
+    },
+    "mlc-llm": {
+      "class": "ChatCompletionRequest",
+      "engine_specific": [
+        "debug_config"
+      ],
+      "fields": [
+        "debug_config",
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "presence_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ],
+      "file": "python/mlc_llm/protocol/openai_api_protocol.py",
+      "line": 258,
+      "missing_vs_openai": [
+        "audio",
+        "function_call",
+        "functions",
+        "max_completion_tokens",
+        "metadata",
+        "modalities",
+        "parallel_tool_calls",
+        "prediction",
+        "reasoning_effort",
+        "service_tier",
+        "store"
+      ],
+      "n_fields": 20,
+      "openai_standard": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "presence_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ]
+    },
+    "sglang": {
+      "class": "ChatCompletionRequest",
+      "engine_specific": [
+        "bootstrap_host",
+        "bootstrap_port",
+        "bootstrap_room",
+        "cache_salt",
+        "chat_template_kwargs",
+        "continue_final_message",
+        "custom_logit_processor",
+        "custom_params",
+        "data_parallel_rank",
+        "disagg_prefill_dp_rank",
+        "ebnf",
+        "extra_key",
+        "ignore_eos",
+        "images_config",
+        "input_ids",
+        "lora_path",
+        "max_dynamic_patch",
+        "min_dynamic_patch",
+        "min_p",
+        "min_tokens",
+        "no_stop_trim",
+        "priority",
+        "regex",
+        "repetition_penalty",
+        "return_cached_tokens_details",
+        "return_hidden_states",
+        "return_meta_info",
+        "return_prompt_token_ids",
+        "return_routed_experts",
+        "return_sampling_mask",
+        "return_spec_tokens_details",
+        "return_token_ids",
+        "rid",
+        "routed_dp_rank",
+        "routed_experts_start_len",
+        "separate_reasoning",
+        "session_id",
+        "session_params",
+        "skip_special_tokens",
+        "stop_regex",
+        "stop_token_ids",
+        "stream_reasoning",
+        "task",
+        "top_k",
+        "use_audio_in_video",
+        "video_config"
+      ],
+      "fields": [
+        "bootstrap_host",
+        "bootstrap_port",
+        "bootstrap_room",
+        "cache_salt",
+        "chat_template_kwargs",
+        "continue_final_message",
+        "custom_logit_processor",
+        "custom_params",
+        "data_parallel_rank",
+        "disagg_prefill_dp_rank",
+        "ebnf",
+        "extra_key",
+        "frequency_penalty",
+        "ignore_eos",
+        "images_config",
+        "input_ids",
+        "logit_bias",
+        "logprobs",
+        "lora_path",
+        "max_completion_tokens",
+        "max_dynamic_patch",
+        "max_tokens",
+        "messages",
+        "min_dynamic_patch",
+        "min_p",
+        "min_tokens",
+        "model",
+        "n",
+        "no_stop_trim",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "priority",
+        "reasoning_effort",
+        "regex",
+        "repetition_penalty",
+        "response_format",
+        "return_cached_tokens_details",
+        "return_hidden_states",
+        "return_meta_info",
+        "return_prompt_token_ids",
+        "return_routed_experts",
+        "return_sampling_mask",
+        "return_spec_tokens_details",
+        "return_token_ids",
+        "rid",
+        "routed_dp_rank",
+        "routed_experts_start_len",
+        "seed",
+        "separate_reasoning",
+        "session_id",
+        "session_params",
+        "skip_special_tokens",
+        "stop",
+        "stop_regex",
+        "stop_token_ids",
+        "stream",
+        "stream_options",
+        "stream_reasoning",
+        "task",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p",
+        "use_audio_in_video",
+        "user",
+        "video_config"
+      ],
+      "file": "python/sglang/srt/entrypoints/openai/protocol.py",
+      "line": 823,
+      "missing_vs_openai": [
+        "audio",
+        "function_call",
+        "functions",
+        "metadata",
+        "modalities",
+        "prediction",
+        "service_tier",
+        "store"
+      ],
+      "n_fields": 68,
+      "openai_standard": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ]
+    },
+    "tensorrt-llm": {
+      "class": "ChatCompletionRequest",
+      "engine_specific": [
+        "add_generation_prompt",
+        "add_special_tokens",
+        "agent_hierarchy",
+        "best_of",
+        "cache_salt",
+        "chat_template",
+        "chat_template_kwargs",
+        "conversation_params",
+        "disaggregated_params",
+        "documents",
+        "early_stopping",
+        "echo",
+        "ignore_eos",
+        "include_stop_str_in_output",
+        "length_penalty",
+        "lora_request",
+        "media_io_kwargs",
+        "min_p",
+        "min_tokens",
+        "mm_processor_kwargs",
+        "priority",
+        "prompt_ignore_length",
+        "prompt_token_ids",
+        "prompt_token_ids_b64",
+        "repetition_penalty",
+        "skip_special_tokens",
+        "spaces_between_special_tokens",
+        "stop_token_ids",
+        "thinking_token_budget",
+        "top_k",
+        "top_p_min",
+        "truncate_prompt_tokens",
+        "use_beam_search"
+      ],
+      "fields": [
+        "add_generation_prompt",
+        "add_special_tokens",
+        "agent_hierarchy",
+        "best_of",
+        "cache_salt",
+        "chat_template",
+        "chat_template_kwargs",
+        "conversation_params",
+        "disaggregated_params",
+        "documents",
+        "early_stopping",
+        "echo",
+        "frequency_penalty",
+        "ignore_eos",
+        "include_stop_str_in_output",
+        "length_penalty",
+        "logit_bias",
+        "logprobs",
+        "lora_request",
+        "max_completion_tokens",
+        "media_io_kwargs",
+        "messages",
+        "min_p",
+        "min_tokens",
+        "mm_processor_kwargs",
+        "model",
+        "n",
+        "presence_penalty",
+        "priority",
+        "prompt_ignore_length",
+        "prompt_token_ids",
+        "prompt_token_ids_b64",
+        "reasoning_effort",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "skip_special_tokens",
+        "spaces_between_special_tokens",
+        "stop",
+        "stop_token_ids",
+        "stream",
+        "stream_options",
+        "temperature",
+        "thinking_token_budget",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p",
+        "top_p_min",
+        "truncate_prompt_tokens",
+        "use_beam_search",
+        "user"
+      ],
+      "file": "tensorrt_llm/serve/openai_protocol.py",
+      "line": 882,
+      "missing_vs_openai": [
+        "audio",
+        "function_call",
+        "functions",
+        "max_tokens",
+        "metadata",
+        "modalities",
+        "parallel_tool_calls",
+        "prediction",
+        "service_tier",
+        "store"
+      ],
+      "n_fields": 53,
+      "openai_standard": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "messages",
+        "model",
+        "n",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ]
+    },
+    "vllm": {
+      "class": "ChatCompletionRequest",
+      "engine_specific": [
+        "_DEFAULT_SAMPLING_PARAMS",
+        "_grammar_from_parser",
+        "add_generation_prompt",
+        "add_special_tokens",
+        "allowed_token_ids",
+        "bad_words",
+        "cache_salt",
+        "chat_template",
+        "chat_template_kwargs",
+        "continue_final_message",
+        "documents",
+        "ec_transfer_params",
+        "echo",
+        "ignore_eos",
+        "include_reasoning",
+        "include_stop_str_in_output",
+        "kv_transfer_params",
+        "length_penalty",
+        "logprob_token_ids",
+        "media_io_kwargs",
+        "min_p",
+        "min_tokens",
+        "mm_processor_kwargs",
+        "priority",
+        "prompt_logprobs",
+        "repetition_detection",
+        "repetition_penalty",
+        "request_id",
+        "return_assistant_tokens_mask",
+        "return_prompt_text",
+        "return_token_ids",
+        "return_token_offsets",
+        "return_tokens_as_token_ids",
+        "routed_experts_prompt_start",
+        "session_id",
+        "skip_special_tokens",
+        "spaces_between_special_tokens",
+        "stop_token_ids",
+        "stream_interval",
+        "structured_outputs",
+        "thinking_token_budget",
+        "top_k",
+        "truncate_prompt_tokens",
+        "truncation_side",
+        "use_beam_search",
+        "vllm_xargs"
+      ],
+      "fields": [
+        "_DEFAULT_SAMPLING_PARAMS",
+        "_grammar_from_parser",
+        "add_generation_prompt",
+        "add_special_tokens",
+        "allowed_token_ids",
+        "bad_words",
+        "cache_salt",
+        "chat_template",
+        "chat_template_kwargs",
+        "continue_final_message",
+        "documents",
+        "ec_transfer_params",
+        "echo",
+        "frequency_penalty",
+        "ignore_eos",
+        "include_reasoning",
+        "include_stop_str_in_output",
+        "kv_transfer_params",
+        "length_penalty",
+        "logit_bias",
+        "logprob_token_ids",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "media_io_kwargs",
+        "messages",
+        "min_p",
+        "min_tokens",
+        "mm_processor_kwargs",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "priority",
+        "prompt_logprobs",
+        "reasoning_effort",
+        "repetition_detection",
+        "repetition_penalty",
+        "request_id",
+        "response_format",
+        "return_assistant_tokens_mask",
+        "return_prompt_text",
+        "return_token_ids",
+        "return_token_offsets",
+        "return_tokens_as_token_ids",
+        "routed_experts_prompt_start",
+        "seed",
+        "session_id",
+        "skip_special_tokens",
+        "spaces_between_special_tokens",
+        "stop",
+        "stop_token_ids",
+        "stream",
+        "stream_interval",
+        "stream_options",
+        "structured_outputs",
+        "temperature",
+        "thinking_token_budget",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p",
+        "truncate_prompt_tokens",
+        "truncation_side",
+        "use_beam_search",
+        "user",
+        "vllm_xargs"
+      ],
+      "file": "vllm/entrypoints/openai/chat_completion/protocol.py",
+      "line": 213,
+      "missing_vs_openai": [
+        "audio",
+        "function_call",
+        "functions",
+        "metadata",
+        "modalities",
+        "prediction",
+        "service_tier",
+        "store"
+      ],
+      "n_fields": 68,
+      "openai_standard": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "messages",
+        "model",
+        "n",
+        "parallel_tool_calls",
+        "presence_penalty",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "stop",
+        "stream",
+        "stream_options",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "user"
+      ]
+    }
+  },
+  "engines_compared": [
+    "dynamo",
+    "ktransformers",
+    "lightllm",
+    "llama.cpp",
+    "lmdeploy",
+    "mlc-llm",
+    "mooncake",
+    "sglang",
+    "tensorrt-llm",
+    "tgi",
+    "tokasaurus",
+    "vllm"
+  ],
+  "notes": {
+    "caveat": "路由集合来自装饰器静态抽取；条件注册（if 分支里 add_api_route）可能漏。",
+    "openai_field_list_source": "platform.openai.com/docs/api-reference/chat/create, 2026-08 人工录入"
+  },
+  "routes": [
+    {
+      "engines": [
+        "ktransformers",
+        "lightllm",
+        "sglang",
+        "tgi"
+      ],
+      "exclusive_to": null,
+      "n": 4,
+      "path": "/"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/_internal/tokenize"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/abort_request"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/abort_requests"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/add_external_corpus"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/anthropic/v1/models"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/apply-template"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/audio/transcriptions"
+    },
+    {
+      "engines": [
+        "dynamo"
+      ],
+      "exclusive_to": "dynamo",
+      "n": 1,
+      "path": "/busy_threshold"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/chat"
+    },
+    {
+      "engines": [
+        "ktransformers",
+        "llama.cpp"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/chat/completions"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/chat/completions/input_tokens"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/chat_tokenize"
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/classify"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/clear_hicache_storage_backend"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/close_session"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/cluster_info"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/cohere/v2/chat"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/collective_rpc"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/completion"
+    },
+    {
+      "engines": [
+        "ktransformers",
+        "llama.cpp"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/completions"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/configure_logging"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/continue_generation"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/cors-proxy"
+    },
+    {
+      "engines": [
+        "tokasaurus"
+      ],
+      "exclusive_to": "tokasaurus",
+      "n": 1,
+      "path": "/custom/synchronous-batch-completions"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/debug/cuda_profiler_start"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/debug/cuda_profiler_stop"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/debug/dump_engine_metrics"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/debug/dump_event_trace"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/debug/reset_engine"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/delete"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/destroy_weights_update_group"
+    },
+    {
+      "engines": [
+        "llama.cpp",
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/detokenize"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/connection_warmup"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/engine_info"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/free_cache"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/gc"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/p2p_connect"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/p2p_drop_connect"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/distserve/p2p_initialize"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/dump_expert_distribution_record"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/dumper/{method}"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/embedding"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/embeddings"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/encode"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/energy_metrics"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/expire"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/fault_tolerance/apply"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/fault_tolerance/status"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/finish"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/finish_weight_update"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/flush_cache"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/freeze_gc"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "ktransformers",
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tgi"
+      ],
+      "exclusive_to": null,
+      "n": 6,
+      "path": "/generate"
+    },
+    {
+      "engines": [
+        "lightllm",
+        "tgi"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/generate_stream"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/generative_scoring"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/get"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/get_load"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/get_model_info"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/get_model_name"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/get_ppl"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/get_prefix"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/get_remote_instance_transfer_engine_info"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/get_score"
+    },
+    {
+      "engines": [
+        "lightllm",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/get_server_info"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/get_transfer_engine_info"
+    },
+    {
+      "engines": [
+        "lightllm",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/get_weight_version"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/get_weights_by_name"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/get_world_size"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "tgi"
+      ],
+      "exclusive_to": null,
+      "n": 6,
+      "path": "/health"
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/health_generate"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/healthz"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/hicache/storage-backend"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/hicache/storage-backend/clear"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/inference/v1/generate"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/infill"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/info"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/init_weight_transfer_engine"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/init_weights_send_group_for_remote_instance"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/init_weights_update_group"
+    },
+    {
+      "engines": [
+        "sglang",
+        "tgi",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/invocations"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/is_paused"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/is_scaling_elastic_ep"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/is_sleeping"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/kv_cache_events"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/list_external_corpora"
+    },
+    {
+      "engines": [
+        "dynamo"
+      ],
+      "exclusive_to": "dynamo",
+      "n": 1,
+      "path": "/live"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/liveness"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/load_lora_adapter"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/load_lora_adapter_from_tensors"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/lora-adapters"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "mlc-llm",
+        "tensorrt-llm",
+        "tgi"
+      ],
+      "exclusive_to": null,
+      "n": 5,
+      "path": "/metrics"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/microserving/prep_recv"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/microserving/remote_send"
+    },
+    {
+      "engines": [
+        "mlc-llm"
+      ],
+      "exclusive_to": "mlc-llm",
+      "n": 1,
+      "path": "/microserving/start_generate"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/model_info"
+    },
+    {
+      "engines": [
+        "ktransformers",
+        "llama.cpp"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/models"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/models/load"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/models/unload"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/nodes/add"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/nodes/remove"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/nodes/status"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/nodes/terminate"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/nodes/terminate_all"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/open_session"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/parse_function_call"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/pause"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/pause_generation"
+    },
+    {
+      "engines": [
+        "sglang",
+        "tgi",
+        "tokasaurus",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 4,
+      "path": "/ping"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/pooling"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/profiler_start"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/profiler_stop"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/props"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/readiness"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/register_transfer_engine_info"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/release_memory"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/release_memory_occupation"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/remote_instance_transfer_engine_info"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/remove_external_corpus"
+    },
+    {
+      "engines": [
+        "llama.cpp",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/rerank"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/reranking"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/reset_encoder_cache"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/reset_mm_cache"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/reset_prefix_cache"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/responses"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/responses/input_tokens"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/resume"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/resume_memory"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/resume_memory_occupation"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/runs"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/scale_elastic_ep"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/score"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/select"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/send_weights_to_remote_instance"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/separate_reasoning"
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/server_info"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/set"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/set_internal_state"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/set_trace_level"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/show"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/sleep"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/slots/:id_slot"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/slow_down"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/start_draft_weight_update"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/start_expert_distribution_record"
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/start_profile"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/start_weight_update"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/status"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/steady_clock_offset"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/stop_expert_distribution_record"
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/stop_profile"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/system-info"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/tags"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/terminate"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/token_load"
+    },
+    {
+      "engines": [
+        "llama.cpp",
+        "sglang",
+        "tgi",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 4,
+      "path": "/tokenize"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/tokenizer_info"
+    },
+    {
+      "engines": [
+        "lightllm"
+      ],
+      "exclusive_to": "lightllm",
+      "n": 1,
+      "path": "/tokens"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/tools"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/unload_lora_adapter"
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/update_weight_version"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/update_weights"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/update_weights_from_disk"
+    },
+    {
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/update_weights_from_distributed"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/update_weights_from_ipc"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/update_weights_from_tensor"
+    },
+    {
+      "engines": [
+        "dynamo"
+      ],
+      "exclusive_to": "dynamo",
+      "n": 1,
+      "path": "/v1/audio/speech"
+    },
+    {
+      "engines": [
+        "llama.cpp",
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/v1/audio/transcriptions"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/audio/translations"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "tokasaurus"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/batches"
+    },
+    {
+      "engines": [
+        "tokasaurus"
+      ],
+      "exclusive_to": "tokasaurus",
+      "n": 1,
+      "path": "/v1/batches/{batch_id}"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "llama.cpp",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "tgi",
+        "tokasaurus",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 10,
+      "path": "/v1/chat/completions"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/chat/completions/batch"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/v1/chat/completions/control"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/chat/completions/derender"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/v1/chat/completions/input_tokens"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/chat/completions/render"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "sglang"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/classify"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "llama.cpp",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "tgi",
+        "tokasaurus",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 10,
+      "path": "/v1/completions"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/completions/derender"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/completions/render"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/v1/data_transceiver_state"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/v1/detokenize"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "llama.cpp",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 7,
+      "path": "/v1/embeddings"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/v1/encode"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "tokasaurus"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/files"
+    },
+    {
+      "engines": [
+        "tokasaurus"
+      ],
+      "exclusive_to": "tokasaurus",
+      "n": 1,
+      "path": "/v1/files/{file_id}"
+    },
+    {
+      "engines": [
+        "tokasaurus"
+      ],
+      "exclusive_to": "tokasaurus",
+      "n": 1,
+      "path": "/v1/files/{file_id}/content"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/v1/images/edits"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "tensorrt-llm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/images/generations"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/v1/images/{image_id}/content"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/load_lora_adapter"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "llama.cpp",
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 6,
+      "path": "/v1/messages"
+    },
+    {
+      "engines": [
+        "lightllm",
+        "llama.cpp",
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 5,
+      "path": "/v1/messages/count_tokens"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "lmdeploy",
+        "mlc-llm",
+        "sglang",
+        "tensorrt-llm",
+        "tgi",
+        "tokasaurus",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 9,
+      "path": "/v1/models"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/v1/models/{model:path}"
+    },
+    {
+      "engines": [
+        "dynamo"
+      ],
+      "exclusive_to": "dynamo",
+      "n": 1,
+      "path": "/v1/pooling"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/v1/realtime"
+    },
+    {
+      "engines": [
+        "llama.cpp",
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/v1/rerank"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/v1/reranking"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "lightllm",
+        "llama.cpp",
+        "lmdeploy",
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 7,
+      "path": "/v1/responses"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/v1/responses/input_tokens"
+    },
+    {
+      "engines": [
+        "sglang",
+        "tensorrt-llm",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 3,
+      "path": "/v1/responses/{response_id}"
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/responses/{response_id}/cancel"
+    },
+    {
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/score"
+    },
+    {
+      "engines": [
+        "llama.cpp"
+      ],
+      "exclusive_to": "llama.cpp",
+      "n": 1,
+      "path": "/v1/streams/lookup"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/v1/tokenize"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v1/unload_lora_adapter"
+    },
+    {
+      "engines": [
+        "dynamo",
+        "tensorrt-llm"
+      ],
+      "exclusive_to": null,
+      "n": 2,
+      "path": "/v1/videos"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/v1/videos/generations"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/v1/videos/{video_id}"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/v1/videos/{video_id}/content"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/v2"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v2/embed"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/v2/health/live"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/v2/health/ready"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/v2/models/:model_name/versions/:model_version"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/v2/models/:model_name/versions/:model_version/infer"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/v2/models/:model_name/versions/:model_version/ready"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/v2/rerank"
+    },
+    {
+      "engines": [
+        "tensorrt-llm"
+      ],
+      "exclusive_to": "tensorrt-llm",
+      "n": 1,
+      "path": "/version"
+    },
+    {
+      "engines": [
+        "tgi"
+      ],
+      "exclusive_to": "tgi",
+      "n": 1,
+      "path": "/vertex"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/wake_up"
+    },
+    {
+      "engines": [
+        "lmdeploy"
+      ],
+      "exclusive_to": "lmdeploy",
+      "n": 1,
+      "path": "/wakeup"
+    },
+    {
+      "engines": [
+        "vllm"
+      ],
+      "exclusive_to": "vllm",
+      "n": 1,
+      "path": "/weight_info"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/weight_version"
+    },
+    {
+      "engines": [
+        "sglang"
+      ],
+      "exclusive_to": "sglang",
+      "n": 1,
+      "path": "/weights_checker"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{assistant_id}"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{assistant_id}/related_thread"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}/messages"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}/messages/{message_id}"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}/runs"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}/runs/{run_id}"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}/runs/{run_id}/cancel"
+    },
+    {
+      "engines": [
+        "ktransformers"
+      ],
+      "exclusive_to": "ktransformers",
+      "n": 1,
+      "path": "/{thread_id}/runs/{run_id}/submit_tool_outputs"
+    }
+  ],
+  "scale": [
+    {
+      "cpp_lines": 598382,
+      "cuda_files": 429,
+      "date": "2026-08-22T04:50:28Z",
+      "engine": "tensorrt-llm",
+      "label": "TensorRT-LLM",
+      "lines_total": 2452198,
+      "python_src": 792216,
+      "python_test": 603872,
+      "rust_lines": 0,
+      "sha": "75b023cd",
+      "test_ratio": 0.762,
+      "triton_files": 91
+    },
+    {
+      "cpp_lines": 51979,
+      "cuda_files": 246,
+      "date": "2026-08-22T15:35:55+08:00",
+      "engine": "sglang",
+      "label": "SGLang",
+      "lines_total": 2317985,
+      "python_src": 1254674,
+      "python_test": 605010,
+      "rust_lines": 156078,
+      "sha": "15a43983",
+      "test_ratio": 0.482,
+      "triton_files": 249
+    },
+    {
+      "cpp_lines": 1533,
+      "cuda_files": 2,
+      "date": "2026-08-22T03:47:18Z",
+      "engine": "dynamo",
+      "label": "NVIDIA Dynamo",
+      "lines_total": 2220830,
+      "python_src": 193827,
+      "python_test": 215985,
+      "rust_lines": 608542,
+      "sha": "2a6da14c",
+      "test_ratio": 1.114,
+      "triton_files": 0
+    },
+    {
+      "cpp_lines": 55159,
+      "cuda_files": 169,
+      "date": "2026-08-22T05:11:44Z",
+      "engine": "vllm",
+      "label": "vLLM",
+      "lines_total": 1914984,
+      "python_src": 932277,
+      "python_test": 505654,
+      "rust_lines": 109867,
+      "sha": "7ca49fbe",
+      "test_ratio": 0.542,
+      "triton_files": 202
+    },
+    {
+      "cpp_lines": 663024,
+      "cuda_files": 273,
+      "date": "2026-08-22T09:44:22+02:00",
+      "engine": "llama.cpp",
+      "label": "llama.cpp",
+      "lines_total": 992377,
+      "python_src": 58859,
+      "python_test": 11033,
+      "rust_lines": 0,
+      "sha": "2c6b141e",
+      "test_ratio": 0.187,
+      "triton_files": 0
+    },
+    {
+      "cpp_lines": 420627,
+      "cuda_files": 38,
+      "date": "2026-08-22T13:12:18+08:00",
+      "engine": "mooncake",
+      "label": "Mooncake",
+      "lines_total": 548895,
+      "python_src": 30573,
+      "python_test": 33413,
+      "rust_lines": 4405,
+      "sha": "3b5a5941",
+      "test_ratio": 1.093,
+      "triton_files": 0
+    },
+    {
+      "cpp_lines": 127399,
+      "cuda_files": 21,
+      "date": "2026-08-21T17:53:58+08:00",
+      "engine": "ktransformers",
+      "label": "KTransformers",
+      "lines_total": 403076,
+      "python_src": 152237,
+      "python_test": 29114,
+      "rust_lines": 0,
+      "sha": "95009ea6",
+      "test_ratio": 0.191,
+      "triton_files": 8
+    },
+    {
+      "cpp_lines": 67110,
+      "cuda_files": 130,
+      "date": "2026-08-21T22:31:54+08:00",
+      "engine": "lmdeploy",
+      "label": "LMDeploy",
+      "lines_total": 339214,
+      "python_src": 155986,
+      "python_test": 59422,
+      "rust_lines": 0,
+      "sha": "1263d5cd",
+      "test_ratio": 0.381,
+      "triton_files": 34
+    },
+    {
+      "cpp_lines": 1251,
+      "cuda_files": 31,
+      "date": "2026-03-21T20:34:22+09:00",
+      "engine": "tgi",
+      "label": "TGI",
+      "lines_total": 189926,
+      "python_src": 98255,
+      "python_test": 10645,
+      "rust_lines": 23443,
+      "sha": "b4adbf2f",
+      "test_ratio": 0.108,
+      "triton_files": 4
+    },
+    {
+      "cpp_lines": 0,
+      "cuda_files": 0,
+      "date": "2026-08-21T06:29:48Z",
+      "engine": "lightllm",
+      "label": "LightLLM",
+      "lines_total": 148574,
+      "python_src": 103709,
+      "python_test": 24334,
+      "rust_lines": 0,
+      "sha": "87881ae7",
+      "test_ratio": 0.235,
+      "triton_files": 129
+    },
+    {
+      "cpp_lines": 22690,
+      "cuda_files": 0,
+      "date": "2026-08-17T13:41:45-07:00",
+      "engine": "mlc-llm",
+      "label": "MLC-LLM",
+      "lines_total": 100240,
+      "python_src": 59516,
+      "python_test": 10673,
+      "rust_lines": 0,
+      "sha": "9fa644f5",
+      "test_ratio": 0.179,
+      "triton_files": 0
+    },
+    {
+      "cpp_lines": 0,
+      "cuda_files": 0,
+      "date": "2025-08-19T12:45:09-07:00",
+      "engine": "tokasaurus",
+      "label": "Tokasaurus",
+      "lines_total": 13219,
+      "python_src": 11405,
+      "python_test": 1251,
+      "rust_lines": 0,
+      "sha": "72689052",
+      "test_ratio": 0.11,
+      "triton_files": 0
+    }
+  ],
+  "server_knobs": {
+    "ktransformers": {
+      "class": "Config",
+      "file": "archive/ktransformers/server/config/config.py",
+      "line": 20,
+      "n_fields": 0
+    },
+    "lmdeploy": {
+      "class": "PytorchEngineConfig",
+      "file": "lmdeploy/messages.py",
+      "line": 371,
+      "n_fields": 48
+    },
+    "sglang": {
+      "class": "ServerArgs",
+      "file": "python/sglang/srt/server_args.py",
+      "line": 473,
+      "n_fields": 476
+    },
+    "vllm": {
+      "class": "EngineArgs",
+      "file": "vllm/engine/arg_utils.py",
+      "line": 424,
+      "n_fields": 233
+    }
+  },
+  "shared_knobs": [
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "dataclasses.field(default_factory=list)",
+        "vllm": "ModelConfig.allowed_media_domains"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "allowed_media_domains"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "AttentionConfig.backend"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "attention_backend"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "64",
+        "vllm": "None"
+      },
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "knob": "block_size"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "0",
+        "vllm": "UVAOffloadConfig.cpu_offload_gb"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "cpu_offload_gb"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'ag_rs'",
+        "vllm": "ParallelConfig.dcp_comm_backend"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "dcp_comm_backend"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "False",
+        "vllm": "ParallelConfig.disable_custom_all_reduce"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "disable_custom_all_reduce"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "None",
+        "vllm": "ParallelConfig.distributed_executor_backend"
+      },
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "knob": "distributed_executor_backend"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "None",
+        "sglang": "None",
+        "vllm": "LoadConfig.download_dir"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "knob": "download_dir"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "'auto'",
+        "sglang": "'auto'",
+        "vllm": "ModelConfig.dtype"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "knob": "dtype"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "False",
+        "sglang": "False",
+        "vllm": "ParallelConfig.enable_eplb"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "knob": "enable_eplb"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "False"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "enable_lora"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "False",
+        "vllm": "MambaConfig.enable_stochastic_rounding"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "enable_mamba_cache_stochastic_rounding"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "True",
+        "sglang": "False"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang"
+      ],
+      "knob": "enable_metrics"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "False",
+        "vllm": "ObservabilityConfig.enable_mfu_metrics"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "enable_mfu_metrics"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "False",
+        "vllm": "None"
+      },
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "knob": "enable_prefix_caching"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "False",
+        "sglang": "False",
+        "vllm": "ModelConfig.enable_return_routed_experts"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "knob": "enable_return_routed_experts"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "None",
+        "vllm": "get_field(ModelConfig, 'hf_overrides')"
+      },
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "knob": "hf_overrides"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'auto'",
+        "vllm": "CacheConfig.cache_dtype"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "kv_cache_dtype"
+    },
+    {
+      "default_differs": false,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "None"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "kv_events_config"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "False",
+        "sglang": "False",
+        "vllm": "MultiModalConfig.language_model_only"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "knob": "language_model_only"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'auto'",
+        "vllm": "LoadConfig.load_format"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "load_format"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "None",
+        "vllm": "ModelConfig.logprobs_mode"
+      },
+      "engines": [
+        "lmdeploy",
+        "vllm"
+      ],
+      "knob": "logprobs_mode"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "LoRAConfig.target_modules"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "lora_target_modules"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'triton'",
+        "vllm": "MambaBackendEnum.TRITON"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "mamba_backend"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "0",
+        "vllm": "MambaConfig.stochastic_rounding_philox_rounds"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "mamba_cache_philox_rounds"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "LoRAConfig.max_lora_rank"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "max_lora_rank"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'auto'",
+        "vllm": "ModelConfig.model_impl"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "model_impl"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'{}'",
+        "vllm": "get_field(LoadConfig, 'model_loader_extra_config')"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "model_loader_extra_config"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "1",
+        "vllm": "ParallelConfig.nnodes"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "nnodes"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "0",
+        "vllm": "ParallelConfig.node_rank"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "node_rank"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "-1",
+        "vllm": "PrefetchOffloadConfig.offload_group_size"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "offload_group_size"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "1",
+        "vllm": "PrefetchOffloadConfig.offload_num_in_group"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "offload_num_in_group"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "1",
+        "vllm": "PrefetchOffloadConfig.offload_prefetch_step"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "offload_prefetch_step"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'localhost:4317'",
+        "vllm": "ObservabilityConfig.otlp_traces_endpoint"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "otlp_traces_endpoint"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "ModelConfig.quantization"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "quantization"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "StructuredOutputsConfig.reasoning_parser"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "reasoning_parser"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "lmdeploy": "None",
+        "sglang": "None",
+        "vllm": "ModelConfig.revision"
+      },
+      "engines": [
+        "lmdeploy",
+        "sglang",
+        "vllm"
+      ],
+      "knob": "revision"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "None",
+        "vllm": "ModelConfig.served_model_name"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "served_model_name"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "False",
+        "vllm": "ModelConfig.skip_tokenizer_init"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "skip_tokenizer_init"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "1",
+        "vllm": "SchedulerConfig.stream_interval"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "stream_interval"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "'auto'",
+        "vllm": "ModelConfig.tokenizer_mode"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "tokenizer_mode"
+    },
+    {
+      "default_differs": true,
+      "defaults": {
+        "sglang": "False",
+        "vllm": "ModelConfig.trust_remote_code"
+      },
+      "engines": [
+        "sglang",
+        "vllm"
+      ],
+      "knob": "trust_remote_code"
+    }
+  ]
+}
