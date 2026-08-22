@@ -24,6 +24,7 @@ import common  # noqa: E402
 import compare  # noqa: E402
 import improve  # noqa: E402
 import prefix_sim  # noqa: E402
+import sched_sim  # noqa: E402
 import repo_stats  # noqa: E402
 import struct_map  # noqa: E402
 
@@ -38,6 +39,7 @@ def test_selftests_all_pass():
     assert compare.selftest() == 0
     assert improve.selftest() == 0
     assert prefix_sim.selftest() == 0
+    assert sched_sim.selftest() == 0
 
 
 def test_engine_registry_consistent():
@@ -375,3 +377,54 @@ def test_prefix_sim_results_match_committed_json():
                                     seed=7)
         assert again["vllm"]["hit_tokens"] == r["vllm"]["hit_tokens"], r["workload"]
         assert again["sglang"]["hit_tokens"] == r["sglang"]["hit_tokens"], r["workload"]
+
+
+# ------------------------------------------------------ 调度公平性差分模拟器
+
+def _gap(policy, seeds=(11, 23, 37, 53, 71, 97), cap=512):
+    gs = []
+    for sd in seeds:
+        proto = sched_sim.gen_arrivals(150, 2, 50, 128, sd)
+        gs.append(sched_sim.simulate(proto, sched_sim._arm(policy), cache_tokens=cap).fairness_gap)
+    return sum(gs) / len(gs)
+
+
+def _hit(policy, seeds=(11, 23, 37, 53, 71, 97), cap=512):
+    hs = []
+    for sd in seeds:
+        proto = sched_sim.gen_arrivals(150, 2, 50, 128, sd)
+        hs.append(sched_sim.simulate(proto, sched_sim._arm(policy), cache_tokens=cap).hit_rate)
+    return sum(hs) / len(hs)
+
+
+def test_lpm_buys_nothing_when_cache_is_ample():
+    """**最强的一条结论**：缓存充裕时 LPM 一分命中率都不多赚，只是重新分配延迟。"""
+    proto = sched_sim.gen_arrivals(150, 2, 50, 128, 11)
+    a = sched_sim.simulate(proto, "lpm", cache_tokens=65536)
+    b = sched_sim.simulate(proto, "fcfs", cache_tokens=65536)
+    assert a.hit_rate == b.hit_rate
+    assert a.fairness_gap > b.fairness_gap + 50      # 但公平性天差地别
+
+
+def test_lpm_pays_off_only_under_cache_pressure():
+    """LPM 的价值完全是缓存压力的函数。"""
+    assert _hit("lpm") > _hit("fcfs") + 0.05
+
+
+def test_anti_starvation_is_nearly_free_in_hit_rate():
+    """给 SGLang 加防饥饿的核心论据：公平性大幅改善，命中率几乎不掉。"""
+    h_lpm, h_aged = _hit("lpm"), _hit("aged_T32")
+    g_lpm, g_aged = _gap("lpm"), _gap("aged_T32")
+    assert g_aged < g_lpm * 0.75, f"公平差应显著下降 {g_lpm} -> {g_aged}"
+    assert h_aged > h_lpm - 0.02, f"命中率不该掉太多 {h_lpm} -> {h_aged}"
+
+
+def test_the_fairness_actually_comes_from_the_tiebreak():
+    """**本实验最反直觉的一条**：T 不变、只换并列时的 tiebreak，公平性收益就大部分消失
+    —— 真正在防饥饿的是 tiebreak，不是「等得久就加分」这条公式本身。"""
+    assert _gap("aged_T32") < _gap("aged_T32_antitie") * 0.8
+
+
+def test_fine_quantization_loses_the_tiebreak_effect():
+    """T 越细 → 并列越少 → tiebreak 越难生效 → 越不公平。上一条的推论。"""
+    assert _gap("aged_T32") < _gap("aged_T1")

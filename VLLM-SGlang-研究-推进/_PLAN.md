@@ -69,6 +69,7 @@ git clone --depth 1 --no-tags --single-branch -c core.longpaths=true https://git
 | `improve.py` | 可改进点信号（TODO/未实现/废弃/静默吞异常/超大文件），按热路径口径 | `out/improve.json` |
 | `fixcite.py` | 修「路径写短了」的引用，多义只报告不自动选 | — |
 | `prefix_sim.py` | **前缀缓存策略差分模拟器**：两家匹配/驱逐策略如实重实现，同 trace 对拍 | `out/prefix_sim.json` |
+| `sched_sim.py` | **调度策略差分模拟器**：量化 LPM 的「缓存友好 ↔ 公平性」兑换率，多种子取均值 | `out/sched_sim.json` |
 
 规矩：
 - 每个脚本都有 `--selftest`，**用临时目录造假仓库自检解析逻辑**，不依赖 `_src` 也能验对错；
@@ -146,10 +147,11 @@ python -m pytest tests -q
 - ✅ `04-可落地贡献清单.md`
 
 ### 06-拓展方向/（第二轮 /goal：vLLM 与 SGLang 还能拓展成什么）
-- ⬜ `01-前缀缓存差分实验-亲笔.md` —— **亲笔**，`_lab/prefix_sim.py` 的方法与结论（含自我推翻）
-- ⬜ `02-可编程调度与缓存策略.md`
-- ⬜ `03-降级信号契约.md`
-- ⬜ `04-拓展优先级-亲笔.md` —— **亲笔**
+- ✅ `01-前缀缓存差分实验-亲笔.md` —— **亲笔**，`_lab/prefix_sim.py` 的方法与结论（含自我推翻）
+- ✅ `02-可编程调度与缓存策略.md`
+- ✅ `03-降级信号契约.md`
+- ✅ `04-调度公平性差分实验-亲笔.md` —— **亲笔**，`_lab/sched_sim.py` 的方法与结论
+- ✅ `05-拓展优先级-亲笔.md` —— **亲笔**
 
 ### 99 收束
 - ✅ `99-本质总结-亲笔.md` —— **亲笔**，不许 agent 代写

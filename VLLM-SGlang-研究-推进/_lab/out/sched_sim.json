@@ -1,0 +1,719 @@
+{
+  "disclaimer": "**策略模拟，不是性能实测。** 步进是抽象步不是毫秒；无 GPU、无算子、无显存带宽；不建模 chunked prefill/抢占/overlap。只能回答排序策略之间的相对关系。",
+  "modeled_from": {
+    "sglang_policy_enum": "python/sglang/srt/managers/schedule_policy.py:200",
+    "sglang_cache_agnostic": "python/sglang/srt/managers/schedule_policy.py:207",
+    "lmdeploy_age_credit_doc": "lmdeploy/pytorch/paging/scheduler.py:158",
+    "lmdeploy_age_credit_formula": "lmdeploy/pytorch/paging/scheduler.py:162"
+  },
+  "results": [
+    {
+      "scenario": "half_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 50,
+      "prefix_len": 128,
+      "cache_tokens": 32768,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": -8.5,
+          "fairness_gap_std": 14.3788,
+          "unshared_p90_wait_mean": 183.5,
+          "unshared_p90_wait_std": 21.2897
+        },
+        "lpm": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 165.625,
+          "fairness_gap_std": 13.4809,
+          "unshared_p90_wait_mean": 208.875,
+          "unshared_p90_wait_std": 13.1856
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 158.5,
+          "fairness_gap_std": 15.6525,
+          "unshared_p90_wait_mean": 209.25,
+          "unshared_p90_wait_std": 12.5971
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 165.875,
+          "fairness_gap_std": 14.0662,
+          "unshared_p90_wait_mean": 209.0,
+          "unshared_p90_wait_std": 13.1624
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 166.5,
+          "fairness_gap_std": 13.7113,
+          "unshared_p90_wait_mean": 209.0,
+          "unshared_p90_wait_std": 13.3323
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 166.125,
+          "fairness_gap_std": 13.5226,
+          "unshared_p90_wait_mean": 208.875,
+          "unshared_p90_wait_std": 13.1856
+        }
+      }
+    },
+    {
+      "scenario": "half_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 50,
+      "prefix_len": 128,
+      "cache_tokens": 4096,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.3749,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": -8.5,
+          "fairness_gap_std": 14.3788,
+          "unshared_p90_wait_mean": 183.5,
+          "unshared_p90_wait_std": 21.2897
+        },
+        "lpm": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 165.625,
+          "fairness_gap_std": 13.4809,
+          "unshared_p90_wait_mean": 208.875,
+          "unshared_p90_wait_std": 13.1856
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 158.5,
+          "fairness_gap_std": 15.6525,
+          "unshared_p90_wait_mean": 209.25,
+          "unshared_p90_wait_std": 12.5971
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 165.875,
+          "fairness_gap_std": 14.0662,
+          "unshared_p90_wait_mean": 209.0,
+          "unshared_p90_wait_std": 13.1624
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 166.5,
+          "fairness_gap_std": 13.7113,
+          "unshared_p90_wait_mean": 209.0,
+          "unshared_p90_wait_std": 13.3323
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.375,
+          "hit_rate_std": 0.031,
+          "fairness_gap_mean": 166.125,
+          "fairness_gap_std": 13.5226,
+          "unshared_p90_wait_mean": 208.875,
+          "unshared_p90_wait_std": 13.1856
+        }
+      }
+    },
+    {
+      "scenario": "half_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 50,
+      "prefix_len": 128,
+      "cache_tokens": 1024,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.3159,
+          "hit_rate_std": 0.0415,
+          "fairness_gap_mean": -8.5,
+          "fairness_gap_std": 14.3788,
+          "unshared_p90_wait_mean": 183.5,
+          "unshared_p90_wait_std": 21.2897
+        },
+        "lpm": {
+          "hit_rate_mean": 0.3711,
+          "hit_rate_std": 0.0304,
+          "fairness_gap_mean": 164.875,
+          "fairness_gap_std": 13.7971,
+          "unshared_p90_wait_mean": 208.75,
+          "unshared_p90_wait_std": 13.2169
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.3672,
+          "hit_rate_std": 0.0307,
+          "fairness_gap_mean": 141.875,
+          "fairness_gap_std": 46.7077,
+          "unshared_p90_wait_mean": 203.75,
+          "unshared_p90_wait_std": 16.6189
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.3704,
+          "hit_rate_std": 0.0304,
+          "fairness_gap_mean": 164.25,
+          "fairness_gap_std": 15.409,
+          "unshared_p90_wait_mean": 208.25,
+          "unshared_p90_wait_std": 15.2459
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.3711,
+          "hit_rate_std": 0.0304,
+          "fairness_gap_mean": 165.625,
+          "fairness_gap_std": 14.2473,
+          "unshared_p90_wait_mean": 209.0,
+          "unshared_p90_wait_std": 13.3323
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.3711,
+          "hit_rate_std": 0.0304,
+          "fairness_gap_mean": 165.5,
+          "fairness_gap_std": 13.9014,
+          "unshared_p90_wait_mean": 208.875,
+          "unshared_p90_wait_std": 13.3645
+        }
+      }
+    },
+    {
+      "scenario": "half_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 50,
+      "prefix_len": 128,
+      "cache_tokens": 512,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.2177,
+          "hit_rate_std": 0.0322,
+          "fairness_gap_mean": -8.5,
+          "fairness_gap_std": 14.3788,
+          "unshared_p90_wait_mean": 183.5,
+          "unshared_p90_wait_std": 21.2897
+        },
+        "lpm": {
+          "hit_rate_mean": 0.3564,
+          "hit_rate_std": 0.0313,
+          "fairness_gap_mean": 132.75,
+          "fairness_gap_std": 45.7787,
+          "unshared_p90_wait_mean": 208.375,
+          "unshared_p90_wait_std": 14.5339
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.3482,
+          "hit_rate_std": 0.0306,
+          "fairness_gap_mean": 74.25,
+          "fairness_gap_std": 51.5819,
+          "unshared_p90_wait_mean": 203.5,
+          "unshared_p90_wait_std": 14.0268
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.3558,
+          "hit_rate_std": 0.0318,
+          "fairness_gap_mean": 132.375,
+          "fairness_gap_std": 45.3485,
+          "unshared_p90_wait_mean": 207.875,
+          "unshared_p90_wait_std": 15.3821
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.3564,
+          "hit_rate_std": 0.0313,
+          "fairness_gap_mean": 132.75,
+          "fairness_gap_std": 46.0183,
+          "unshared_p90_wait_mean": 208.125,
+          "unshared_p90_wait_std": 15.012
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.3564,
+          "hit_rate_std": 0.0313,
+          "fairness_gap_mean": 132.625,
+          "fairness_gap_std": 45.9019,
+          "unshared_p90_wait_mean": 208.125,
+          "unshared_p90_wait_std": 15.1281
+        }
+      }
+    },
+    {
+      "scenario": "mostly_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 80,
+      "prefix_len": 128,
+      "cache_tokens": 32768,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 1.875,
+          "fairness_gap_std": 12.1289,
+          "unshared_p90_wait_mean": 195.375,
+          "unshared_p90_wait_std": 15.3374
+        },
+        "lpm": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 140.875,
+          "fairness_gap_std": 6.1733,
+          "unshared_p90_wait_mean": 272.375,
+          "unshared_p90_wait_std": 9.4464
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 123.25,
+          "fairness_gap_std": 8.6422,
+          "unshared_p90_wait_mean": 262.625,
+          "unshared_p90_wait_std": 9.6558
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 138.75,
+          "fairness_gap_std": 6.7222,
+          "unshared_p90_wait_mean": 270.125,
+          "unshared_p90_wait_std": 8.6666
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 141.0,
+          "fairness_gap_std": 7.1414,
+          "unshared_p90_wait_mean": 271.5,
+          "unshared_p90_wait_std": 9.6437
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 142.0,
+          "fairness_gap_std": 6.0622,
+          "unshared_p90_wait_mean": 273.0,
+          "unshared_p90_wait_std": 8.9022
+        }
+      }
+    },
+    {
+      "scenario": "mostly_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 80,
+      "prefix_len": 128,
+      "cache_tokens": 4096,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.033,
+          "fairness_gap_mean": 1.875,
+          "fairness_gap_std": 12.1289,
+          "unshared_p90_wait_mean": 195.375,
+          "unshared_p90_wait_std": 15.3374
+        },
+        "lpm": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 140.875,
+          "fairness_gap_std": 6.1733,
+          "unshared_p90_wait_mean": 272.375,
+          "unshared_p90_wait_std": 9.4464
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 123.25,
+          "fairness_gap_std": 8.6422,
+          "unshared_p90_wait_mean": 262.625,
+          "unshared_p90_wait_std": 9.6558
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 138.75,
+          "fairness_gap_std": 6.7222,
+          "unshared_p90_wait_mean": 270.125,
+          "unshared_p90_wait_std": 8.6666
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 141.0,
+          "fairness_gap_std": 7.1414,
+          "unshared_p90_wait_mean": 271.5,
+          "unshared_p90_wait_std": 9.6437
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.6339,
+          "hit_rate_std": 0.0329,
+          "fairness_gap_mean": 142.0,
+          "fairness_gap_std": 6.0622,
+          "unshared_p90_wait_mean": 273.0,
+          "unshared_p90_wait_std": 8.9022
+        }
+      }
+    },
+    {
+      "scenario": "mostly_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 80,
+      "prefix_len": 128,
+      "cache_tokens": 1024,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.6271,
+          "hit_rate_std": 0.039,
+          "fairness_gap_mean": 1.875,
+          "fairness_gap_std": 12.1289,
+          "unshared_p90_wait_mean": 195.375,
+          "unshared_p90_wait_std": 15.3374
+        },
+        "lpm": {
+          "hit_rate_mean": 0.6332,
+          "hit_rate_std": 0.0334,
+          "fairness_gap_mean": 137.875,
+          "fairness_gap_std": 11.3516,
+          "unshared_p90_wait_mean": 272.125,
+          "unshared_p90_wait_std": 9.6104
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.6298,
+          "hit_rate_std": 0.036,
+          "fairness_gap_mean": 96.0,
+          "fairness_gap_std": 39.7052,
+          "unshared_p90_wait_mean": 253.125,
+          "unshared_p90_wait_std": 17.0106
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.6325,
+          "hit_rate_std": 0.0339,
+          "fairness_gap_mean": 134.875,
+          "fairness_gap_std": 12.5742,
+          "unshared_p90_wait_mean": 268.75,
+          "unshared_p90_wait_std": 10.3047
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.6325,
+          "hit_rate_std": 0.0339,
+          "fairness_gap_mean": 137.125,
+          "fairness_gap_std": 12.7616,
+          "unshared_p90_wait_mean": 270.25,
+          "unshared_p90_wait_std": 11.5407
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.6332,
+          "hit_rate_std": 0.0334,
+          "fairness_gap_mean": 138.5,
+          "fairness_gap_std": 11.0567,
+          "unshared_p90_wait_mean": 272.75,
+          "unshared_p90_wait_std": 9.1754
+        }
+      }
+    },
+    {
+      "scenario": "mostly_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 80,
+      "prefix_len": 128,
+      "cache_tokens": 512,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.5328,
+          "hit_rate_std": 0.0381,
+          "fairness_gap_mean": 1.875,
+          "fairness_gap_std": 12.1289,
+          "unshared_p90_wait_mean": 195.375,
+          "unshared_p90_wait_std": 15.3374
+        },
+        "lpm": {
+          "hit_rate_mean": 0.623,
+          "hit_rate_std": 0.0358,
+          "fairness_gap_mean": 132.375,
+          "fairness_gap_std": 16.4616,
+          "unshared_p90_wait_mean": 272.25,
+          "unshared_p90_wait_std": 10.0343
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.6156,
+          "hit_rate_std": 0.0389,
+          "fairness_gap_mean": 57.0,
+          "fairness_gap_std": 34.1833,
+          "unshared_p90_wait_mean": 236.75,
+          "unshared_p90_wait_std": 19.3891
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.6182,
+          "hit_rate_std": 0.0363,
+          "fairness_gap_mean": 126.375,
+          "fairness_gap_std": 13.1333,
+          "unshared_p90_wait_mean": 265.0,
+          "unshared_p90_wait_std": 12.7867
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.6203,
+          "hit_rate_std": 0.0368,
+          "fairness_gap_mean": 131.125,
+          "fairness_gap_std": 16.0736,
+          "unshared_p90_wait_mean": 269.25,
+          "unshared_p90_wait_std": 11.519
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.6223,
+          "hit_rate_std": 0.0363,
+          "fairness_gap_mean": 132.625,
+          "fairness_gap_std": 16.8593,
+          "unshared_p90_wait_mean": 272.0,
+          "unshared_p90_wait_std": 10.3441
+        }
+      }
+    },
+    {
+      "scenario": "few_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 20,
+      "prefix_len": 128,
+      "cache_tokens": 32768,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.1421,
+          "hit_rate_std": 0.0137,
+          "fairness_gap_mean": -0.875,
+          "fairness_gap_std": 11.174,
+          "unshared_p90_wait_mean": 181.875,
+          "unshared_p90_wait_std": 14.5983
+        },
+        "lpm": {
+          "hit_rate_mean": 0.1421,
+          "hit_rate_std": 0.0137,
+          "fairness_gap_mean": 179.125,
+          "fairness_gap_std": 17.302,
+          "unshared_p90_wait_mean": 190.75,
+          "unshared_p90_wait_std": 15.7698
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.1421,
+          "hit_rate_std": 0.0137,
+          "fairness_gap_mean": 179.125,
+          "fairness_gap_std": 17.302,
+          "unshared_p90_wait_mean": 190.75,
+          "unshared_p90_wait_std": 15.7698
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.1421,
+          "hit_rate_std": 0.0137,
+          "fairness_gap_mean": 179.125,
+          "fairness_gap_std": 17.302,
+          "unshared_p90_wait_mean": 190.75,
+          "unshared_p90_wait_std": 15.7698
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.1421,
+          "hit_rate_std": 0.0137,
+          "fairness_gap_mean": 179.125,
+          "fairness_gap_std": 17.302,
+          "unshared_p90_wait_mean": 190.75,
+          "unshared_p90_wait_std": 15.7698
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.1421,
+          "hit_rate_std": 0.0137,
+          "fairness_gap_mean": 179.125,
+          "fairness_gap_std": 17.302,
+          "unshared_p90_wait_mean": 190.75,
+          "unshared_p90_wait_std": 15.7698
+        }
+      }
+    },
+    {
+      "scenario": "few_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 20,
+      "prefix_len": 128,
+      "cache_tokens": 4096,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.1338,
+          "hit_rate_std": 0.014,
+          "fairness_gap_mean": -0.875,
+          "fairness_gap_std": 11.174,
+          "unshared_p90_wait_mean": 181.875,
+          "unshared_p90_wait_std": 14.5983
+        },
+        "lpm": {
+          "hit_rate_mean": 0.1415,
+          "hit_rate_std": 0.0148,
+          "fairness_gap_mean": 164.375,
+          "fairness_gap_std": 50.3387,
+          "unshared_p90_wait_mean": 190.875,
+          "unshared_p90_wait_std": 15.5599
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.1415,
+          "hit_rate_std": 0.0148,
+          "fairness_gap_mean": 164.375,
+          "fairness_gap_std": 50.3387,
+          "unshared_p90_wait_mean": 190.875,
+          "unshared_p90_wait_std": 15.5599
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.1415,
+          "hit_rate_std": 0.0148,
+          "fairness_gap_mean": 164.375,
+          "fairness_gap_std": 50.3387,
+          "unshared_p90_wait_mean": 190.875,
+          "unshared_p90_wait_std": 15.5599
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.1415,
+          "hit_rate_std": 0.0148,
+          "fairness_gap_mean": 164.375,
+          "fairness_gap_std": 50.3387,
+          "unshared_p90_wait_mean": 190.875,
+          "unshared_p90_wait_std": 15.5599
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.1415,
+          "hit_rate_std": 0.0148,
+          "fairness_gap_mean": 164.375,
+          "fairness_gap_std": 50.3387,
+          "unshared_p90_wait_mean": 190.875,
+          "unshared_p90_wait_std": 15.5599
+        }
+      }
+    },
+    {
+      "scenario": "few_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 20,
+      "prefix_len": 128,
+      "cache_tokens": 1024,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.0638,
+          "hit_rate_std": 0.0155,
+          "fairness_gap_mean": -0.875,
+          "fairness_gap_std": 11.174,
+          "unshared_p90_wait_mean": 181.875,
+          "unshared_p90_wait_std": 14.5983
+        },
+        "lpm": {
+          "hit_rate_mean": 0.1286,
+          "hit_rate_std": 0.0162,
+          "fairness_gap_mean": 58.625,
+          "fairness_gap_std": 22.3659,
+          "unshared_p90_wait_mean": 191.375,
+          "unshared_p90_wait_std": 16.1318
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.1286,
+          "hit_rate_std": 0.0162,
+          "fairness_gap_mean": 58.625,
+          "fairness_gap_std": 22.3659,
+          "unshared_p90_wait_mean": 191.375,
+          "unshared_p90_wait_std": 16.1318
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.1286,
+          "hit_rate_std": 0.0162,
+          "fairness_gap_mean": 58.625,
+          "fairness_gap_std": 22.3659,
+          "unshared_p90_wait_mean": 191.375,
+          "unshared_p90_wait_std": 16.1318
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.1286,
+          "hit_rate_std": 0.0162,
+          "fairness_gap_mean": 58.625,
+          "fairness_gap_std": 22.3659,
+          "unshared_p90_wait_mean": 191.375,
+          "unshared_p90_wait_std": 16.1318
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.1286,
+          "hit_rate_std": 0.0162,
+          "fairness_gap_mean": 58.625,
+          "fairness_gap_std": 22.3659,
+          "unshared_p90_wait_mean": 191.375,
+          "unshared_p90_wait_std": 16.1318
+        }
+      }
+    },
+    {
+      "scenario": "few_shared",
+      "n_req": 150,
+      "hot_families": 2,
+      "shared_ratio_pct": 20,
+      "prefix_len": 128,
+      "cache_tokens": 512,
+      "seeds": 8,
+      "policies": {
+        "fcfs": {
+          "hit_rate_mean": 0.0354,
+          "hit_rate_std": 0.0096,
+          "fairness_gap_mean": -0.875,
+          "fairness_gap_std": 11.174,
+          "unshared_p90_wait_mean": 181.875,
+          "unshared_p90_wait_std": 14.5983
+        },
+        "lpm": {
+          "hit_rate_mean": 0.1216,
+          "hit_rate_std": 0.02,
+          "fairness_gap_mean": 68.625,
+          "fairness_gap_std": 30.5775,
+          "unshared_p90_wait_mean": 190.375,
+          "unshared_p90_wait_std": 14.8739
+        },
+        "aged_T32": {
+          "hit_rate_mean": 0.1216,
+          "hit_rate_std": 0.02,
+          "fairness_gap_mean": 68.625,
+          "fairness_gap_std": 30.5775,
+          "unshared_p90_wait_mean": 190.375,
+          "unshared_p90_wait_std": 14.8739
+        },
+        "aged_T8": {
+          "hit_rate_mean": 0.1216,
+          "hit_rate_std": 0.02,
+          "fairness_gap_mean": 68.625,
+          "fairness_gap_std": 30.5775,
+          "unshared_p90_wait_mean": 190.375,
+          "unshared_p90_wait_std": 14.8739
+        },
+        "aged_T1": {
+          "hit_rate_mean": 0.1216,
+          "hit_rate_std": 0.02,
+          "fairness_gap_mean": 68.625,
+          "fairness_gap_std": 30.5775,
+          "unshared_p90_wait_mean": 190.375,
+          "unshared_p90_wait_std": 14.8739
+        },
+        "aged_T32_antitie": {
+          "hit_rate_mean": 0.1216,
+          "hit_rate_std": 0.02,
+          "fairness_gap_mean": 68.625,
+          "fairness_gap_std": 30.5775,
+          "unshared_p90_wait_mean": 190.375,
+          "unshared_p90_wait_std": 14.8739
+        }
+      }
+    }
+  ]
+}
