@@ -37146,9 +37146,57 @@
         },
         {
           "file": "tools/server/server.cpp",
+          "line": 230,
+          "method": "GET",
+          "path": "/models/sse"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 231,
+          "method": "?",
+          "path": "/models"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 234,
+          "method": "GET",
+          "path": "/health"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 235,
+          "method": "GET",
+          "path": "/v1/health"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 236,
+          "method": "GET",
+          "path": "/metrics"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 237,
+          "method": "GET",
+          "path": "/props"
+        },
+        {
+          "file": "tools/server/server.cpp",
           "line": 238,
           "method": "POST",
           "path": "/props"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 239,
+          "method": "GET",
+          "path": "/models"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 240,
+          "method": "GET",
+          "path": "/v1/models"
         },
         {
           "file": "tools/server/server.cpp",
@@ -37314,9 +37362,21 @@
         },
         {
           "file": "tools/server/server.cpp",
+          "line": 270,
+          "method": "GET",
+          "path": "/lora-adapters"
+        },
+        {
+          "file": "tools/server/server.cpp",
           "line": 271,
           "method": "POST",
           "path": "/lora-adapters"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 273,
+          "method": "GET",
+          "path": "/slots"
         },
         {
           "file": "tools/server/server.cpp",
@@ -37326,15 +37386,39 @@
         },
         {
           "file": "tools/server/server.cpp",
+          "line": 290,
+          "method": "GET",
+          "path": "/v1/stream"
+        },
+        {
+          "file": "tools/server/server.cpp",
           "line": 291,
           "method": "POST",
           "path": "/v1/streams/lookup"
         },
         {
           "file": "tools/server/server.cpp",
+          "line": 292,
+          "method": "?",
+          "path": "/v1/stream"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 325,
+          "method": "GET",
+          "path": "/cors-proxy"
+        },
+        {
+          "file": "tools/server/server.cpp",
           "line": 326,
           "method": "POST",
           "path": "/cors-proxy"
+        },
+        {
+          "file": "tools/server/server.cpp",
+          "line": 347,
+          "method": "GET",
+          "path": "/tools"
         },
         {
           "file": "tools/server/server.cpp",
@@ -37346,8 +37430,8 @@
       "summary": {
         "n_cli_flags": 0,
         "n_protocol_classes": 0,
-        "n_routes": 36,
-        "n_unique_paths": 36,
+        "n_routes": 50,
+        "n_unique_paths": 43,
         "openai_compat_paths": [
           "/v1/audio/transcriptions",
           "/v1/chat/completions",
@@ -37355,12 +37439,15 @@
           "/v1/chat/completions/input_tokens",
           "/v1/completions",
           "/v1/embeddings",
+          "/v1/health",
           "/v1/messages",
           "/v1/messages/count_tokens",
+          "/v1/models",
           "/v1/rerank",
           "/v1/reranking",
           "/v1/responses",
           "/v1/responses/input_tokens",
+          "/v1/stream",
           "/v1/streams/lookup"
         ],
         "route_prefix_caveat": null,
@@ -37376,16 +37463,20 @@
           "/detokenize",
           "/embedding",
           "/embeddings",
+          "/health",
           "/infill",
           "/lora-adapters",
+          "/metrics",
           "/models",
           "/models/load",
+          "/models/sse",
           "/models/unload",
           "/props",
           "/rerank",
           "/reranking",
           "/responses",
           "/responses/input_tokens",
+          "/slots",
           "/slots/:id_slot",
           "/tokenize",
           "/tools",
@@ -37395,12 +37486,15 @@
           "/v1/chat/completions/input_tokens",
           "/v1/completions",
           "/v1/embeddings",
+          "/v1/health",
           "/v1/messages",
           "/v1/messages/count_tokens",
+          "/v1/models",
           "/v1/rerank",
           "/v1/reranking",
           "/v1/responses",
           "/v1/responses/input_tokens",
+          "/v1/stream",
           "/v1/streams/lookup"
         ]
       }

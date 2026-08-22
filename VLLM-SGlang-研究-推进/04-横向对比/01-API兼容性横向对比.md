@@ -276,6 +276,8 @@ vLLM（`vllm/entrypoints/openai/chat_completion/protocol.py:274`）、SGLang（`
 
 vLLM 还多一层 Cohere Chat v2 兼容（`/cohere/v2/chat`，`vllm/entrypoints/cohere/api_router.py:104`），但同样默认关闭，需要 `VLLM_ENABLE_COHERE_API=1` 且装了 `cohere` SDK 才注册（`vllm/entrypoints/cohere/api_router.py:212-243`）——vLLM 的 `/v2/embed`、`/v2/rerank` 则是 pooling 族的一部分，只要模型支持对应任务就始终注册，没有任何开关，同一个厂商的三个兼容端点走两种完全不同的默认可用性策略。
 
+细看 `/v1/messages` 的姊妹端点 `/v1/messages/count_tokens`（`## 3.2` 中间档表已给出 5/12 覆盖），6 家实现 `/v1/messages` 的引擎里只有 Dynamo 没有配套实现 `count_tokens`——与 `/v1/messages` 本身一样，Dynamo 的 Anthropic 支持标注为 `[EXPERIMENTAL]`（见上表），配套的计数端点没有跟进并不意外，这也印证了"实验性功能"这个标签是准确的，不是自谦。
+
 - **为什么这样**：Anthropic Messages API 在 Claude 生态里的地位类似 OpenAI Chat Completions，一旦某个客户端 SDK（比如 Claude Code 本身、各类 Agent 框架）已经针对 Anthropic 协议写好了工具调用/流式解析逻辑，引擎侧实现 `/v1/messages` 就能让这批客户端**零改动**接入——这是"多标准并存"对客户端 SDK 生态最大的意义：客户端不需要为每个后端引擎写一份适配代码，只要引擎实现了它认的那套协议。
 - **不这样会怎样**：如果引擎只做 OpenAI 协议，Anthropic 生态的客户端要么自己写一层 Anthropic→OpenAI 的转换 proxy（LightLLM 选的就是这条路，只不过它把转换逻辑委托给了 `litellm` 这个第三方库，而不是自己实现），要么干脆不支持——这也是为什么 6 家里有 2 家（TGI、TensorRT-LLM）选择完全不做：如果目标客户群本来就是走 OpenAI 协议进来的企业客户，额外维护一套协议转换层的收益不足以覆盖维护成本。
 - **什么时候可以不这样**：一个引擎如果目标场景高度垂直（比如 MLC-LLM 面向端侧单机部署，Tokasaurus 是研究用途的极简服务器），维护多标准兼容层的边际收益很低，不实现是合理选择。
@@ -287,6 +289,7 @@ vLLM 还多一层 Cohere Chat v2 兼容（`/cohere/v2/chat`，`vllm/entrypoints/
 | vLLM | `/sleep` `/wake_up` `/is_sleeping`（`vllm/entrypoints/serve/dev/sleep/api_router.py:21`）、`/scale_elastic_ep`（`vllm/entrypoints/serve/elastic_ep/api_router.py:29`）、`/collective_rpc`（`vllm/entrypoints/serve/dev/rpc/api_router.py:23`） | 显存让出（RLHF rollout 之间腾空间）、弹性扩缩容、任意 RPC 调试——但**物理隔离**在 `serve/dev/` 目录下，多数需要 `VLLM_SERVER_DEV_MODE=1` |
 | SGLang | `/init_weights_update_group` 起（`sglang:python/sglang/srt/entrypoints/http_server.py:1339`）共 16 条权重热更新/显存让出端点 | 同样服务 RLHF 场景，但当成**主服务器的一等公民路由**，只用 `AuthLevel.ADMIN_OPTIONAL` 标记权限级别（`sglang:python/sglang/srt/utils/auth.py:128-137`），未配 key 时默认不设防 |
 | llama.cpp | `/infill` `/props` `/apply-template` `/slots/:id_slot`（`llama.cpp:tools/server/server.cpp:237`、`llama.cpp:tools/server/server.cpp:252`） | 面向"本地单机 + 编辑器集成"场景的调试/编辑能力，没有分布式运维端点 |
+| TensorRT-LLM | `/cluster_info`（`tensorrt-llm:tensorrt_llm/serve/coordinator_server.py:67`）、`/kv_cache_events`、`/energy_metrics`、`/release_memory`（`tensorrt-llm:tensorrt_llm/serve/openai_server.py:988`、`tensorrt-llm:tensorrt_llm/serve/openai_server.py:977`、`tensorrt-llm:tensorrt_llm/serve/openai_server.py:1039`） | 面向数据中心级集群运维：跨节点集群状态查询、KV 缓存事件流、能耗指标——这是本篇 12 个引擎里唯一暴露"能耗"这个维度的端点，对应 NVIDIA 自己数据中心运维体系的诉求 |
 
 vLLM 与 SGLang 在**功能对等**的 RLHF 权重更新能力上做出了相反的产品判断：vLLM 把它当开发者调试后门（默认不挂载，挂载时打印 `SECURITY WARNING`），SGLang 把它当生产特性（默认挂载，只做权限标记）。这不是谁更安全，是两边对"谁会把推理引擎当 RL rollout worker 用"这件事的产品定位不同——这一判断沿用自 `08-SGLang-HTTP-API表面全解` 的对照结论，本篇核实过两处引用行号均成立。
 

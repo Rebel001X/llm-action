@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 verify_out.txt
 *.log
+*.tmp
+_verify_utf8.txt

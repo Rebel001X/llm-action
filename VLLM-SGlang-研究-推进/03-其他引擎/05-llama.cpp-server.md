@@ -11,6 +11,18 @@
 - **slot 之间的 KV 复用靠一次线性最长公共前缀（LCP）扫描，不是基数树或哈希表。** `get_available_slot`（`tools/server/server-context.cpp:1500`）遍历所有空闲 slot，对每个 slot 现存的 token 序列和新请求做 `tokens.get_common_prefix(task.tokens)`（`:1531`），选相似度最高且过阈值（默认 0.1，`common/common.h:678`）的那个；找不到就退化成 LRU（`:1565`-`1579`）。这一步是 `O(n_slots)` 的，n_slots 通常个位数到几十，量级上和 SGLang RadixCache 的树查找不是一回事，但因为 slot 数天生就小，这个"笨办法"反而够用。
 - **还有一层容易被忽略的兜底：8 GiB 默认开启的主机内存提示词缓存。** `--cache-ram` 默认值是 `8192`（MiB）（`common/common.h:616`），不是 0——也就是说 llama-server **默认就会**把被挤出 slot 的旧提示词的 KV 状态序列化进普通内存（`server_prompt_cache`，`tools/server/server-task.h:613`），下次同一个前缀回来时优先从这里恢复而不是重算，代价是主机 RAM 而非显存。
 - **`_lab/api_surface.py` 用正则而非 AST 抽 llama.cpp 的路由（`method=regex`），这份统计低估了真实路由数。** 它只识别 `ctx_http.post(...)` 这一种调用形态，抽出 36 条、全部标成 `POST`——但 `tools/server/server.cpp` 里同样密集地写着 `ctx_http.get (...)` 和 `ctx_http.del (...)`（比如 `GET /health` 在 `:234`、`GET /props` 在 `:237`、`GET /slots` 在 `:273`），这些一条都没被正则捕到。`## 2` `## 7` 会把这个精度缺口摊开讲。
+
+
+> **【本篇写完之后的更新】** 上面指出的这个缺陷**已经按本篇的诊断修掉了**：
+> `_lab/api_surface.py` 的 llama.cpp 正则原本写作 `ctx_http\.(get|post)\(`，
+> 一是漏了 `del`/`put`/`patch`，二是括号前不允许空格 —— 而源码里确实有
+> `ctx_http.get ("/v1/models", ...)` 这种带空格的写法。
+> 改成 `ctx_http\.(get|post|del|put|patch)\s*\(` 之后，抽到的路由由 **36 条涨到 50 条**
+> （POST 36 / GET 12 / 方法未定 2），`/v1/*` 由 13 条涨到 **16 条**。
+> 本篇正文里的「36」保留原样不改，是为了留下这条诊断的现场 ——
+> **正文指出工具缺陷 → 工具被修 → 数字变化**，这个链条本身是本库想留下的东西。
+> 当前数字以 `_lab/out/api_surface.json` 为准。
+
 - **`server-mcp.cpp` 让 llama-server 长出了 MCP 能力，但方向和"MCP server"这个名字暗示的相反。** 它实现的是**MCP 客户端/宿主**：按 Cursor 兼容的 JSON 配置拉起外部 MCP server 子进程（stdio 传输），列出它们的工具、在模型调用工具时按需转发（`tools/server/server-mcp.h:50` 的 `server_mcp_transport`、`:132` 的 `server_mcp` 类），再把这些工具和内置工具一起挂到 `GET /tools`（`tools/server/server.cpp:347`-`348`）。**llama-server 本身并不对外暴露一个 MCP 协议端点供别的 MCP 客户端连接**——全仓库搜不到任何 `/mcp` 这样的 JSON-RPC over HTTP 路由。这是本篇取证过程里最反直觉的一点。
 - **GGUF 的量化类型远不止"Q4 还是 Q8"这么简单。** `ggml_type` 枚举定义了 35 个存活类型（`GGML_TYPE_COUNT=43` 是数组哨兵，中间跳过 8 个历史废弃占位，`ggml/include/ggml.h:392`-`433`），其中 27 个是权重量化格式，分属三个机制完全不同的家族（传统线性量化、K-quant 分层量化、I-quant 码本量化，`## 4` 逐一拆）；上层暴露给 CLI 的 `llama_ftype` 有 36 个预设（如 `Q4_K_M`），每个预设不是"全模型统一比特宽度"，而是一张按张量角色分配不同类型的**混合表**（`src/llama-quant.cpp:608`-`613`）。
 - **HTTP 连接断开不等于生成中止，这是一个 vLLM 侧找不到对应实现的能力。** 每次生成对应一个按 `conversation_id` 索引的环形缓冲区（`tools/server/server-stream.h:11`-`12`），客户端断线重连后可以从任意偏移量继续读；`_src/vllm/vllm/entrypoints/` 下对同名机制的 grep 是零命中，`## 6` `## 7` 会给出这条能力在两边目标场景下的价值差异。
@@ -165,6 +177,7 @@
 - **`buft_list_t`**(`src/llama-model-loader.h:21`,定义为 `std::vector<std::pair<ggml_backend_dev_t, ggml_backend_buffer_type_t>>`)与 `ggml_backend_buffer_type_t`(`ggml/include/ggml-backend.h:24`,一个不透明指针类型)——模型加载时每个设备对应一份"这个设备能把张量放进哪些 buffer 类型"的**优先级列表**,`## 4.1` 会展示它如何在 GPU 分配失败时提供退路。这一层是 `## 5` 决策一"CPU 兜底不需要异常处理分支"的具体数据结构基础。
 - **GGUF 文件布局**(`ggml/include/gguf.h:1`-`30` 的头部注释是权威定义)——一个 GGUF 文件从头到尾是:4 字节魔数 `"GGUF"`(`GGUF_MAGIC`,`:41`)→ 4 字节版本号(当前 `GGUF_VERSION 3`,`:42`)→ 张量计数 → KV 元数据计数 → 逐个 KV 对(超参数、tokenizer 词表、量化信息等都塞在这里)→ 逐个张量的名字/维度/类型/偏移量 → 最后是对齐过的张量数据二进制块。**整个模型是一个自描述的单文件**,不需要旁边配一个 `config.json` 或 tokenizer 文件才能加载——这是 `## 5` 决策五要展开的对比点。
 - **`ex_wrapper`**(`tools/server/server.cpp:54`-`84`)——一个包裹每个路由 handler 的统一异常翻译层。`## 2` 表格里几乎每一行注册路由都长成 `ctx_http.post("/path", ex_wrapper(handler))` 这个形状:`ex_wrapper` 内部 `try/catch` 住 `std::invalid_argument`(翻译成 400)、其他 `std::exception`(翻译成 500)、以及裸的 `catch (...)`(未知异常同样归为 500),统一格式化成 JSON 错误体返回,还会把异常信息打进 `SRV_WRN` 日志(`:76`)。**这意味着单个 handler 内部完全不需要写自己的 try/catch 来处理"参数不对就报错"这类场景**——直接 `throw std::invalid_argument(...)`,顶层的 `ex_wrapper` 会接住。这是 C++ 单体架构下用异常传播替代逐层显式错误码检查的一个具体例子。
+- **`server_model_status`**(`tools/server/server-models.h:30`-`38`)——router 模式下每个子进程模型的六态生命周期:`DOWNLOADING`/`DOWNLOADED`/`UNLOADED`/`LOADING`/`LOADED`/`SLEEPING`。`## 7` `## 8` 会指出这套状态机和 `server_slot` 的状态机分属不同层级(前者是"这个模型子进程活着没有",后者是"这个 slot 现在在干什么"),不能混为一谈。
 
 ## 4. 主流程走读
 
@@ -314,9 +327,23 @@
 
 **同机多模型:进程级路由 vs 无内建概念。** `## 4.9` 已给出证据:llama.cpp 的 router 模式在同一个二进制里内建了"按需拉起模型子进程、代理转发请求"的能力(`tools/server/server-models.cpp:1022` 的 spawn 日志)。vLLM 没有对应的内建组件(**源码为证**:`_src/vllm/vllm/entrypoints/` 下对 `Router`/`model_router` 一类命名的 grep 零命中),多模型场景依赖外部编排——起多个独立的 vLLM 实例,前面挂一层 Nginx 或 Kubernetes Service 做路由。这不是能力缺失,而是两边对"谁负责编排"这件事的默认答案不同:llama.cpp 假设使用者没有现成的编排基础设施(端侧/单机场景通常也确实没有),所以把这层内建进来;vLLM 假设部署环境本来就有容器编排能力,不重复造轮子。
 
+**"CPU 兜底"这个词,两边指的不是同一件事。** llama.cpp 的 `-ngl` 部分卸载(`## 0` `## 4.4` 已给出证据)是让 CPU 真正执行那部分层的矩阵乘法,用的是 `ggml-cpu` 的手写核函数。vLLM 也有一个名字很像的选项——`cpu_offload_gb`(`` `vllm:vllm/config/offload.py:23` `` ,默认 0)——但它的机制是 UVA(Unified Virtual Addressing)零拷贝访问:权重摆在 CPU 内存里,前向传播时按需搬到 GPU 上**在 GPU 上计算**(docstring 原话"part of the model is loaded from CPU memory to GPU memory on the fly in each model forward pass",`vllm:vllm/config/offload.py:29`-`30`),本质是用 CPU 内存"virtually 扩大 GPU 显存"，不是让 CPU 分担算力。两边都叫"CPU offload"，解决的问题也相似（显存不够怎么办），但**计算实际发生在哪个设备上**是两回事——这是读代码时容易被同一个术语带偏的地方。
+
 ## 7. 踩坑与反直觉
 
 - **`_lab/out/api_surface.json` 里的 36 条路由,方法全标成 `POST`——这是抽取脚本的盲区,不是 llama.cpp 只支持 POST。** 正则只匹配了 `ctx_http.post(...)` 这一种调用形态(`_lab/out/api_surface.json` 的 `"method": "regex"` 字段就是明确的自曝),`server.cpp` 里同样数量级的 `ctx_http.get(...)`(`GET /health`、`GET /props`、`GET /models`、`GET /lora-adapters`、`GET /slots`、`GET /v1/stream`、`GET /tools` 等)和 `ctx_http.del(...)`(`DELETE /models`、`DELETE /v1/stream`)一条都没被统计进去。读这份 JSON 时如果直接拿"36"当作"llama.cpp 一共暴露 36 个能力点",会明显低估。
+
+
+> **【本篇写完之后的更新】** 上面指出的这个缺陷**已经按本篇的诊断修掉了**：
+> `_lab/api_surface.py` 的 llama.cpp 正则原本写作 `ctx_http\.(get|post)\(`，
+> 一是漏了 `del`/`put`/`patch`，二是括号前不允许空格 —— 而源码里确实有
+> `ctx_http.get ("/v1/models", ...)` 这种带空格的写法。
+> 改成 `ctx_http\.(get|post|del|put|patch)\s*\(` 之后，抽到的路由由 **36 条涨到 50 条**
+> （POST 36 / GET 12 / 方法未定 2），`/v1/*` 由 13 条涨到 **16 条**。
+> 本篇正文里的「36」保留原样不改，是为了留下这条诊断的现场 ——
+> **正文指出工具缺陷 → 工具被修 → 数字变化**，这个链条本身是本库想留下的东西。
+> 当前数字以 `_lab/out/api_surface.json` 为准。
+
 - **`server-mcp.cpp` 这个文件名本身是个陷阱。** 第一反应容易读成"llama.cpp 实现了一个 MCP server",但代码显示它做的是反方向:llama-server 是 MCP **客户端**,去连接、调用外部 MCP server 提供的工具(`## 0` `## 5` 已给证据)。这个命名习惯(用被集成的协议名字命名"集成这个协议的模块")在很多项目里都存在,读源码时不能只看文件名猜方向,要看谁发起连接、谁实现协议的哪一端。
 - **`--cache-ram` 默认是 8192(MiB),不是 0。** 容易假设"额外的缓存机制默认关闭,要显式开启才有",但 `common/common.h:616` 显示提示词缓存**默认就占用 8 GiB 主机内存**——在内存本就紧张的端侧设备上,这是一笔容易被忽略的隐性开销,需要显式传 `--cache-ram 0` 才能关掉。
 - **`Q4_K_M` 这种命名格式暗示"4 bit,一种类型",实际是一张混合表。** `src/llama-quant.cpp:608`-`613` 显示同一个 `Q4_K_M` 预设下,不同层、不同角色的张量可能被分配 `Q4_K`、`Q5_K`、甚至 `Q6_K` 三种不同类型——量化后的模型文件大小和精度,是这张混合表和模型结构共同决定的结果,不能只凭预设名字里的"4"字推算出统一的比特占用。
@@ -331,6 +358,8 @@
 - **`## 4.9` 提到的"router 每个模型一个独立子进程",容易被误读成"和 vLLM 的多副本部署是一回事"。** 表面上都是"多个独立进程各自跑一份模型",但触发扩容/缩容的机制完全不同:vLLM 的多副本通常靠外部编排(K8s、`--data-parallel-size` 之类的启动期静态配置)决定副本数,运行时不会自己去起停副本;llama.cpp 的 router 子进程数量是**请求触发**的动态行为——`POST /models/load`(`## 2` 已列出)按需拉起一个新子进程,`SLEEPING` 状态(`server_model_status` 已给出)则是子进程存活但模型权重被换出。这更接近"按需唤醒的模型仓库",不是"预先配置好副本数的负载均衡集群"。
 - **`server_task` 的 `is_parent()`/`child_tasks` 看起来像"高级调度信号",实际服务的是相对朴素的一对多协同场景,不是抢占或优先级调度。** `## 3` 已经指出这对字段支持"一个父任务扇出多个子任务、各自抢一个 slot"的模式;第一次看到"父子任务"容易联想到 vLLM 里请求优先级或者投机解码草稿-验证这类复杂调度概念,但 llama.cpp 这里对应的是更朴素的场景(比如同一次请求需要多个 slot 协同处理),背后不存在一个"谁的优先级更高"的判断逻辑——所有子任务平权,一起等资源,`slot_state::WAIT_OTHER` 纯粹是"等其他子任务的 slot 先处理完 prompt"这个同步点,不涉及优先级比较。
 - **`n_batch`/`n_ubatch` 是两个独立的旋钮,不是同一个概念的两种叫法。** `-b/--batch-size` 的帮助文本写的是"logical maximum batch size",`-ub/--ubatch-size` 写的是"physical maximum batch size"(`common/arg.cpp:1659`-`1667`,`## 2` 已给出行号)。第一次看只有"batch"字样容易以为是同一件事的默认值和覆盖值,实际上"逻辑"批大小是 `update_slots()` 单次处理的 token 上限(`## 4.2` 已展开的 chunked prefill 单位),"物理"批大小是这个逻辑块内部再往 GPU/CPU kernel 提交时实际用的子批大小——两者可以配成不同的值,`n_ubatch` 通常小于等于 `n_batch`。
+- **"CPU offload" 这个词在 llama.cpp 和 vLLM 里指的不是同一种机制。** `## 6` 已给出对照:llama.cpp 的 `-ngl` 部分卸载是让 CPU 真的去跑那部分层的矩阵乘法;vLLM 的 `cpu_offload_gb`(`` `vllm:vllm/config/offload.py:23` ``)是把权重摆在 CPU 内存、用 UVA 零拷贝在**GPU 上**计算,本质是"虚拟扩大显存"而不是"分担算力"。看到"CPU offload"字样时,不能默认两个项目在说同一件事,要具体看计算发生在哪个设备上。
+- **`-ngl` 的默认值不是"0"或"不卸载",而是"全部卸载"。** `params.n_gpu_layers` 的默认值是 `-1`(`common/common.h:465`),CLI 帮助文本把它标注成"auto"、把 `-2` 标注成"all"两个不同档位(`common/arg.cpp:2764`-`2765`),但 `n_gpu_layers()` 这个具体的取值函数(`## 4.4` 已给出,`src/llama-model.cpp:1756`-`1758`)对任何负值一视同仁,统一解析成"全部层"——在这个快照里,"auto"和"all"在这一步的实际行为看起来是一致的(**本库推断**,未继续深挖"auto"是否在其他地方还有专属的、基于显存探测的分支)。如果本机没有可用 GPU,`common/arg.cpp:2775` 会打一句"no usable GPU found, --gpu-layers option will be ignored"的警告,自动退化到纯 CPU——这是另一处默认行为需要读日志才能确认的地方,和 `## 7` 已经提到的几处"警告而非报错"是同一类模式。
 
 
 ## 8. 可改进点
@@ -348,6 +377,7 @@
 9. **`GET /props` 目前不区分"用户请求的配置"和"实际生效的配置"。** `## 8` 第 5 条已经指出 `--ctx-size` 被截断这一个具体场景,但同样的落差(用户传的参数值和运行时实际生效值不一致)理论上不止这一处。一个更系统性的改进是让 `server_context` 在启动期把"每个曾经被静默调整过的参数"统一记进一张小表,`GET /props` 响应体里加一个 `adjusted_params` 字段列出来,而不是每发现一处降级就单独打一次补丁式的日志——这样以后再新增一种静默降级路径,客户端可观测性是自动继承的,不需要每次都记得手动加一处上报。
 10. **Router 模式下,子进程的资源账本(每个模型占多少显存/内存)没有在 `## 2` 提到的路由表面暴露出来。** `server_model_status`(`## 7` 已给出六态状态机)只回答"这个模型现在处于哪个阶段",不直接回答"这台机器现在还能不能再多起一个模型"。如果 router 能在生成状态响应时顺带汇总"当前已加载模型的显存占用总量 vs 硬件总量",对于同机多模型场景的运维决策(现在能不能再 `POST /models/load` 一个新模型)会比现在"试了才知道"更可预测。
 11. **`_lab/repo_stats.py` 目前统计不到 `conversion/` 目录下按架构注册的转换类数量,只给出目录总行数。** `## 1.4` 这份"222 处 `@ModelBase.register`"的数字是本篇现场跑 `grep -rc` 得到的,不在 `_lab/out/repo_stats.json` 的既有字段里。给 `repo_stats.py` 补一个"按装饰器/关键类统计注册数"的通用小工具(不只对 llama.cpp,对任何用装饰器模式做插件注册的引擎都适用),能让"一个仓库到底支持多少种可插拔的东西"这类问题从"临时手动 grep"变成"跑一次脚本就有的确定性数字"。
+12. **"CPU offload" 这个术语在 llama.cpp 和 vLLM 文档里含义不同,但两边都没有互相提醒读者这一点。** `## 7` 已指出这个术语碰撞。这不是任何一方的错,只是两个生态各自独立演化出了同一个名字——但对同时要读两边文档、做选型对比的人来说,一个小的改进空间是:任何横向对比材料(包括本库自己的篇目表)在提到"CPU offload"时,都应该显式标注是"CPU 分担计算"还是"CPU 内存扩展显存",不能假设读者已经知道这是两回事。
 
 
 ## 9. 自测题与延伸阅读
@@ -369,6 +399,8 @@
 13. `qs.has_imatrix` 这个标志位会不会改变同一个量化预设(比如 `Q4_K_M`)下的张量类型分配?举一个源码里能找到的具体分支作为证据。
 14. 支持一个新模型架构,llama.cpp 需要在哪两个目录、用哪两种语言各写一份代码?这两处各自的文件/注册数量级(本篇给出的现场统计)大致是多少?
 15. router 模式下,一个新模型被加载时,router 进程本身会不会去读取或持有这个模型的权重?真正持有权重的是谁?
+16. `-ngl`/`--n-gpu-layers` 部分卸载时,哪一部分层(靠近输入还是靠近输出)会先被留在 CPU 上?这个判断在源码的哪个表达式里体现?
+17. llama.cpp 的 `-ngl` 部分卸载和 vLLM 的 `cpu_offload_gb` 都叫"CPU offload",但计算实际发生在哪个设备上不一样——分别说说两边的机制。
 
 **延伸阅读**(双链只取自 `_PLAN.md` §6 名册):
 

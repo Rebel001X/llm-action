@@ -136,8 +136,10 @@ REGEX_ROUTES: dict[str, dict] = {
     "llama.cpp": {
         "files": ["tools/server/server.cpp", "tools/server/server-http.cpp",
                   "examples/server/server.cpp"],
-        "patterns": [r'ctx_http\.(get|post)\(\s*"([^"]+)"',
-                     r'srv->(Get|Post)\(\s*"([^"]+)"'],
+        # 注意 `\s*` 要放在括号**前面**：源码里有 `ctx_http.get ("/v1/models", ...)`
+        # 这种括号前带空格的写法，少了它就会漏抽 /v1/models。
+        "patterns": [r'ctx_http\.(get|post|del|put|patch)\s*\(\s*"([^"]+)"',
+                     r'srv->(Get|Post)\s*\(\s*"([^"]+)"'],
     },
     # Dynamo：axum 的 .route(&path, post(h)) 用的是变量，路径本身写在
     # `unwrap_or("/v1/xxx")` 的默认值或 `const X: &str = "/v1/xxx"` 里。
