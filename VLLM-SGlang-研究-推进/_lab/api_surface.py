@@ -89,16 +89,22 @@ ENTRY_HINTS: dict[str, dict[str, list[str]]] = {
                    "ktransformers/server/api/**/*.py"],
         "protocol": ["archive/ktransformers/server/schemas/**/*.py",
                      "ktransformers/server/schemas/**/*.py"],
+        # 新的 kt-cli 用 click 而不是 argparse，得把它的命令模块也扫进来
         "config": ["archive/ktransformers/server/config/config.py",
                    "archive/ktransformers/server/args.py",
-                   "ktransformers/server/config/config.py"],
+                   "ktransformers/server/config/config.py",
+                   "kt-kernel/python/cli/commands/*.py"],
         "pyapi": ["archive/ktransformers/server/backend/interfaces/*.py"],
     },
     "mlc-llm": {
         "routes": ["python/mlc_llm/serve/entrypoints/openai_entrypoints.py",
                    "python/mlc_llm/**/entrypoints/*.py"],
         "protocol": ["python/mlc_llm/protocol/openai_api_protocol.py"],
-        "config": ["python/mlc_llm/serve/config.py", "python/mlc_llm/interface/serve.py"],
+        # 第一版只指 serve/config.py + interface/serve.py，两个都不是 CLI 入口，
+        # 于是 cli_flags 抽出 0 —— 假的。真正的 argparse 散在 python/mlc_llm/cli/*.py，
+        # 光 cli/serve.py 就有 36 处 add_argument。
+        "config": ["python/mlc_llm/serve/config.py", "python/mlc_llm/interface/serve.py",
+                   "python/mlc_llm/cli/*.py"],
         "pyapi": ["python/mlc_llm/serve/engine.py"],
     },
     "tokasaurus": {
@@ -225,6 +231,73 @@ def _call_routes(tree) -> list[dict]:
     return found
 
 
+def _router_prefixes(tree) -> dict[str, str]:
+    """找出 `router = APIRouter(prefix="/v1")` 这类前缀声明，返回 {变量名: 前缀}。
+
+    为什么必须有：FastAPI 允许把公共前缀挂在 router 上，处理函数上的装饰器只写
+    `@router.post("/chat/completions")`。只看装饰器会得到 `/chat/completions`，
+    于是"有几条 /v1/* 端点"会被算成 0 —— KTransformers 就是这么被误判的。
+    """
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        fn = node.value.func
+        name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", "")
+        if name not in ("APIRouter", "Router"):
+            continue
+        prefix = ""
+        for kw in node.value.keywords:
+            if kw.arg == "prefix" and isinstance(kw.value, ast.Constant) \
+                    and isinstance(kw.value.value, str):
+                prefix = kw.value.value
+        if not prefix:
+            continue
+        for t in node.targets:
+            if isinstance(t, ast.Name):
+                out[t.id] = prefix.rstrip("/")
+    return out
+
+
+def _click_flags(tree) -> list[dict]:
+    """抽 `@click.option("--foo", ...)` / `@option("--foo", ...)` 装饰器式 CLI 开关。
+
+    为什么必须有：新一代 CLI（KTransformers 的 `kt-cli`）用 click 而不是 argparse，
+    只认 argparse 会把它的开关数算成 0。
+    """
+    flags = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call):
+                continue
+            f = dec.func
+            nm = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+            if nm not in ("option", "argument"):
+                continue
+            names = [a.value for a in dec.args
+                     if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+            opts = [n for n in names if n.startswith("-")]
+            if not opts:
+                continue
+            kw = {k.arg: k.value for k in dec.keywords if k.arg}
+            entry = {
+                "flags": opts,
+                "primary": next((n for n in opts if n.startswith("--")), opts[0]),
+                "type": _unparse(kw["type"]) if "type" in kw else None,
+                "default": _unparse(kw["default"]) if "default" in kw else None,
+                "action": None,
+                "line": dec.lineno,
+                "style": "click",
+            }
+            if "help" in kw and isinstance(kw["help"], ast.Constant) \
+                    and isinstance(kw["help"].value, str):
+                entry["help"] = " ".join(kw["help"].value.split())[:200]
+            flags.append(entry)
+    return flags
+
+
 def _class_fields(cls: ast.ClassDef) -> list[dict]:
     """抽类体里的带注解字段（pydantic / dataclass 都是这个形状）。"""
     fields = []
@@ -304,6 +377,7 @@ def _resolve(root: Path, patterns: list[str], cap: int = 400) -> list[Path]:
 def _scan_python(root: Path, files: list[Path], want_routes=True, want_classes=True,
                  want_flags=True) -> dict:
     routes, classes, flags, parsed, failed = [], [], [], [], []
+    uses_include_router = False
     for fp in files:
         text = read_text(fp)
         if not text:
@@ -315,10 +389,18 @@ def _scan_python(root: Path, files: list[Path], want_routes=True, want_classes=T
             continue
         parsed.append(rel(fp, root))
         r = rel(fp, root)
+        prefixes = _router_prefixes(tree)
+        if "include_router" in text:
+            uses_include_router = True
         if want_routes:
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     for rt in _decorator_routes(node):
+                        # router = APIRouter(prefix="/v1") 时，装饰器上的路径要补前缀
+                        pre = prefixes.get(rt.get("app_obj", ""))
+                        if pre and not rt["path"].startswith(pre):
+                            rt["path"] = pre + rt["path"]
+                            rt["prefix_from_router"] = pre
                         rt["file"] = r
                         routes.append(rt)
             for rt in _call_routes(tree):
@@ -336,11 +418,12 @@ def _scan_python(root: Path, files: list[Path], want_routes=True, want_classes=T
                         "decorators": [_unparse(d) for d in node.decorator_list],
                     })
         if want_flags:
-            for f in _argparse_flags(tree):
+            for f in _argparse_flags(tree) + _click_flags(tree):
                 f["file"] = r
                 flags.append(f)
     return {"routes": routes, "classes": classes, "flags": flags,
-            "files_parsed": parsed, "parse_failures": failed}
+            "files_parsed": parsed, "parse_failures": failed,
+            "uses_include_router": uses_include_router}
 
 
 def _scan_regex(root: Path, spec: dict) -> dict:
@@ -396,6 +479,7 @@ def analyze(name: str) -> dict:
         result["engine_classes"] = api["classes"]
         result["parse_failures"] = (rs["parse_failures"] + ps["parse_failures"]
                                     + cs["parse_failures"] + api["parse_failures"])
+        result["_uses_include_router"] = rs.get("uses_include_router", False) or             api.get("uses_include_router", False)
         # 混合型引擎（Python worker + Rust/C++ HTTP 层，如 Dynamo）：两种抽法都跑，合并
         if name in REGEX_ROUTES:
             extra = _scan_regex(root, REGEX_ROUTES[name])
@@ -412,7 +496,22 @@ def analyze(name: str) -> dict:
                        "cli_flags": [], "engine_classes": [], "note": "未登记入口线索"})
 
     paths = sorted({r["path"] for r in result.get("routes", [])})
+    # 前缀解析的已知边界：本工具只在**单个文件内**解析 APIRouter(prefix=...)。
+    # 像 KTransformers 那样用 include_router 跨文件组合、把 /v1 挂在更上层的写法，
+    # 这里补不出来 —— 于是 openai_compat_paths 会偏少。**这是工具的边界，不是引擎没有该端点。**
+    # 只有当「用了 include_router **且** 一条 /v1/* 都没抽到」时才报警 ——
+    # 光看用没用 include_router 会对 vLLM/SGLang 这类前缀写在装饰器里的项目误报，
+    # 一个对所有人都亮的警告等于没有警告。
+    uses_include = bool(result.pop("_uses_include_router", False))
+    _paths_tmp = {r["path"] for r in result.get("routes", [])}
+    suspicious = uses_include and bool(_paths_tmp) and not any(
+        p.startswith("/v1/") for p in _paths_tmp)
     result["summary"] = {
+        "route_prefix_caveat": (
+            "该引擎用 include_router 跨文件组合路由，且本次一条 /v1/* 都没抽到 —— "
+            "上层前缀很可能挂在别处，本工具只在单文件内解析 APIRouter(prefix=...)，补不出来。"
+            "**这是工具的边界，不能据此说该引擎没有 /v1 端点。**" if suspicious else None),
+        "route_prefix_maybe_undercounted": suspicious,
         "n_routes": len(result.get("routes", [])),
         "n_unique_paths": len(paths),
         "unique_paths": paths,
@@ -442,6 +541,16 @@ SELFTEST_SRC = "\n".join([
     "def health():",
     "    return 'ok'",
     "",
+    "v1 = APIRouter(prefix='/v1')",
+    "",
+    "@v1.post('/rerank2')",
+    "def rr():",
+    "    pass",
+    "",
+    "@click.option('--kt-flag', default=3, help='click style')",
+    "def cli():",
+    "    pass",
+    "",
     "def make():",
     "    p = argparse.ArgumentParser()",
     "    p.add_argument('--max-num-seqs', type=int, default=256, help='Maximum sequences.')",
@@ -467,7 +576,7 @@ def selftest() -> int:
 
         paths = sorted(r["path"] for r in got["routes"])
         if paths != ["/health", "/v1/chat/completions", "/v1/models",
-                     "/v1/rerank", "/version"]:
+                     "/v1/rerank", "/v1/rerank2", "/version"]:
             print(f"FAIL routes -> {paths}"); ok = False
         # add_api_route：显式 methods 要被读出来，不写 methods 时按 FastAPI 默认 GET
         by_path = {r["path"]: r for r in got["routes"]}
@@ -486,8 +595,11 @@ def selftest() -> int:
         elif cls[0]["fields"][2]["default"] != "1.0":
             print(f"FAIL default -> {cls[0]['fields'][2]}"); ok = False
 
+        # APIRouter(prefix=...) 的前缀必须被补上，否则 /v1 端点数会被算成 0
+        if by_path["/v1/rerank2"].get("prefix_from_router") != "/v1":
+            print(f"FAIL router prefix -> {by_path['/v1/rerank2']}"); ok = False
         flags = sorted(x["primary"] for x in got["flags"])
-        if flags != ["--enable-prefix-caching", "--max-num-seqs"]:
+        if flags != ["--enable-prefix-caching", "--kt-flag", "--max-num-seqs"]:
             print(f"FAIL flags -> {flags}"); ok = False
         else:
             mns = next(x for x in got["flags"] if x["primary"] == "--max-num-seqs")

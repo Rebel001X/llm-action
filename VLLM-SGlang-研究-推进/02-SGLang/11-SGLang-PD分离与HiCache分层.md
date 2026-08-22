@@ -35,9 +35,13 @@
 
 两条轴唯一的正式交叉点在 decode 侧：`decode_hicache_mixin.py` 文件顶部的 docstring 写得很直白——“HiCache integration mixins **for the decode side of PD disaggregation**”（`python/sglang/srt/disaggregation/decode_hicache_mixin.py:1`）。一个 decode 实例收到一个已经在 prefill 侧跑过的请求后，不会天真地假设“KV 一定要从网络传过来”——它先在本地的 L1/L2/L3 走一遍前缀匹配，只把本地确实没有的那一段标记为“需要从 prefill 网络传输”（详见 §4.5）。这意味着**一个开了 HiCache 的 decode 实例，本质上是把“该不该发起 PD 网络传输”这个决策，从“是否 PD 分离”单独一个开关，变成了“本地缓存命中率”和“网络传输代价”之间的一次即时比较**——本篇 §5 会把这次比较写成一条解析公式。
 
-**角色划分里还缺一环：谁负责把外部请求分发到哪一对 prefill/decode 实例？** 这一环不在 `python/sglang/srt/disaggregation/` 目录里，也不在任何 Python 文件里——它是一个独立的 Rust crate `sgl-model-gateway`（2025 行的 `sgl-model-gateway/src/routers/http/pd_router.rs`，另有 gRPC 版 `sgl-model-gateway/src/routers/grpc/pd_router.rs`）。`PDRouter` 结构体（`sgl-model-gateway/src/routers/http/pd_router.rs:50`）持有 `worker_registry`（`WorkerRegistry`，`sgl-model-gateway/src/core/worker_registry.rs:180`）和 `policy_registry`（`PolicyRegistry`，`sgl-model-gateway/src/policies/registry.rs:19`）两个成员；每次请求进来，`select_pd_pair`（`sgl-model-gateway/src/routers/http/pd_router.rs:972`）分别从 prefill worker 池和 decode worker 池里各选一个（`prefill_policy`/`decode_policy` 是两条独立的负载均衡策略），再靠 `worker_registry.get_hash_ring(...)`（一致性哈希环，`HashRing` 定义在 `sgl-model-gateway/src/core/worker_registry.rs:43`）尽量把同一请求／同一前缀路由到之前处理过它的那个 prefill worker——这与 HiCache 的“同一前缀尽量别重算”是同一个目标，只是发生在请求分发这一层，而不是缓存这一层。选好一对之后 `execute_dual_dispatch`（`sgl-model-gateway/src/routers/http/pd_router.rs:365`）把请求同时转发给这一对 worker，双方再各自走本篇 §4.1 的 `KVPoll` 握手流程——**Rust 网关只负责“选谁”，不参与“怎么搬 KV”，两者是完全解耦的两层**。
+**角色划分里还缺一环：谁负责把外部请求分发到哪一对 prefill/decode 实例？** 这一环不在 `python/sglang/srt/disaggregation/` 目录里，也不在任何 Python 文件里——它是一个独立的 Rust crate `sgl-model-gateway`（2025 行的 `sgl-model-gateway/src/routers/http/pd_router.rs`，另有 gRPC 版 `sgl-model-gateway/src/routers/grpc/pd_router.rs`）。`PDRouter` 结构体（`sgl-model-gateway/src/routers/http/pd_router.rs:50`）持有 `worker_registry`（`WorkerRegistry`，`sgl-model-gateway/src/core/worker_registry.rs:180`）和 `policy_registry`（`PolicyRegistry`，`sgl-model-gateway/src/policies/registry.rs:19`）两个成员。
 
-**还有一条独立的轴，容易被误认成 PD 的“第三种角色”，但其实是另一回事**：`disaggregation/encoder/` 子目录服务的是多模态模型的 **Encode-Prefill-Decode（EPD）** 拆分，把图像/视频编码单独摘成第三种实例类型，与本篇主线的 P/D 两角色是不同维度的拆分（可以同时开，也可以只开 P/D 不开 E）。GPU 侧编码器封装在 `MMEncoder`（`python/sglang/srt/disaggregation/encoder/server.py:438`）；调度侧是 `EncoderScheduler`（`python/sglang/srt/disaggregation/encoder/runtime.py:101`）和 `EncoderRuntime`（`python/sglang/srt/disaggregation/encoder/runtime.py:353`）；语言模型侧（prefill/decode 所在的进程）用 `EncoderBootstrapServer`（`python/sglang/srt/disaggregation/encoder/receiver.py:65`）接收编码结果，走的是自己的一套 `MMReceiverHTTP`/`MMReceiverGrpc`（`python/sglang/srt/disaggregation/encoder/receiver.py:2393`/`2525`）接收管线，和 `PrefillBootstrapQueue`/`CommonKVBootstrapServer` 完全是两条不相干的代码路径（§7 第 4 条已经指出两者监听端口都不同）。本篇聚焦 P/D 这一条轴，E 这一条轴的传输细节（`encoder_transfer_backend`）留给专门讲多模态的篇目处理，这里只标出它的存在和入口，避免读者把 `disaggregation/` 目录下的三个角色（encoder/prefill/decode）误当成一套对称设计。
+每次请求进来，`select_pd_pair`（`sgl-model-gateway/src/routers/http/pd_router.rs:972`）分别从 prefill worker 池和 decode worker 池里各选一个（`prefill_policy`/`decode_policy` 是两条独立的负载均衡策略），再靠 `worker_registry.get_hash_ring(...)`（一致性哈希环，`HashRing` 定义在 `sgl-model-gateway/src/core/worker_registry.rs:43`）尽量把同一请求／同一前缀路由到之前处理过它的那个 prefill worker——这与 HiCache 的“同一前缀尽量别重算”是同一个目标，只是发生在请求分发这一层，而不是缓存这一层。选好一对之后 `execute_dual_dispatch`（`sgl-model-gateway/src/routers/http/pd_router.rs:365`）把请求同时转发给这一对 worker，双方再各自走本篇 §4.1 的 `KVPoll` 握手流程——**Rust 网关只负责“选谁”，不参与“怎么搬 KV”，两者是完全解耦的两层**。
+
+**还有一条独立的轴，容易被误认成 PD 的“第三种角色”，但其实是另一回事**：`disaggregation/encoder/` 子目录服务的是多模态模型的 **Encode-Prefill-Decode（EPD）** 拆分，把图像/视频编码单独摘成第三种实例类型，与本篇主线的 P/D 两角色是不同维度的拆分（可以同时开，也可以只开 P/D 不开 E）。GPU 侧编码器封装在 `MMEncoder`（`python/sglang/srt/disaggregation/encoder/server.py:438`）；调度侧是 `EncoderScheduler`（`python/sglang/srt/disaggregation/encoder/runtime.py:101`）和 `EncoderRuntime`（`python/sglang/srt/disaggregation/encoder/runtime.py:353`）；语言模型侧（prefill/decode 所在的进程）用 `EncoderBootstrapServer`（`python/sglang/srt/disaggregation/encoder/receiver.py:65`）接收编码结果。
+
+这套接收流程走的是自己的一套 `MMReceiverHTTP`/`MMReceiverGrpc`（`python/sglang/srt/disaggregation/encoder/receiver.py:2393`/`2525`），和 `PrefillBootstrapQueue`/`CommonKVBootstrapServer` 完全是两条不相干的代码路径（§7 第 4 条已经指出两者监听端口都不同）。本篇聚焦 P/D 这一条轴，E 这一条轴的传输细节（`encoder_transfer_backend`）留给专门讲多模态的篇目处理，这里只标出它的存在和入口，避免读者把 `disaggregation/` 目录下的三个角色（encoder/prefill/decode）误当成一套对称设计。
 
 ## 2. 代码地图（文件 → 职责，带行号）
 
@@ -94,7 +98,9 @@ class KVPoll:
     Success = 4
 ```
 
-（`python/sglang/srt/disaggregation/base/conn.py:93`-`98`）这五个整数常量是 PD 分离全部状态转换的唯一词汇表——prefill 侧的 sender 和 decode 侧的 receiver 各自维护自己的一份，谁都不知道对方在这五个状态里具体停在哪一步的内部细节，只通过各自的 `poll()` 返回值同步。`KVArgs`（`python/sglang/srt/disaggregation/base/conn.py:43`）是握手时打包的“这个进程有哪些可传输的内存”的清单——不仅有 `kv_data_ptrs`/`kv_item_lens` 这类标准 KV 指针，还有 `state_types: List[StateType]`（`python/sglang/srt/disaggregation/base/conn.py:53`）和一整组 `state_data_ptrs`/`state_slice_outer_counts`/`state_conv_shard_groups` 字段，这是为了让同一套传输协议也能搬运 Mamba 状态、SWA 环形缓冲、DSA 索引器 K 缓存这些“不是标准 KV 但也要跟着请求走”的东西（对照 [[04-SGLang-内存池与KV布局]] §3.6 讲过的 `IndexKeyCache`）——PD 传输协议和 KV 池物理布局在“有哪些异构组件”这件事上是同步演进的。
+（`python/sglang/srt/disaggregation/base/conn.py:93`-`98`）这五个整数常量是 PD 分离全部状态转换的唯一词汇表——prefill 侧的 sender 和 decode 侧的 receiver 各自维护自己的一份，谁都不知道对方在这五个状态里具体停在哪一步的内部细节，只通过各自的 `poll()` 返回值同步。
+
+`KVArgs`（`python/sglang/srt/disaggregation/base/conn.py:43`）是握手时打包的“这个进程有哪些可传输的内存”的清单——不仅有 `kv_data_ptrs`/`kv_item_lens` 这类标准 KV 指针，还有 `state_types: List[StateType]`（`python/sglang/srt/disaggregation/base/conn.py:53`）和一整组 `state_data_ptrs`/`state_slice_outer_counts`/`state_conv_shard_groups` 字段，这是为了让同一套传输协议也能搬运 Mamba 状态、SWA 环形缓冲、DSA 索引器 K 缓存这些“不是标准 KV 但也要跟着请求走”的东西（对照 [[04-SGLang-内存池与KV布局]] §3.6 讲过的 `IndexKeyCache`）——PD 传输协议和 KV 池物理布局在“有哪些异构组件”这件事上是同步演进的。
 
 ### 3.2 `disaggregation_*` 旋钮（`python/sglang/srt/server_args.py:3159` 起）
 
@@ -134,15 +140,21 @@ class KVPoll:
 | `hicache_storage_prefetch_policy` | `"timeout"` | `python/sglang/srt/server_args.py:2788` | `best_effort`/`wait_complete`/`timeout` 三选一，见 §4.4 |
 | `hicache_storage_backend_extra_config` | `None` | `python/sglang/srt/server_args.py:2796` | 给具体后端的 JSON 配置 |
 
-`hicache_mem_layout` 的 5 个取值不是随意排列组合，`_resolve_layout_io_compatibility`（`python/sglang/srt/server_args.py:7569`）会在启动期做一次自动改写：`page_first` 配 `direct` IO 后端时会被静默改成 `page_first_direct` 并打 warning（`python/sglang/srt/server_args.py:7579`-`7586`），`page_first_direct` 配 `kernel` IO 后端时反过来把 IO 后端改成 `direct`（`python/sglang/srt/server_args.py:7571`-`7577`）——这与 [[04-SGLang-内存池与KV布局]] §5.4 讲过的“`page_size` 由 attention 后端反过来钉死”是**同一种工程模式**：布局与传输路径的合法组合不是靠文档约束用户，而是在参数解析阶段就自动纠正 + 打日志，把校验成本从“用户读文档”转移到“代码在启动时兜底”。`layer_first` 对应 §3.4（GPU 侧）已经讲过的“每层一份独立张量”的直觉搬到 host 侧；`page_first`/`page_first_direct` 则是把同一页里所有层的 KV 摆到一起（`server_args.py:5676`-`5680` 的注释提到"page_first"和"page_first_direct"都有专门的"split K/V transfer path"），对应 GPU 侧 `PageMajorMHATokenToKVPool` 那种“连续大 buffer”思路——**这组选择在 L2 层面重演了 04 篇在 L1 层面讲过的同一个权衡**：按层存取更简单、按页存取对批量 L1↔L2 搬运更友好。
+`hicache_mem_layout` 的 5 个取值不是随意排列组合，`_resolve_layout_io_compatibility`（`python/sglang/srt/server_args.py:7569`）会在启动期做一次自动改写：`page_first` 配 `direct` IO 后端时会被静默改成 `page_first_direct` 并打 warning（`python/sglang/srt/server_args.py:7579`-`7586`），`page_first_direct` 配 `kernel` IO 后端时反过来把 IO 后端改成 `direct`（`python/sglang/srt/server_args.py:7571`-`7577`）——这与 [[04-SGLang-内存池与KV布局]] §5.4 讲过的“`page_size` 由 attention 后端反过来钉死”是**同一种工程模式**：布局与传输路径的合法组合不是靠文档约束用户，而是在参数解析阶段就自动纠正 + 打日志，把校验成本从“用户读文档”转移到“代码在启动时兜底”。
+
+`layer_first` 对应 §3.4（GPU 侧）已经讲过的“每层一份独立张量”的直觉搬到 host 侧；`page_first`/`page_first_direct` 则是把同一页里所有层的 KV 摆到一起（`python/sglang/srt/server_args.py:5676`-`5680` 的注释提到"page_first"和"page_first_direct"都有专门的"split K/V transfer path"），对应 GPU 侧 `PageMajorMHATokenToKVPool` 那种“连续大 buffer”思路——**这组选择在 L2 层面重演了 04 篇在 L1 层面讲过的同一个权衡**：按层存取更简单、按页存取对批量 L1↔L2 搬运更友好。
 
 ### 3.5 `TreeNode` 上为 HiCache 准备的字段（继承自 [[03-SGLang-RadixAttention与前缀缓存]] 讲过的 `radix_cache.py`）
 
-`host_value: Optional[torch.Tensor]`（`python/sglang/srt/mem_cache/radix_cache.py:256`）和 `host_ref_counter`（`python/sglang/srt/mem_cache/radix_cache.py:254`）是与 GPU 侧 `value`/`lock_ref` 完全独立的第二本账：`evicted`（`python/sglang/srt/mem_cache/radix_cache.py:269`）判定 GPU 上的 `value` 还在不在，`backuped`（`python/sglang/srt/mem_cache/radix_cache.py:273`-`274`，`return self.host_value is not None`）判定 CPU 上的备份还在不在，一个节点可以同时是“GPU 已驱逐、CPU 有备份”。`protect_host`/`release_host`（`python/sglang/srt/mem_cache/radix_cache.py:276`-`283`）是这份 CPU 备份专属的引用计数，独立于保护 GPU 值的 `lock_ref`。
+`host_value: Optional[torch.Tensor]`（`python/sglang/srt/mem_cache/radix_cache.py:256`）和 `host_ref_counter`（`python/sglang/srt/mem_cache/radix_cache.py:254`）是与 GPU 侧 `value`/`lock_ref` 完全独立的第二本账：`evicted`（`python/sglang/srt/mem_cache/radix_cache.py:269`）判定 GPU 上的 `value` 还在不在，`backuped`（`python/sglang/srt/mem_cache/radix_cache.py:273`-`274`，`return self.host_value is not None`）判定 CPU 上的备份还在不在，一个节点可以同时是“GPU 已驱逐、CPU 有备份”。
+
+`protect_host`/`release_host`（`python/sglang/srt/mem_cache/radix_cache.py:276`-`283`）是这份 CPU 备份专属的引用计数，独立于保护 GPU 值的 `lock_ref`。
 
 ### 3.6 `HiCacheStorage` 接口的 v1→v2 演进：从单池到多池
 
-`HiCacheStorage(ABC)`（`python/sglang/srt/mem_cache/hicache_storage.py:150`）目前 v1、v2 两套读写接口并存：v1 的 `batch_get_v1`/`batch_set_v1`（`python/sglang/srt/mem_cache/hicache_storage.py:220`/`232`）签名很朴素——`keys: List[str]` 配一段 `host_indices: torch.Tensor`，一个 key 对应一段连续的 host 内存，这是“L3 只存标准 KV”这个假设下最简单的形状。v2 的 `batch_exists_v2`/`batch_get_v2`/`batch_set_v2`（`hicache_storage.py:165`/`198`/`209`）把参数换成了 `List[PoolTransfer]`，并且 `batch_exists_v2` 的 docstring（`hicache_storage.py:171`-`195`）明确写了它要处理“多个池子共同存在性”的问题：主 KV 池默认要求 `"all_pages"` 命中策略（前缀里每一页都必须存在，DSA 索引池就是这么严格），而 Mamba/SWA 这类"只覆盖前缀尾部"的辅助状态池可以用 `"trailing_pages"` 策略（只要最后几页存在就够，不要求从头连续）——**最终可用前缀长度取所有池子结果的最小值**，一个辅助池缺页会反过来缩短整个前缀的可用长度。
+`HiCacheStorage(ABC)`（`python/sglang/srt/mem_cache/hicache_storage.py:150`）目前 v1、v2 两套读写接口并存：v1 的 `batch_get_v1`/`batch_set_v1`（`python/sglang/srt/mem_cache/hicache_storage.py:220`/`232`）签名很朴素——`keys: List[str]` 配一段 `host_indices: torch.Tensor`，一个 key 对应一段连续的 host 内存，这是“L3 只存标准 KV”这个假设下最简单的形状。
+
+v2 的 `batch_exists_v2`/`batch_get_v2`/`batch_set_v2`（`python/sglang/srt/mem_cache/hicache_storage.py:165`/`198`/`209`）把参数换成了 `List[PoolTransfer]`，并且 `batch_exists_v2` 的 docstring（`python/sglang/srt/mem_cache/hicache_storage.py:171`-`195`）明确写了它要处理“多个池子共同存在性”的问题：主 KV 池默认要求 `"all_pages"` 命中策略（前缀里每一页都必须存在，DSA 索引池就是这么严格），而 Mamba/SWA 这类"只覆盖前缀尾部"的辅助状态池可以用 `"trailing_pages"` 策略（只要最后几页存在就够，不要求从头连续）——**最终可用前缀长度取所有池子结果的最小值**，一个辅助池缺页会反过来缩短整个前缀的可用长度。
 
 这条演进线和 §3.1 讲的 `KVArgs.state_types`（PD 传输协议里为 Mamba/SWA/DSA 各开一个 `StateType` 分支）是**同一个问题在两个子系统里各自的解法**：PD 传输协议用一个枚举字段区分"这块内存是 KV 还是某种额外状态"；HiCache L3 存储接口用"每个池子一条 `PoolTransfer`、外加命中策略"来表达同样的异构性——两边都是"标准 KV 场景先设计出来，混合模型的额外状态后补上去"的演进痕迹，只是补的方式不同（一个加枚举分支，一个加接口版本）。
 
@@ -282,9 +294,11 @@ class PrefetchTimeoutConfig:
 
 ### 4.6 decode 侧主动下沉：`DecodeKVCacheOffloadManager`
 
-§3.7 讲的是“decode 收请求前先查缓存”这个方向；反方向的交叉点是 `disaggregation_decode_enable_offload_kvcache=True` 时启用的 `DecodeKVCacheOffloadManager`（`python/sglang/srt/disaggregation/decode_kvcache_offload_manager.py:34`）——它不是把 KV **拉进** decode 实例，而是把 decode 实例算出来的 KV **主动下沉**进 HiCache，用于请求被抢占重试（retraction）时不必整段丢弃。这个 manager 自己 `build_kv_host_pool`（`decode_kvcache_offload_manager.py:60`）建一份独立的 host 内存池，复用的是同一个 `HiCacheController` 机制，但物理上和 §2.2 表里 `HiRadixCache` 挂的那份 L2 池是分开的两块内存——**decode 侧的“备份用途”host 池，和 prefill/decode 共用的“常规 L2 缓存”host 池，是两个不同的分配单元**，只是复用同一套搬运代码。
+§3.7 讲的是“decode 收请求前先查缓存”这个方向；反方向的交叉点是 `disaggregation_decode_enable_offload_kvcache=True` 时启用的 `DecodeKVCacheOffloadManager`（`python/sglang/srt/disaggregation/decode_kvcache_offload_manager.py:34`）——它不是把 KV **拉进** decode 实例，而是把 decode 实例算出来的 KV **主动下沉**进 HiCache，用于请求被抢占重试（retraction）时不必整段丢弃。
 
-下沉的粒度由 `offload_stride` 控制（`decode_kvcache_offload_manager.py:50`-`56`）：
+这个 manager 自己 `build_kv_host_pool`（`python/sglang/srt/disaggregation/decode_kvcache_offload_manager.py:60`）建一份独立的 host 内存池，复用的是同一个 `HiCacheController` 机制，但物理上和 §2.2 表里 `HiRadixCache` 挂的那份 L2 池是分开的两块内存——**decode 侧的“备份用途”host 池，和 prefill/decode 共用的“常规 L2 缓存”host 池，是两个不同的分配单元**，只是复用同一套搬运代码。
+
+下沉的粒度由 `offload_stride` 控制（`python/sglang/srt/disaggregation/decode_kvcache_offload_manager.py:50`-`56`）：
 
 ```python
 env_stride = envs.SGLANG_HICACHE_DECODE_OFFLOAD_STRIDE.get()
@@ -360,11 +374,15 @@ overhead_ratio(P) = T_transfer(P) / (P × t_prefill + T_decode)
 1. **短 prompt**：`T_fixed` 与 `P` 无关，是常数；但分子里的 `P × t_prefill` 随 `P` 线性缩小。当 `P` 很小时（短对话、单轮问答、检索片段拼接类请求），`T_fixed` 可以轻易超过 `P × t_prefill` 本身——这时候 PD 分离带来的握手固定开销，比它想要节省下来的那部分 prefill 计算时间还要大。这正是源码里 `optimistic_prefill_attempts`（提前放行，跳过等待）和 `disaggregation_decode_polling_interval`（批量摊薄轮询次数）这两个旋钮存在的理由——它们是对“`T_fixed` 在短请求场景下占比过高”这个已知代价的显式补救，补救的存在本身就是代价存在的证据。
 2. **`BW_net` 低（退化到 `mooncake_tcp` 或跨机房长距离网络）**：`P × cell_size / BW_net` 这一项随 `cell_size`（模型越大、KV 头越多，这个数越大）和 `P`（长 prompt）同时放大，当它的量级接近甚至超过 `P × t_prefill` 时，PD 分离把“prefill 计算换成网络传输”这笔交换整体上不再划算——尤其是当输出 token 数 `T_decode` 本身很短（比如摘要/分类类任务，答案很短）时，分母里能摊薄这笔固定+线性开销的“decode 阶段收益”也很有限。
 
-**同一套 `cell_size` 公式也决定了 HiCache restore 是否划算**：把“从 L2/L3 拉回”类比成上面的 `T_transfer`，只是把 `BW_net` 换成 `BW_L2`（PCIe，量级上通常远高于跨机网络）或 `BW_L3`（远端存储/磁盘带宽，量级上通常低于 PCIe），把 `T_fixed` 换成一次 DMA/RPC 的固定开销。**结构完全一样，结论也一样**：极短的命中前缀（`P` 很小）时，固定开销可能超过重算这段前缀本身的计算时间——直接重算比“去 L2/L3 找一遍再搬回来”更快。当前源码里没有一处显式计算这个比值再决定要不要 restore（§4.3 的准入判据只看命中次数，§4.5 的预取终止策略只看时间/超时，都不是这个比值本身），这是 §8 的可改进点之一。
+**同一套 `cell_size` 公式也决定了 HiCache restore 是否划算**：把“从 L2/L3 拉回”类比成上面的 `T_transfer`，只是把 `BW_net` 换成 `BW_L2`（PCIe，量级上通常远高于跨机网络）或 `BW_L3`（远端存储/磁盘带宽，量级上通常低于 PCIe），把 `T_fixed` 换成一次 DMA/RPC 的固定开销。
+
+**结构完全一样，结论也一样**：极短的命中前缀（`P` 很小）时，固定开销可能超过重算这段前缀本身的计算时间——直接重算比“去 L2/L3 找一遍再搬回来”更快。当前源码里没有一处显式计算这个比值再决定要不要 restore（§4.3 的准入判据只看命中次数，§4.5 的预取终止策略只看时间/超时，都不是这个比值本身），这是 §8 的可改进点之一。
 
 ### 5.6 路由/负载均衡不放进 Python 调度进程，独立成一个 Rust 网关
 
-**为什么这么设计**：`PDRouter`（`sgl-model-gateway/src/routers/http/pd_router.rs:50`）要做的事——维护全部 worker 的健康状态与一致性哈希环（`WorkerRegistry`/`HashRing`，`sgl-model-gateway/src/core/worker_registry.rs:43`/`180`）、对每个进来的 HTTP 请求做 `select_pd_pair`（`sgl-model-gateway/src/routers/http/pd_router.rs:972`）再 `execute_dual_dispatch`（`sgl-model-gateway/src/routers/http/pd_router.rs:365`）——是纯粹的**请求级、无状态、高频**的路径：它不需要碰 KV 张量、不需要读写 GPU 显存，只需要在极短时间内选出一对 worker 并转发字节流。这类工作负载正是 Rust 相对 Python 的强项（没有 GIL、原生异步 I/O、内存开销小），而 `Scheduler`（Python，见 [[02-SGLang-Scheduler事件循环]]）要处理的是需要直接操作 CUDA 张量、与模型前向紧密耦合的调度逻辑——把两者分进两个进程/两种语言，路由层的横向扩容（多开几个网关副本）和调度层的纵向优化（每个 GPU worker 专注自己的 batch）可以完全独立进行，互不掣肘。
+**为什么这么设计**：`PDRouter`（`sgl-model-gateway/src/routers/http/pd_router.rs:50`）要做的事——维护全部 worker 的健康状态与一致性哈希环（`WorkerRegistry`/`HashRing`，`sgl-model-gateway/src/core/worker_registry.rs:43`/`180`）、对每个进来的 HTTP 请求做 `select_pd_pair`（`sgl-model-gateway/src/routers/http/pd_router.rs:972`）再 `execute_dual_dispatch`（`sgl-model-gateway/src/routers/http/pd_router.rs:365`）——是纯粹的**请求级、无状态、高频**的路径：它不需要碰 KV 张量、不需要读写 GPU 显存，只需要在极短时间内选出一对 worker 并转发字节流。
+
+这类工作负载正是 Rust 相对 Python 的强项（没有 GIL、原生异步 I/O、内存开销小），而 `Scheduler`（Python，见 [[02-SGLang-Scheduler事件循环]]）要处理的是需要直接操作 CUDA 张量、与模型前向紧密耦合的调度逻辑——把两者分进两个进程/两种语言，路由层的横向扩容（多开几个网关副本）和调度层的纵向优化（每个 GPU worker 专注自己的 batch）可以完全独立进行，互不掣肘。
 
 **不这样会怎样**：如果把路由逻辑塞进某个 Python `Scheduler` 进程内部，这个进程就同时承担“面向外部世界的高频请求分发”和“面向 GPU 的低频重计算调度”两种截然不同的职责——前者的延迟敏感度是毫秒级，后者的一次 batch 组装/前向调用是几十到几百毫秒级，两者共享一个事件循环容易互相拖慢；而且这个 Python 进程会变成单点：它既要懂"HTTP 层怎么转发"又要懂"KV 传输状态机怎么轮询"，職责耦合导致独立扩容路由能力变得困难（想多开几个路由副本，会连带复制一份不必要的调度器状态）。
 
@@ -372,15 +390,25 @@ overhead_ratio(P) = T_transfer(P) / (P × t_prefill + T_decode)
 
 ## 6. 同位对照（vLLM 的 KVConnector 体系）
 
-vLLM 把“KV 从哪来、传到哪去”这整件事收进**一个**抽象基类：`KVConnectorBase_V1`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:171` ``）。它把接口拆成调度器侧和 worker 侧两组方法，且深度嵌入到调度器的分配循环里——调度器在**分配 block 之前**就要调 `get_num_new_matched_tokens`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:450` ``）问 connector“这个请求外部缓存里有多少能用”，分配完之后调 `update_state_after_alloc`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:485` ``）告诉 connector“这些 block 归你了，可以开始异步加载”，每一步再调 `build_connector_meta`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:511` ``）把这一步要做的事打包传给 worker；worker 侧则有 `start_load_kv`/`save_kv_layer`/`get_finished`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:289`/`321`/`353` ``）这类按**层**粒度挂进模型前向的钩子。请求结束时 `request_finished`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:543` ``）决定 block 是立刻释放还是等一次异步保存完成再释放。
+vLLM 把“KV 从哪来、传到哪去”这整件事收进**一个**抽象基类：`KVConnectorBase_V1`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:171` ``）。它把接口拆成调度器侧和 worker 侧两组方法，且深度嵌入到调度器的分配循环里。
 
-后端接入走一个纯字符串注册表：`KVConnectorFactory`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:27` ``）的 `register_connector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:31` ``）把名字映射到“模块路径+类名”，`create_connector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:43` ``）按需懒加载导入。截至本篇取证时，这个表里同时注册了 `NixlConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:177` ``）、`MooncakeConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:219` ``）、`HF3FSKVConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:239` ``），**以及**一个 `OffloadingConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:207` ``，实现类在 `` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py:49` ``，`class OffloadingConnector(KVConnectorBase_V1, SupportsHMA)`）。
+调度器在**分配 block 之前**就要调 `get_num_new_matched_tokens`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:450` ``）问 connector“这个请求外部缓存里有多少能用”，分配完之后调 `update_state_after_alloc`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:485` ``）告诉 connector“这些 block 归你了，可以开始异步加载”，每一步再调 `build_connector_meta`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:511` ``）把这一步要做的事打包传给 worker；worker 侧则有 `start_load_kv`/`save_kv_layer`/`get_finished`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:289`/`321`/`353` ``）这类按**层**粒度挂进模型前向的钩子。请求结束时 `request_finished`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/base.py:543` ``）决定 block 是立刻释放还是等一次异步保存完成再释放。
 
-**这是两边架构哲学的关键分歧点**：vLLM 把“PD 跨机传输”和“GPU→CPU 层级卸载”看成**同一类问题的两个实例**，都通过同一个 `KVConnectorBase_V1` 接口接入调度器——`OffloadingConnector` 和 `NixlConnector` 对调度器暴露的是完全相同的方法集合，调度器代码不需要知道自己在跟哪一种“外部 KV 来源”打交道。SGLang 则是**两套独立演化的子系统**：`disaggregation/` 用 `KVPoll` 轮询状态机对接调度器，`mem_cache/hiradix_cache.py` + `mem_cache/storage/` 用命中次数阈值+预取超时对接调度器，两者的调度器接入点（`prefill.py`/`decode.py` 的 Mixin vs `python/sglang/srt/managers/scheduler.py:3386` 的 `check_prefetch_progress`）在代码里是分开的调用路径，**只在 decode 侧靠 `decode_hicache_mixin.py` 这层专门的胶水代码手工打通**（§3.7）。
+后端接入走一个纯字符串注册表：`KVConnectorFactory`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:27` ``）的 `register_connector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:31` ``）把名字映射到“模块路径+类名”，`create_connector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:43` ``）按需懒加载导入。
 
-**代价对比**：vLLM 统一接口的代价是接口本身很厚——`KVConnectorBase_V1` 有十几个抽象/可覆盖方法，且深度耦合进调度器的 block 分配时序（`get_num_new_matched_tokens` 必须在分配前调用，返回值直接影响这一步分配多少 block），新写一个 connector 意味着要理解并正确实现这整套时序契约。SGLang 分目录的代价是**样板代码更少见**（`common/conn.py` 吸收了传输后端间的重复），但 PD 和 HiCache 是两条独立生长的分支，交叉处需要专门的 mixin 补丁（`DecodeHiCachePreallocMixin`/`DecodeHiCacheTransferMixin`）手工缝合，而不是像 vLLM 那样天然共享同一套调度器钩子——**统一抽象换来的是“新增后端的学习曲线陡”，分目录换来的是“系统级交叉点需要额外的胶水层”**，两者都不是免费的。
+截至本篇取证时，这个表里同时注册了 `NixlConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:177` ``）、`MooncakeConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:219` ``）、`HF3FSKVConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:239` ``），**以及**一个 `OffloadingConnector`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/factory.py:207` ``，实现类在 `` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py:49` ``，`class OffloadingConnector(KVConnectorBase_V1, SupportsHMA)`）。
 
-**一个更细的分歧点：谁负责处理“prefill 和 decode 的并行度不一样”**。真实部署里 prefill 实例和 decode 实例经常配不同的 TP size（prefill 算力密集，decode 显存密集，两边按各自资源特点独立配置并行度）。vLLM 把这件事收进一个**单独的、所有 offloading 后端共享**的模块：`canonical_mapping.py`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/offloading/canonical_mapping.py:1`-`9` ``）的模块 docstring 直接写明它是“整个 offload 栈里唯一处理并行度（TP/DCP/PCP）的地方，下游只消费字节映射”——把一个规范化的“canonical page”算好，后面所有存储后端都不用再关心 rank 怎么切分。SGLang 则是**每个传输后端各自处理一遍**：`NixlKVManager` 自己实现了 `_init_equal_tp_prep_handle`（`python/sglang/srt/disaggregation/nixl/conn.py:725`）、`_init_hetero_tp_prep_handle`（`python/sglang/srt/disaggregation/nixl/conn.py:760`）、`_init_mixed_equal_tp_prep_handles`（`python/sglang/srt/disaggregation/nixl/conn.py:917`）三套方法专门处理“prefill TP size 与 decode TP size 相等/不等/部分相等”这三种情况——Mooncake、ascend、mori 各自的 conn.py 里也有各自处理这个问题的代码，不共享 NIXL 那一份。**这是“统一抽象”和“分目录实现”这条分歧线在一个具体工程问题上的直接投影**：vLLM 选择在共享层一次性解决异构并行度，SGLang 选择让每个后端自己面对它——后者的好处是每个后端可以针对自己的传输原语做最贴合的优化（比如 NIXL 的 hetero-TP 路径可以利用它自己的内存注册机制），代价是同一个逻辑问题在多个文件里被解决了多次，修一个 bug 不保证另一个后端也修了。
+**这是两边架构哲学的关键分歧点**：vLLM 把“PD 跨机传输”和“GPU→CPU 层级卸载”看成**同一类问题的两个实例**，都通过同一个 `KVConnectorBase_V1` 接口接入调度器——`OffloadingConnector` 和 `NixlConnector` 对调度器暴露的是完全相同的方法集合，调度器代码不需要知道自己在跟哪一种“外部 KV 来源”打交道。
+
+SGLang 则是**两套独立演化的子系统**：`disaggregation/` 用 `KVPoll` 轮询状态机对接调度器，`mem_cache/hiradix_cache.py` + `mem_cache/storage/` 用命中次数阈值+预取超时对接调度器，两者的调度器接入点（`prefill.py`/`decode.py` 的 Mixin vs `python/sglang/srt/managers/scheduler.py:3386` 的 `check_prefetch_progress`）在代码里是分开的调用路径，**只在 decode 侧靠 `decode_hicache_mixin.py` 这层专门的胶水代码手工打通**（§3.7）。
+
+**代价对比**：vLLM 统一接口的代价是接口本身很厚——`KVConnectorBase_V1` 有十几个抽象/可覆盖方法，且深度耦合进调度器的 block 分配时序（`get_num_new_matched_tokens` 必须在分配前调用，返回值直接影响这一步分配多少 block），新写一个 connector 意味着要理解并正确实现这整套时序契约。
+
+SGLang 分目录的代价是**样板代码更少见**（`common/conn.py` 吸收了传输后端间的重复），但 PD 和 HiCache 是两条独立生长的分支，交叉处需要专门的 mixin 补丁（`DecodeHiCachePreallocMixin`/`DecodeHiCacheTransferMixin`）手工缝合，而不是像 vLLM 那样天然共享同一套调度器钩子——**统一抽象换来的是“新增后端的学习曲线陡”，分目录换来的是“系统级交叉点需要额外的胶水层”**，两者都不是免费的。
+
+**一个更细的分歧点：谁负责处理“prefill 和 decode 的并行度不一样”**。真实部署里 prefill 实例和 decode 实例经常配不同的 TP size（prefill 算力密集，decode 显存密集，两边按各自资源特点独立配置并行度）。vLLM 把这件事收进一个**单独的、所有 offloading 后端共享**的模块：`canonical_mapping.py`（`` `vllm:vllm/distributed/kv_transfer/kv_connector/v1/offloading/canonical_mapping.py:1`-`9` ``）的模块 docstring 直接写明它是“整个 offload 栈里唯一处理并行度（TP/DCP/PCP）的地方，下游只消费字节映射”——把一个规范化的“canonical page”算好，后面所有存储后端都不用再关心 rank 怎么切分。
+
+SGLang 则是**每个传输后端各自处理一遍**：`NixlKVManager` 自己实现了 `_init_equal_tp_prep_handle`（`python/sglang/srt/disaggregation/nixl/conn.py:725`）、`_init_hetero_tp_prep_handle`（`python/sglang/srt/disaggregation/nixl/conn.py:760`）、`_init_mixed_equal_tp_prep_handles`（`python/sglang/srt/disaggregation/nixl/conn.py:917`）三套方法专门处理“prefill TP size 与 decode TP size 相等/不等/部分相等”这三种情况——Mooncake、ascend、mori 各自的 conn.py 里也有各自处理这个问题的代码，不共享 NIXL 那一份。**这是“统一抽象”和“分目录实现”这条分歧线在一个具体工程问题上的直接投影**：vLLM 选择在共享层一次性解决异构并行度，SGLang 选择让每个后端自己面对它——后者的好处是每个后端可以针对自己的传输原语做最贴合的优化（比如 NIXL 的 hetero-TP 路径可以利用它自己的内存注册机制），代价是同一个逻辑问题在多个文件里被解决了多次，修一个 bug 不保证另一个后端也修了。
 
 ## 7. 踩坑与反直觉
 

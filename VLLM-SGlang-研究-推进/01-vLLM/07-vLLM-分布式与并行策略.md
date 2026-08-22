@@ -195,7 +195,9 @@ if config.model_config is None or config.model_config.is_moe:
     )
 ```
 
-EP 组的大小是 `data_parallel_size × prefill_context_parallel_size × tensor_parallel_size`——也就是说，**EP 组吃掉了 DP 和 TP 两个维度，只把 PP 排除在外**。这解释了"DP 和 EP 什么关系"：对于 MoE 模型，attention 部分仍然各自在自己的 TP 组内做张量并行，但 MoE 的专家层被摊到"同一个 PP stage 内的所有 DP×TP rank"上一起分担——所以 DP 和 EP 不是互斥关系，而是同一批物理 rank 在不同层上戴着不同的"组员"帽子：算 attention 时是 TP 组的一员，算 MoE 时是 EP 组的一员。上面那段注释里"all the ranks in the same DP group should generate simultaneously... otherwise it will cause deadlock"（`vllm/distributed/parallel_state.py:1820`-`1823`）正是为这件事埋下的伏笔——`## 4` ④会展开这句"deadlock"具体怎么被规避。
+EP 组的大小是 `data_parallel_size × prefill_context_parallel_size × tensor_parallel_size`——也就是说，**EP 组吃掉了 DP 和 TP 两个维度，只把 PP 排除在外**。这解释了"DP 和 EP 什么关系"：对于 MoE 模型，attention 部分仍然各自在自己的 TP 组内做张量并行，但 MoE 的专家层被摊到"同一个 PP stage 内的所有 DP×TP rank"上一起分担——所以 DP 和 EP 不是互斥关系，而是同一批物理 rank 在不同层上戴着不同的"组员"帽子：算 attention 时是 TP 组的一员，算 MoE 时是 EP 组的一员。
+
+上面那段注释里"all the ranks in the same DP group should generate simultaneously... otherwise it will cause deadlock"（`vllm/distributed/parallel_state.py:1820`-`1823`）正是为这件事埋下的伏笔——`## 4` ④会展开这句"deadlock"具体怎么被规避。
 
 `config.model_config is None or config.model_config.is_moe`（`vllm/distributed/parallel_state.py:1926`）——稠密模型这一整段直接跳过，完全不创建 EP 组；对应地，`# If no EP group needed, _EP remains None`（`vllm/distributed/parallel_state.py:1979`）。
 
@@ -220,7 +222,9 @@ EP 组的大小是 `data_parallel_size × prefill_context_parallel_size × tenso
 
 **O_proj / down_proj**——`RowParallelLinear.forward()`（`vllm/model_executor/layers/linear.py:1641`-`1665`）：输入已经是分片的（`input_is_parallel=True`），本地矩阵乘后如果 `reduce_results=True and tp_size>1`，调 `tensor_model_parallel_all_reduce(output_parallel)`（`vllm/model_executor/layers/linear.py:1660`）。这是 TP 每层唯一必须的一次 all-reduce（attention 一次、MLP 一次，一层两次）。
 
-**Embedding**——`VocabParallelEmbedding.forward()`（`vllm/model_executor/layers/vocab_parallel_embedding.py:486`-`505`）：按词表切分（不是隐藏维），每个 rank 只持有 `[vocab_start, vocab_end)` 区间的行；查表前先用 `get_masked_input_and_mask` 把落在别的 rank 区间的 token id 打上 mask 变成 0（`vllm/model_executor/layers/vocab_parallel_embedding.py:487`-`494`），查完表把落在别处的位置清零（`.masked_fill_`），最后 `all_reduce` 求和——因为每个 token 只在一个 rank 上非零，求和等价于"选出正确的那一份"。这和行/列并行都不同，是靠"稀疏 + 求和"模拟 gather 的技巧。
+**Embedding**——`VocabParallelEmbedding.forward()`（`vllm/model_executor/layers/vocab_parallel_embedding.py:486`-`505`）：按词表切分（不是隐藏维），每个 rank 只持有 `[vocab_start, vocab_end)` 区间的行；查表前先用 `get_masked_input_and_mask` 把落在别的 rank 区间的 token id 打上 mask 变成 0（`vllm/model_executor/layers/vocab_parallel_embedding.py:487`-`494`），查完表把落在别处的位置清零（`.masked_fill_`），最后 `all_reduce` 求和——因为每个 token 只在一个 rank 上非零，求和等价于"选出正确的那一份"。
+
+这和行/列并行都不同，是靠"稀疏 + 求和"模拟 gather 的技巧。
 
 **lm_head**——`LogitsProcessor._gather_logits()`（`vllm/model_executor/layers/logits_processor.py:118`-`127`）：`lm_head` 复用 `VocabParallelEmbedding` 的切分方式，但输出层需要每个 rank 都看到完整词表的 logits 才能采样，所以末尾用 `tensor_model_parallel_all_gather(logits)`（`vllm/model_executor/layers/logits_processor.py:126`）把各 rank 的 vocab 切片拼回完整向量,而不是像 embedding 输入那样用 all_reduce。
 
@@ -243,9 +247,13 @@ def max_concurrent_batches(self) -> int:
     return pp_size
 ```
 
-`EngineCore.step_with_batch_queue()`（`vllm/v1/engine/core.py:638`-`712`）用一个 `deque(maxlen=batch_queue_size)` 实现"先把队列填满再等结果"：只要队列没满且还有请求，就继续 `schedule()` + `execute_model(..., non_block=True)` 拿到一个 `Future` 塞进队列并立刻返回（不阻塞等待这一步的模型输出）；只有队列满了或没有更多请求可调度时，才 `batch_queue.pop()` 阻塞等待**最早**那个 future 的结果。
+`EngineCore.step_with_batch_queue()`（`vllm/v1/engine/core.py:638`-`712`）用一个 `deque(maxlen=batch_queue_size)` 实现"先把队列填满再等结果"：只要队列没满且还有请求，就继续 `schedule()` + `execute_model(..., non_block=True)` 拿到一个 `Future` 塞进队列并立刻返回（不阻塞等待这一步的模型输出）。
 
-PP rank 之间通过 `GroupCoordinator.send_tensor_dict()` / `recv_tensor_dict()`（`vllm/distributed/parallel_state.py:981`、`1076`）把 `IntermediateTensors` 逐级传递（`vllm/v1/worker/gpu_model_runner.py:4579`-`4583`：非最后一个 PP rank 直接 `return hidden_states`，交给 executor 层的通信原语转发）。**这不是把一个 batch 切成 micro-batch 分给不同 PP rank**（vLLM 不做这种模型内部切分），而是把**多个连续的调度步骤**同时喂进流水线——效果类似 GPipe 的"多批次排队"，但排队的单位是"引擎迭代"而不是"模型内 micro-batch"，也没有 Megatron 那种为了减小气泡而设计的 interleaved/virtual-pipeline 调度。
+只有队列满了或没有更多请求可调度时，才 `batch_queue.pop()` 阻塞等待**最早**那个 future 的结果。
+
+PP rank 之间通过 `GroupCoordinator.send_tensor_dict()` / `recv_tensor_dict()`（`vllm/distributed/parallel_state.py:981`、`1076`）把 `IntermediateTensors` 逐级传递（`vllm/v1/worker/gpu_model_runner.py:4579`-`4583`：非最后一个 PP rank 直接 `return hidden_states`，交给 executor 层的通信原语转发）。
+
+**这不是把一个 batch 切成 micro-batch 分给不同 PP rank**（vLLM 不做这种模型内部切分），而是把**多个连续的调度步骤**同时喂进流水线——效果类似 GPipe 的"多批次排队"，但排队的单位是"引擎迭代"而不是"模型内 micro-batch"，也没有 Megatron 那种为了减小气泡而设计的 interleaved/virtual-pipeline 调度。
 
 ### ④ DP：只有 MoE 才 lockstep
 
@@ -263,7 +271,9 @@ else:
     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
 ```
 
-`DPEngineCoreProc.__init__` 开头就是一个 `assert vllm_config.model_config.is_moe`（`vllm/v1/engine/core.py:2014`-`2016`）。MoE 模型下，DP 各 rank 共享同一个 EP 组做专家计算，任何一个 rank 少跑一步都会让别的 rank 在集合通信上永久等待，因此每一步都要判断"本地没请求时是否要空跑"：`EngineCoreProc.run_busy_loop`（DP 版本，`vllm/v1/engine/core.py:2210`-`2223`）在 `local_unfinished_reqs` 为假但 `engines_running` 仍为真时调用 `execute_dummy_batch()`（`vllm/v1/engine/core.py:2216`-`2220`），底层是 `self.model_runner._dummy_run(num_tokens, uniform_decode=True)`（`vllm/v1/worker/gpu_worker.py:1221`-`1223`）——跑一个假 token 序列把这一步的集合通信"配合"完，但不产出真实输出。
+`DPEngineCoreProc.__init__` 开头就是一个 `assert vllm_config.model_config.is_moe`（`vllm/v1/engine/core.py:2014`-`2016`）。MoE 模型下，DP 各 rank 共享同一个 EP 组做专家计算，任何一个 rank 少跑一步都会让别的 rank 在集合通信上永久等待，因此每一步都要判断"本地没请求时是否要空跑"。
+
+`EngineCoreProc.run_busy_loop`（DP 版本，`vllm/v1/engine/core.py:2210`-`2223`）在 `local_unfinished_reqs` 为假但 `engines_running` 仍为真时调用 `execute_dummy_batch()`（`vllm/v1/engine/core.py:2216`-`2220`），底层是 `self.model_runner._dummy_run(num_tokens, uniform_decode=True)`（`vllm/v1/worker/gpu_worker.py:1221`-`1223`）——跑一个假 token 序列把这一步的集合通信"配合"完，但不产出真实输出。
 
 而"全体 DP rank 是否都已经没活干了"这个全局判断很贵（要做一次 all-reduce），所以做了限流：`_has_global_unfinished_reqs()` 每被调用 32 次才真正发起一次同步 all-reduce，中间 31 次直接假定"还在跑"（`vllm/v1/engine/core.py:2267`-`2274`）。
 
@@ -298,11 +308,17 @@ def should_custom_ar(self, inp: torch.Tensor):
 
 `EplbState`（`vllm/distributed/eplb/eplb_state.py:230`起）在 `__init__` 里从 `EPLBConfig` 读出 `expert_load_window_size`（滑窗，默认 1000 步）和 `expert_rearrangement_step_interval`（默认 3000 步，`vllm/distributed/eplb/eplb_state.py:432`-`448`）。每个 MoE 前向步都往滑窗里记一次各专家的实际负载（`_compute_eplb_load_stats`，`vllm/distributed/eplb/eplb_state.py:66`-`74`）；步数计数器超过 `step_interval` 后触发一次重排检查（`vllm/distributed/eplb/eplb_state.py:649`-`674`）。
 
-触发后，`DefaultEplbPolicy`（改编自 DeepSeek 开源 EPLB，源码文件头自述，`vllm/distributed/eplb/policy/default.py:1`-`12`）用贪心装箱算法（`balanced_packing`，`vllm/distributed/eplb/policy/default.py:22`-`50`）算出新的专家到物理 rank 的映射；真正执行搬迁的是 `rearrange_expert_weights_inplace()`（`vllm/distributed/eplb/rebalance_execute.py:512`起），它调用 `transfer_layer()` 逐层把 `expert_weights` 张量从旧 rank 拷贝到新 rank 的中间缓冲区再拷回（`vllm/distributed/eplb/rebalance_execute.py:263`-`269`，`b[dst].copy_(w[src_local], non_blocking=True)`）——这是显式的显存到显存（可能跨节点）拷贝，不是免费操作，`is_profile=True` 时可以只算代价不真的搬（`vllm/distributed/eplb/rebalance_execute.py:455`-`458`）。
+触发后，`DefaultEplbPolicy`（改编自 DeepSeek 开源 EPLB，源码文件头自述，`vllm/distributed/eplb/policy/default.py:1`-`12`）用贪心装箱算法（`balanced_packing`，`vllm/distributed/eplb/policy/default.py:22`-`50`）算出新的专家到物理 rank 的映射。
+
+真正执行搬迁的是 `rearrange_expert_weights_inplace()`（`vllm/distributed/eplb/rebalance_execute.py:512`起），它调用 `transfer_layer()` 逐层把 `expert_weights` 张量从旧 rank 拷贝到新 rank 的中间缓冲区再拷回（`vllm/distributed/eplb/rebalance_execute.py:263`-`269`，`b[dst].copy_(w[src_local], non_blocking=True)`）。
+
+这是显式的显存到显存（可能跨节点）拷贝，不是免费操作，`is_profile=True` 时可以只算代价不真的搬（`vllm/distributed/eplb/rebalance_execute.py:455`-`458`）。
 
 ### ⑦ 多机启动：默认原生 multiprocessing，Ray 是显式选项
 
-执行后端的裁决在 `ParallelConfig.__post_init__`（`vllm/config/parallel.py:936`-`976`）：只要 `distributed_executor_backend` 没被用户显式指定、且 `world_size_across_dp > 1`，就进入一串"能不用 Ray 就不用"的优先级判断——CUDA 平台且 `nnodes > 1` 时直接给 `backend = "mp"`（`vllm/config/parallel.py:946`-`947`）；只有 `data_parallel_backend == "ray"` 被显式设置（`vllm/config/parallel.py:960`-`965`），或者当前进程已经跑在一个 Ray placement group 里（`vllm/config/parallel.py:966`-`976`：先查 `self.placement_group`，再查 `ray_is_initialized()` 和 `get_current_placement_group()`），才会切到 `"ray"`。**多机不是触发 Ray 的条件，多机只会触发 `"mp"`**——这条容易被想当然地读反。
+执行后端的裁决在 `ParallelConfig.__post_init__`（`vllm/config/parallel.py:936`-`976`）：只要 `distributed_executor_backend` 没被用户显式指定、且 `world_size_across_dp > 1`，就进入一串"能不用 Ray 就不用"的优先级判断——CUDA 平台且 `nnodes > 1` 时直接给 `backend = "mp"`（`vllm/config/parallel.py:946`-`947`）。
+
+只有 `data_parallel_backend == "ray"` 被显式设置（`vllm/config/parallel.py:960`-`965`），或者当前进程已经跑在一个 Ray placement group 里（`vllm/config/parallel.py:966`-`976`：先查 `self.placement_group`，再查 `ray_is_initialized()` 和 `get_current_placement_group()`），才会切到 `"ray"`。**多机不是触发 Ray 的条件，多机只会触发 `"mp"`**——这条容易被想当然地读反。
 
 选中 `"mp"` 之后，`MultiprocExecutor`（`vllm/v1/executor/multiproc_executor.py:111`）本身就是能跨节点工作的：每个物理节点各起一份该执行器，用 `parallel_config.node_rank_within_dp == 0` 判断自己是不是这个 DP 组里的"leader 节点"（`vllm/v1/executor/multiproc_executor.py:148`）——leader 节点用 `get_ip()` 拿到自己在局域网里的真实 IP（`vllm/v1/executor/multiproc_executor.py:152`）起一个跨进程消息队列，非 leader 节点的 worker 通过这个 IP:port 加入同一个广播队列。
 
@@ -360,17 +376,37 @@ world_size = parallel_config.world_size_across_dp
 - **不这样会怎样**：如果重排太频繁，专家权重刚搬完，负载分布又变了，等于持续为一个不稳定的目标追着跑；如果完全不重排，负载不均会随着长时间运行、路由分布漂移持续累积，某些专家所在的 rank 长期成为瓶颈。
 - **什么时候可以不这样**：`enable_eplb=False`（默认值）时整套机制根本不存在；`use_async=True`（默认值）让重排和前向计算异步重叠，从"停下来重排"退化为"边算边搬"，进一步摊薄这个权衡的代价——但这要求 `communicator` 不能是 `torch_nccl`/`pynccl`（`vllm/config/parallel.py:102`-`113` 的校验），因为异步重排和 NCCL 共享 CUDA stream 的多流机制会冲突，必须换成 `torch_gloo` 或 `nixl`。
 
+**决策 7：`_EP` 进程组的创建只看模型是不是 MoE，不看用户是否开了 `enable_expert_parallel`**（`vllm/distributed/parallel_state.py:1926`，`vllm/model_executor/layers/fused_moe/config.py:1212`-`1214`）
+
+- **为什么这么设计**：进程组的创建成本相对固定（一次 `new_group` 调用），而 `enable_expert_parallel` 这个开关理论上可以是运行时状态的一部分（比如 `## 1` 提到的 `elastic_ep` 扩缩容场景就需要在运行期间调整 EP 相关的资源分配）；把"组存不存在"和"要不要用这个组做路由"解耦，组只需要在进程启动时判一次"这是不是 MoE 模型"，不需要跟着一个可能变化的运行时标志反复重建——重建 `torch.distributed` 进程组是不可逆、代价高的操作，能避免就避免。
+- **不这样会怎样**：如果进程组的创建也去检查 `enable_expert_parallel`，那么用户在两次不同的启动参数里切换这个标志时，MoE 层代码路径（`FusedMoEParallelConfig.use_ep`）就必须同步处理"组可能不存在"这种情况，多一层判空逻辑；现在的设计保证只要是 MoE 模型，`_EP` 组一定存在，MoE 层代码可以放心地拿它做通信，不用到处判 `None`。代价就是 `## 7` 踩坑 6 里那种"组建了但没用上"的误读风险，需要靠文档和日志弥补（`## 8` 改进点 4）。
+- **什么时候可以不这样**：稠密模型（`is_moe=False`）时 `_EP` 干脆不创建（`## 4` ①），这个决策带来的"组存在但可能不用"的困惑天然不存在——只有 MoE 模型才需要读者留意这条区别。
+
 ## 6. 同位对照（SGLang 在同一位置怎么做）
 
-**并行组的构造方式**：SGLang 的 `initialize_model_parallel()` 不走"从一个统一坐标张量里切"这条路，而是让调用方显式传入七个独立命名的维度参数（`sglang:python/sglang/srt/distributed/parallel_state.py:2328`-`2342`）：`tensor_model_parallel_size`、`expert_model_parallel_size`、`pipeline_model_parallel_size`、`attention_data_parallel_size`、`attention_context_model_parallel_size`、`moe_data_model_parallel_size`、`decode_context_parallel_size`。函数文档里给的例子（`sglang:python/sglang/srt/distributed/parallel_state.py:2374`-`2385`）显式区分了"4 个 attention 张量并行组"和"2 个 MoE 专家并行组"，二者可以用不同的划分方式。
+**并行组的构造方式**：SGLang 的 `initialize_model_parallel()` 不走"从一个统一坐标张量里切"这条路，而是让调用方显式传入七个独立命名的维度参数（`sglang:python/sglang/srt/distributed/parallel_state.py:2328`-`2342`）：`tensor_model_parallel_size`、`expert_model_parallel_size`、`pipeline_model_parallel_size`、`attention_data_parallel_size`、`attention_context_model_parallel_size`、`moe_data_model_parallel_size`、`decode_context_parallel_size`。
+
+函数文档里给的例子（`sglang:python/sglang/srt/distributed/parallel_state.py:2374`-`2385`）显式区分了"4 个 attention 张量并行组"和"2 个 MoE 专家并行组"，二者可以用不同的划分方式。
 
 这与 vLLM 把 EP 组定义成"DP×PCP×TP 的合并投影"（`## 4` ①）是两种不同的建模思路：vLLM 认为 EP 是其他维度的派生物，SGLang 则把"attention 侧怎么并行"和"MoE 侧怎么并行"当成两套独立坐标系从一开始就分开声明。哪种更好未查证——两边都没有公开的消融实验说明这个设计选择对吞吐/延迟的实际影响，本库不编造这个结论。
 
 **DP 的 lockstep 机制**：SGLang 也有一个和 `execute_dummy_batch()` 对等的机制——`DPAttentionHelper.get_idle_batch()`（`sglang:python/sglang/srt/managers/scheduler_components/dp_attn.py:442`-`453`）构造一个请求列表为空、随后调用 `prepare_for_idle()` 把 `forward_mode` 设成 `ForwardMode.IDLE` 的空批次（`sglang:python/sglang/srt/managers/schedule_batch.py:2951`-`2953`），本质上和 vLLM 的 `_dummy_run()` 是同一个目的：让没有真实请求的 rank 也发起一次完整的前向调用，配合其它 rank 完成集合通信。
 
-但两边判断"要不要开这套 lockstep"的**门槛不同**：vLLM 是"这个模型是不是 MoE"（`## 4` ④，`vllm_config.model_config.is_moe`）；SGLang 是 `require_mlp_sync()`——`get_parallel().enable_dp_attention` 显式开启，或者 `require_gathered_buffer()` 为真（`sglang:python/sglang/srt/utils/common.py:3798`-`3801`）。也就是说 SGLang 把"要不要 lockstep"做成了一个独立的运行时开关（`enable_dp_attention`），不是从"是不是 MoE 模型"这一个信号自动推导出来的——这意味着 SGLang 理论上可以让**非 MoE 模型**的 attention 也走 DP lockstep（纯粹为了 attention 层的负载均衡），而 vLLM 目前把"DP 需要步调一致"和"这是不是 MoE 模型"焊死在了一起（`## 7` 踩坑 5 里"非 MoE DP 完全独立"这条，在 SGLang 这边不成立，取决于 `enable_dp_attention` 而不是模型类型）。
+但两边判断"要不要开这套 lockstep"的**门槛不同**：vLLM 是"这个模型是不是 MoE"（`## 4` ④，`vllm_config.model_config.is_moe`）；SGLang 是 `require_mlp_sync()`——`get_parallel().enable_dp_attention` 显式开启，或者 `require_gathered_buffer()` 为真（`sglang:python/sglang/srt/utils/common.py:3798`-`3801`）。也就是说 SGLang 把"要不要 lockstep"做成了一个独立的运行时开关（`enable_dp_attention`），不是从"是不是 MoE 模型"这一个信号自动推导出来的。
 
-**EPLB 触发条件**：vLLM 用固定的 `step_interval`（默认 3000 步，`## 5` 决策 6）节流；SGLang 的 `EPLBManager._check_rebalance_needed()` 则是按**滑窗内平均 GPU 利用率**门控——只有当利用率低于 `eplb_min_rebalancing_utilization_threshold` 时才真正触发重排，否则跳过并打日志说明（`sglang:python/sglang/srt/eplb/eplb_manager.py:232`-`241`）。这是"按固定节奏做"和"挑系统不忙的时候做"两种不同的节流哲学，`## 8` 会把这一点列为可能的改进方向。另外 SGLang 把 EPLB 独立成顶层包 `srt/eplb/`（`eplb_manager.py`、`expert_location.py`、`expert_distribution.py` 等，均在 `python/sglang/srt/eplb/` 下），而不是像 vLLM 那样嵌在 `distributed/eplb/` 目录里——这个目录层级差异直接影响了 `## 2` 提到的"按目录粗口径统计会产生假阳性"问题的严重程度：SGLang 的目录结构不会把 EPLB 和 KV 传输混进同一个"distributed"统计桶。
+这意味着 SGLang 理论上可以让**非 MoE 模型**的 attention 也走 DP lockstep（纯粹为了 attention 层的负载均衡），而 vLLM 目前把"DP 需要步调一致"和"这是不是 MoE 模型"焊死在了一起（`## 7` 踩坑 5 里"非 MoE DP 完全独立"这条，在 SGLang 这边不成立，取决于 `enable_dp_attention` 而不是模型类型）。
+
+**PP 的调度形态**：这是两边差异最大的一点。vLLM 把 PP 重叠做在 `EngineCore` 的隐式 `Future` 队列里（`## 4` ③），调度器本身不知道"这是第几个 micro-batch"。
+
+SGLang 则是显式的：`event_loop_pp()`（`sglang:python/sglang/srt/managers/scheduler_pp_mixin.py:74`-`96`）维护一个大小为 `pp_loop_size = pp_size + pp_async_batch_depth` 的环形数组 `self.mbs` / `self.running_mbs`（`sglang:python/sglang/srt/managers/scheduler_pp_mixin.py:567`-`575`），主循环用 `for mb_id in range(self.pp_loop_size)` 显式轮转每一路 micro-batch，每一路都记着自己的 `running_batch`/`last_batch` 状态。
+
+配合"异步发送、同步接收"（源码注释原话 "We use async send but sync recv to avoid desynchronization while minimizing the communication overhead"，`sglang:python/sglang/srt/managers/scheduler_pp_mixin.py:79`）。
+
+`pp_async_batch_depth` 默认 0（`sglang:python/sglang/srt/server_args.py:1069`-`1071`），这与 vLLM `max_concurrent_batches = pp_size (+1 用于 async scheduling)`（`## 4` ③）是同一个思路的两种实现：都是"排队深度 = PP 级数，异步调度再多留一格缓冲"，但 SGLang 把这个环形队列做成了调度器自己维护的显式状态机，vLLM 则藏在 `deque` + `Future` 的通用排队原语背后。两边都没有做 Megatron 式的 interleaved/virtual-pipeline（`## 5` 决策 3），这一点上是真正的共识，不是巧合。
+
+**EPLB 触发条件**：vLLM 用固定的 `step_interval`（默认 3000 步，`## 5` 决策 6）节流；SGLang 的 `EPLBManager._check_rebalance_needed()` 则是按**滑窗内平均 GPU 利用率**门控——只有当利用率低于 `eplb_min_rebalancing_utilization_threshold` 时才真正触发重排，否则跳过并打日志说明（`sglang:python/sglang/srt/eplb/eplb_manager.py:232`-`241`）。这是"按固定节奏做"和"挑系统不忙的时候做"两种不同的节流哲学，`## 8` 会把这一点列为可能的改进方向。
+
+另外 SGLang 把 EPLB 独立成顶层包 `srt/eplb/`（`eplb_manager.py`、`expert_location.py`、`expert_distribution.py` 等，均在 `python/sglang/srt/eplb/` 下），而不是像 vLLM 那样嵌在 `distributed/eplb/` 目录里——这个目录层级差异直接影响了 `## 2` 提到的"按目录粗口径统计会产生假阳性"问题的严重程度：SGLang 的目录结构不会把 EPLB 和 KV 传输混进同一个"distributed"统计桶。
 
 **多机启动**：两边都**不**默认用 Ray。SGLang 的 `ServerArgs` 里 `dist_init_addr`、`nnodes`、`node_rank` 是走原生 `torch.distributed` 初始化的标准参数（`sglang:python/sglang/srt/server_args.py:1030`-`1039`），没有 Ray 依赖；vLLM 同样默认走自研的 `MultiprocExecutor`（`## 0` 最后一条）。这说明"多机部署默认不用 Ray、自己管理 rank/master 地址"不是 vLLM 一家的特例，而是当前主流开源推理引擎的共同选择——Ray 更多是给"需要动态伸缩、跨异构集群调度"的复杂部署场景准备的可选项，不是多机的默认必需品。
 

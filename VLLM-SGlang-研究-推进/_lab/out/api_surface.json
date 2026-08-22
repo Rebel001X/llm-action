@@ -27964,6 +27964,8 @@
           "/v1/responses",
           "/v1/videos"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/busy_threshold",
           "/generate",
@@ -28925,6 +28927,296 @@
           "line": 125,
           "primary": "--cpu_memory_size_GB",
           "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--host",
+            "-H"
+          ],
+          "help": "Server host address",
+          "line": 39,
+          "primary": "--host",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--port",
+            "-p"
+          ],
+          "help": "Server port",
+          "line": 40,
+          "primary": "--port",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--gpu-experts"
+          ],
+          "help": "Number of GPU experts per layer",
+          "line": 41,
+          "primary": "--gpu-experts",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--cpu-threads"
+          ],
+          "help": "Number of CPU inference threads",
+          "line": 42,
+          "primary": "--cpu-threads",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "()",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--numa-nodes"
+          ],
+          "help": "Number of KT threadpools, or explicit NUMA node IDs for each threadpool (e.g. --numa-nodes 2 or --numa-nodes 0 --numa-nodes 1)",
+          "line": 43,
+          "primary": "--numa-nodes",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--tensor-parallel-size",
+            "--tp"
+          ],
+          "help": "Tensor parallel size",
+          "line": 51,
+          "primary": "--tensor-parallel-size",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--model-path"
+          ],
+          "help": "Custom model path",
+          "line": 54,
+          "primary": "--model-path",
+          "style": "click",
+          "type": "click.Path()"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--weights-path"
+          ],
+          "help": "Custom quantized weights path",
+          "line": 55,
+          "primary": "--weights-path",
+          "style": "click",
+          "type": "click.Path()"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--kt-method"
+          ],
+          "help": "KT quantization method",
+          "line": 56,
+          "primary": "--kt-method",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--kt-gpu-prefill-threshold"
+          ],
+          "help": "GPU prefill token threshold",
+          "line": 57,
+          "primary": "--kt-gpu-prefill-threshold",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--attention-backend"
+          ],
+          "help": "Attention backend",
+          "line": 60,
+          "primary": "--attention-backend",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--max-total-tokens"
+          ],
+          "help": "Maximum total tokens",
+          "line": 61,
+          "primary": "--max-total-tokens",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--max-running-requests"
+          ],
+          "help": "Maximum running requests",
+          "line": 62,
+          "primary": "--max-running-requests",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--chunked-prefill-size"
+          ],
+          "help": "Chunked prefill size",
+          "line": 63,
+          "primary": "--chunked-prefill-size",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--mem-fraction-static"
+          ],
+          "help": "Memory fraction static",
+          "line": 64,
+          "primary": "--mem-fraction-static",
+          "style": "click",
+          "type": "float"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--watchdog-timeout"
+          ],
+          "help": "Watchdog timeout",
+          "line": 65,
+          "primary": "--watchdog-timeout",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--served-model-name"
+          ],
+          "help": "Served model name",
+          "line": 66,
+          "primary": "--served-model-name",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--disable-shared-experts-fusion"
+          ],
+          "help": "Disable shared experts fusion",
+          "line": 67,
+          "primary": "--disable-shared-experts-fusion",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "False",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--enable-shared-experts-fusion"
+          ],
+          "help": "Enable shared experts fusion",
+          "line": 74,
+          "primary": "--enable-shared-experts-fusion",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "False",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--quantize",
+            "-q"
+          ],
+          "help": "Quantize model",
+          "line": 81,
+          "primary": "--quantize",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "False",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--advanced"
+          ],
+          "help": "Show advanced options",
+          "line": 82,
+          "primary": "--advanced",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "False",
+          "file": "kt-kernel/python/cli/commands/run.py",
+          "flags": [
+            "--dry-run"
+          ],
+          "help": "Show command without executing",
+          "line": 83,
+          "primary": "--dry-run",
+          "style": "click",
+          "type": null
         }
       ],
       "config_classes": [
@@ -28969,11 +29261,47 @@
           ],
           "n_fields": 0,
           "name": "ArgumentParser"
+        },
+        {
+          "bases": [
+            "str",
+            "Enum"
+          ],
+          "decorators": [],
+          "fields": [],
+          "file": "kt-kernel/python/cli/commands/bench.py",
+          "line": 25,
+          "methods": [],
+          "n_fields": 0,
+          "name": "BenchType"
+        },
+        {
+          "bases": [
+            "str",
+            "Enum"
+          ],
+          "decorators": [],
+          "fields": [],
+          "file": "kt-kernel/python/cli/commands/quant.py",
+          "line": 30,
+          "methods": [],
+          "n_fields": 0,
+          "name": "QuantMethod"
         }
       ],
       "config_files": [
         "archive/ktransformers/server/config/config.py",
-        "archive/ktransformers/server/args.py"
+        "archive/ktransformers/server/args.py",
+        "kt-kernel/python/cli/commands/__init__.py",
+        "kt-kernel/python/cli/commands/bench.py",
+        "kt-kernel/python/cli/commands/chat.py",
+        "kt-kernel/python/cli/commands/config.py",
+        "kt-kernel/python/cli/commands/doctor.py",
+        "kt-kernel/python/cli/commands/model.py",
+        "kt-kernel/python/cli/commands/quant.py",
+        "kt-kernel/python/cli/commands/run.py",
+        "kt-kernel/python/cli/commands/sft.py",
+        "kt-kernel/python/cli/commands/version.py"
       ],
       "engine_classes": [
         {
@@ -32477,7 +32805,8 @@
           "is_async": true,
           "line": 58,
           "method": "POST",
-          "path": "/generate"
+          "path": "/api/generate",
+          "prefix_from_router": "/api"
         },
         {
           "app_obj": "router",
@@ -32486,7 +32815,8 @@
           "is_async": true,
           "line": 140,
           "method": "POST",
-          "path": "/chat"
+          "path": "/api/chat",
+          "prefix_from_router": "/api"
         },
         {
           "app_obj": "router",
@@ -32495,7 +32825,8 @@
           "is_async": true,
           "line": 235,
           "method": "GET",
-          "path": "/tags"
+          "path": "/api/tags",
+          "prefix_from_router": "/api"
         },
         {
           "app_obj": "router",
@@ -32504,7 +32835,8 @@
           "is_async": true,
           "line": 268,
           "method": "POST",
-          "path": "/show"
+          "path": "/api/show",
+          "prefix_from_router": "/api"
         },
         {
           "app_obj": "router",
@@ -32513,7 +32845,8 @@
           "is_async": true,
           "line": 19,
           "method": "POST",
-          "path": "/"
+          "path": "/assistants/",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32522,7 +32855,8 @@
           "is_async": true,
           "line": 26,
           "method": "GET",
-          "path": "/"
+          "path": "/assistants/",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32531,7 +32865,8 @@
           "is_async": true,
           "line": 38,
           "method": "GET",
-          "path": "/status"
+          "path": "/assistants/status",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32540,7 +32875,8 @@
           "is_async": true,
           "line": 48,
           "method": "GET",
-          "path": "/{assistant_id}"
+          "path": "/assistants/{assistant_id}",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32549,7 +32885,8 @@
           "is_async": true,
           "line": 55,
           "method": "POST",
-          "path": "/{assistant_id}"
+          "path": "/assistants/{assistant_id}",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32558,7 +32895,8 @@
           "is_async": true,
           "line": 63,
           "method": "DELETE",
-          "path": "/{assistant_id}"
+          "path": "/assistants/{assistant_id}",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32567,7 +32905,8 @@
           "is_async": true,
           "line": 69,
           "method": "GET",
-          "path": "/{assistant_id}/related_thread"
+          "path": "/assistants/{assistant_id}/related_thread",
+          "prefix_from_router": "/assistants"
         },
         {
           "app_obj": "router",
@@ -32684,7 +33023,8 @@
           "is_async": true,
           "line": 14,
           "method": "POST",
-          "path": "/"
+          "path": "/threads/",
+          "prefix_from_router": "/threads"
         },
         {
           "app_obj": "router",
@@ -32693,7 +33033,8 @@
           "is_async": true,
           "line": 19,
           "method": "GET",
-          "path": "/"
+          "path": "/threads/",
+          "prefix_from_router": "/threads"
         },
         {
           "app_obj": "router",
@@ -32702,7 +33043,8 @@
           "is_async": true,
           "line": 24,
           "method": "GET",
-          "path": "/{thread_id}"
+          "path": "/threads/{thread_id}",
+          "prefix_from_router": "/threads"
         },
         {
           "app_obj": "router",
@@ -32711,7 +33053,8 @@
           "is_async": true,
           "line": 29,
           "method": "POST",
-          "path": "/{thread_id}"
+          "path": "/threads/{thread_id}",
+          "prefix_from_router": "/threads"
         },
         {
           "app_obj": "router",
@@ -32720,7 +33063,8 @@
           "is_async": true,
           "line": 34,
           "method": "DELETE",
-          "path": "/{thread_id}"
+          "path": "/threads/{thread_id}",
+          "prefix_from_router": "/threads"
         },
         {
           "app_obj": "router",
@@ -32760,26 +33104,29 @@
         }
       ],
       "summary": {
-        "n_cli_flags": 85,
+        "n_cli_flags": 105,
         "n_protocol_classes": 80,
         "n_routes": 32,
-        "n_unique_paths": 20,
+        "n_unique_paths": 21,
         "openai_compat_paths": [],
+        "route_prefix_caveat": "该引擎用 include_router 跨文件组合路由，且本次一条 /v1/* 都没抽到 —— 上层前缀很可能挂在别处，本工具只在单文件内解析 APIRouter(prefix=...)，补不出来。**这是工具的边界，不能据此说该引擎没有 /v1 端点。**",
+        "route_prefix_maybe_undercounted": true,
         "unique_paths": [
-          "/",
-          "/chat",
+          "/api/chat",
+          "/api/generate",
+          "/api/show",
+          "/api/tags",
+          "/assistants/",
+          "/assistants/status",
+          "/assistants/{assistant_id}",
+          "/assistants/{assistant_id}/related_thread",
           "/chat/completions",
           "/completions",
-          "/generate",
           "/models",
           "/runs",
-          "/show",
-          "/status",
           "/system-info",
-          "/tags",
-          "/{assistant_id}",
-          "/{assistant_id}/related_thread",
-          "/{thread_id}",
+          "/threads/",
+          "/threads/{thread_id}",
           "/{thread_id}/messages",
           "/{thread_id}/messages/{message_id}",
           "/{thread_id}/runs",
@@ -36728,6 +37075,8 @@
           "/v1/models",
           "/v1/responses"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/",
           "/generate",
@@ -37014,6 +37363,8 @@
           "/v1/responses/input_tokens",
           "/v1/streams/lookup"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/apply-template",
           "/audio/transcriptions",
@@ -45001,6 +45352,8 @@
           "/v1/models",
           "/v1/responses"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/abort_request",
           "/anthropic/v1/models",
@@ -45040,7 +45393,1185 @@
       }
     },
     "mlc-llm": {
-      "cli_flags": [],
+      "cli_flags": [
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "model"
+          ],
+          "line": 13,
+          "primary": "model",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--device"
+          ],
+          "line": 18,
+          "primary": "--device",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--model-lib"
+          ],
+          "line": 24,
+          "primary": "--model-lib",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--output",
+            "-o"
+          ],
+          "line": 30,
+          "primary": "--output",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--dataset"
+          ],
+          "line": 39,
+          "primary": "--dataset",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "16",
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--num-calibration-samples"
+          ],
+          "line": 46,
+          "primary": "--num-calibration-samples",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "0",
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--seed"
+          ],
+          "line": 53,
+          "primary": "--seed",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "''",
+          "file": "python/mlc_llm/cli/calibrate.py",
+          "flags": [
+            "--overrides"
+          ],
+          "line": 59,
+          "primary": "--overrides",
+          "type": "EngineConfigOverride.from_str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/chat.py",
+          "flags": [
+            "model"
+          ],
+          "line": 12,
+          "primary": "model",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/chat.py",
+          "flags": [
+            "--device"
+          ],
+          "line": 17,
+          "primary": "--device",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/chat.py",
+          "flags": [
+            "--model-lib"
+          ],
+          "line": 23,
+          "primary": "--model-lib",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "''",
+          "file": "python/mlc_llm/cli/chat.py",
+          "flags": [
+            "--overrides"
+          ],
+          "line": 29,
+          "primary": "--overrides",
+          "type": "ModelConfigOverride.from_str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "model"
+          ],
+          "line": 57,
+          "primary": "model",
+          "type": "detect_mlc_chat_config"
+        },
+        {
+          "action": null,
+          "choices": "list(QUANTIZATION.keys())",
+          "default": null,
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--quantization"
+          ],
+          "line": 62,
+          "primary": "--quantization",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['auto', *list(MODELS.keys())]",
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--model-type"
+          ],
+          "line": 69,
+          "primary": "--model-type",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--device"
+          ],
+          "line": 76,
+          "primary": "--device",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--host"
+          ],
+          "line": 82,
+          "primary": "--host",
+          "type": "str"
+        },
+        {
+          "action": "'store_true'",
+          "default": null,
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--enable-subgroups"
+          ],
+          "line": 88,
+          "primary": "--enable-subgroups",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "'O2'",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--opt"
+          ],
+          "line": 93,
+          "primary": "--opt",
+          "type": "OptimizationFlags.from_str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--system-lib-prefix"
+          ],
+          "line": 99,
+          "primary": "--system-lib-prefix",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--output",
+            "-o"
+          ],
+          "line": 105,
+          "primary": "--output",
+          "type": "_parse_output"
+        },
+        {
+          "action": null,
+          "default": "''",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--overrides"
+          ],
+          "line": 112,
+          "primary": "--overrides",
+          "type": "ModelConfigOverride.from_str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/compile.py",
+          "flags": [
+            "--debug-dump"
+          ],
+          "line": 118,
+          "primary": "--debug-dump",
+          "type": "partial(_parse_dir, auto_create=True)"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "config"
+          ],
+          "line": 41,
+          "primary": "config",
+          "type": "detect_config"
+        },
+        {
+          "action": null,
+          "choices": "list(QUANTIZATION.keys())",
+          "default": null,
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--quantization"
+          ],
+          "line": 46,
+          "primary": "--quantization",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['auto', *list(MODELS.keys())]",
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--model-type"
+          ],
+          "line": 53,
+          "primary": "--model-type",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--device"
+          ],
+          "line": 60,
+          "primary": "--device",
+          "type": "detect_device"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--source"
+          ],
+          "line": 66,
+          "primary": "--source",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['auto', 'huggingface-torch', 'huggingface-safetensor', 'awq']",
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--source-format"
+          ],
+          "line": 72,
+          "primary": "--source-format",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--output",
+            "-o"
+          ],
+          "line": 79,
+          "primary": "--output",
+          "type": "_parse_output"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/convert_weight.py",
+          "flags": [
+            "--lora-adapter"
+          ],
+          "help": "Path to a LoRA adapter directory in PEFT format. When provided, adapter weights are merged into the base model before quantization.",
+          "line": 86,
+          "primary": "--lora-adapter",
+          "type": "_parse_lora_adapter"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--username"
+          ],
+          "help": "HuggingFace username",
+          "line": 398,
+          "primary": "--username",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "_get_default_hf_token()",
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--token"
+          ],
+          "help": "HuggingFace access token, obtained under https://huggingface.co/settings/tokens",
+          "line": 404,
+          "primary": "--token",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'model-delivery-config.json'",
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--spec"
+          ],
+          "line": 410,
+          "primary": "--spec",
+          "type": "_load_spec"
+        },
+        {
+          "action": null,
+          "default": "'model-delivered-log.json'",
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--log"
+          ],
+          "line": 416,
+          "primary": "--log",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--output"
+          ],
+          "help": "Directory to store the output MLC models",
+          "line": 422,
+          "primary": "--output",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--hf-local-dir"
+          ],
+          "help": "Local directory to store the downloaded HuggingFace model",
+          "line": 428,
+          "primary": "--hf-local-dir",
+          "type": "str"
+        },
+        {
+          "action": "'store_true'",
+          "default": null,
+          "file": "python/mlc_llm/cli/delivery.py",
+          "flags": [
+            "--dry-run"
+          ],
+          "help": "Dry run without uploading to HuggingFace Hub",
+          "line": 434,
+          "primary": "--dry-run",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "config"
+          ],
+          "line": 24,
+          "primary": "config",
+          "type": "detect_config"
+        },
+        {
+          "action": null,
+          "choices": "list(QUANTIZATION.keys())",
+          "default": null,
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--quantization"
+          ],
+          "line": 29,
+          "primary": "--quantization",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['auto', *list(MODELS.keys())]",
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--model-type"
+          ],
+          "line": 36,
+          "primary": "--model-type",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "list(CONV_TEMPLATES)",
+          "default": null,
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--conv-template"
+          ],
+          "line": 43,
+          "primary": "--conv-template",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--context-window-size"
+          ],
+          "line": 50,
+          "primary": "--context-window-size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--sliding-window-size"
+          ],
+          "line": 56,
+          "primary": "--sliding-window-size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--prefill-chunk-size"
+          ],
+          "line": 62,
+          "primary": "--prefill-chunk-size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--attention-sink-size"
+          ],
+          "line": 68,
+          "primary": "--attention-sink-size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--tensor-parallel-shards"
+          ],
+          "line": 74,
+          "primary": "--tensor-parallel-shards",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--pipeline-parallel-stages"
+          ],
+          "line": 80,
+          "primary": "--pipeline-parallel-stages",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--disaggregation"
+          ],
+          "line": 86,
+          "primary": "--disaggregation",
+          "type": "bool"
+        },
+        {
+          "action": null,
+          "default": "128",
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--max-batch-size"
+          ],
+          "line": 92,
+          "primary": "--max-batch-size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/gen_config.py",
+          "flags": [
+            "--output",
+            "-o"
+          ],
+          "line": 98,
+          "primary": "--output",
+          "type": "_parse_output"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/lib_delivery.py",
+          "flags": [
+            "--spec"
+          ],
+          "help": "Path to the spec file",
+          "line": 186,
+          "primary": "--spec",
+          "type": "_load_spec"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/model_metadata.py",
+          "flags": [
+            "model_lib"
+          ],
+          "help": "The compiled model library. In MLC LLM, an LLM is compiled to a shared or static library (.so or .a), which contains GPU computation to efficiently run the LLM. MLC Chat, as the runtime of MLC LLM, de",
+          "line": 145,
+          "primary": "model_lib",
+          "type": "Path"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/model_metadata.py",
+          "flags": [
+            "--mlc-chat-config"
+          ],
+          "help": "The `mlc-chat-config.json` file specific to a model variant. This is only required when `memory-only` is true and `model_lib` contains a dynamic parameter shape (i.e. using a variable to represent the",
+          "line": 153,
+          "primary": "--mlc-chat-config",
+          "type": "Path"
+        },
+        {
+          "action": "'store_true'",
+          "default": null,
+          "file": "python/mlc_llm/cli/model_metadata.py",
+          "flags": [
+            "--memory-only"
+          ],
+          "help": "If set, only inspect the metadata in memory usage and print richer analysis. Otherwise, the tool will load all the metadata from the model library file but only print the basic information in JSON.",
+          "line": 163,
+          "primary": "--memory-only",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "'mlc-package-config.json'",
+          "file": "python/mlc_llm/cli/package.py",
+          "flags": [
+            "--package-config"
+          ],
+          "line": 36,
+          "primary": "--package-config",
+          "type": "_parse_package_config"
+        },
+        {
+          "action": null,
+          "default": "os.environ.get('MLC_LLM_SOURCE_DIR', None)",
+          "file": "python/mlc_llm/cli/package.py",
+          "flags": [
+            "--mlc-llm-source-dir"
+          ],
+          "line": 42,
+          "primary": "--mlc-llm-source-dir",
+          "type": "_parse_mlc_llm_source_dir"
+        },
+        {
+          "action": null,
+          "default": "'dist'",
+          "file": "python/mlc_llm/cli/package.py",
+          "flags": [
+            "--output",
+            "-o"
+          ],
+          "line": 49,
+          "primary": "--output",
+          "type": "_parse_output"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "model"
+          ],
+          "line": 16,
+          "primary": "model",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--model-lib"
+          ],
+          "line": 21,
+          "primary": "--model-lib",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['disagg', 'round-robin']",
+          "default": "'disagg'",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--router-mode"
+          ],
+          "line": 27,
+          "primary": "--router-mode",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'127.0.0.1'",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--router-host"
+          ],
+          "line": 34,
+          "primary": "--router-host",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "8000",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--router-port"
+          ],
+          "line": 40,
+          "primary": "--router-port",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "'127.0.0.1'",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--endpoint-hosts"
+          ],
+          "line": 46,
+          "primary": "--endpoint-hosts",
+          "type": "list_of_strings"
+        },
+        {
+          "action": null,
+          "default": "[8080]",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--endpoint-ports"
+          ],
+          "line": 52,
+          "primary": "--endpoint-ports",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "[1]",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--endpoint-num-gpus"
+          ],
+          "line": 59,
+          "primary": "--endpoint-num-gpus",
+          "type": "int"
+        },
+        {
+          "action": "'store_true'",
+          "default": "False",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--enable-prefix-cache"
+          ],
+          "line": 66,
+          "primary": "--enable-prefix-cache",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "0.0",
+          "file": "python/mlc_llm/cli/router.py",
+          "flags": [
+            "--pd-balance-factor"
+          ],
+          "line": 72,
+          "primary": "--pd-balance-factor",
+          "type": "float"
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "model"
+          ],
+          "line": 110,
+          "primary": "model",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "'auto'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--device"
+          ],
+          "line": 115,
+          "primary": "--device",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--model-lib"
+          ],
+          "line": 121,
+          "primary": "--model-lib",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['local', 'interactive', 'server']",
+          "default": "'local'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--mode"
+          ],
+          "line": 127,
+          "primary": "--mode",
+          "type": "str"
+        },
+        {
+          "action": "'store_true'",
+          "default": null,
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--enable-debug"
+          ],
+          "help": "whether we enable debug end points and debug config when accepting requests",
+          "line": 134,
+          "primary": "--enable-debug",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": null,
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--additional-models"
+          ],
+          "line": 139,
+          "primary": "--additional-models",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--embedding-model"
+          ],
+          "help": "Path to the embedding model weight directory (enables /v1/embeddings endpoint)",
+          "line": 142,
+          "primary": "--embedding-model",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--embedding-model-lib"
+          ],
+          "help": "Path to the compiled embedding model library (.so/.dylib file)",
+          "line": 148,
+          "primary": "--embedding-model-lib",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['disable', 'small_draft', 'eagle', 'medusa']",
+          "default": "'disable'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--speculative-mode"
+          ],
+          "line": 154,
+          "primary": "--speculative-mode",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['disable', 'radix']",
+          "default": "'radix'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--prefix-cache-mode"
+          ],
+          "line": 161,
+          "primary": "--prefix-cache-mode",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "choices": "['hybrid', 'chunked']",
+          "default": "'hybrid'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--prefill-mode"
+          ],
+          "line": 168,
+          "primary": "--prefill-mode",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "''",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--overrides"
+          ],
+          "line": 175,
+          "primary": "--overrides",
+          "type": "EngineConfigOverride.from_str"
+        },
+        {
+          "action": "'store_true'",
+          "default": null,
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--enable-tracing"
+          ],
+          "line": 181,
+          "primary": "--enable-tracing",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "'127.0.0.1'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--host"
+          ],
+          "line": 182,
+          "primary": "--host",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "8000",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--port"
+          ],
+          "line": 188,
+          "primary": "--port",
+          "type": "int"
+        },
+        {
+          "action": "'store_true'",
+          "default": null,
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--allow-credentials"
+          ],
+          "help": "allow credentials",
+          "line": 194,
+          "primary": "--allow-credentials",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "['*']",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--allow-origins"
+          ],
+          "line": 195,
+          "primary": "--allow-origins",
+          "type": "json.loads"
+        },
+        {
+          "action": null,
+          "default": "['*']",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--allow-methods"
+          ],
+          "line": 201,
+          "primary": "--allow-methods",
+          "type": "json.loads"
+        },
+        {
+          "action": null,
+          "default": "['*']",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--allow-headers"
+          ],
+          "line": 207,
+          "primary": "--allow-headers",
+          "type": "json.loads"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--api-key"
+          ],
+          "help": "API key for authentication. If not provided, authentication is disabled.",
+          "line": 213,
+          "primary": "--api-key",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--max_num_sequence"
+          ],
+          "line": 69,
+          "primary": "--max_num_sequence",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--max_total_seq_length"
+          ],
+          "line": 70,
+          "primary": "--max_total_seq_length",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--prefill_chunk_size"
+          ],
+          "line": 71,
+          "primary": "--prefill_chunk_size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--max_history_size"
+          ],
+          "line": 72,
+          "primary": "--max_history_size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--gpu_memory_utilization"
+          ],
+          "line": 73,
+          "primary": "--gpu_memory_utilization",
+          "type": "float"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--spec_draft_length"
+          ],
+          "line": 74,
+          "primary": "--spec_draft_length",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--spec_tree_width"
+          ],
+          "line": 75,
+          "primary": "--spec_tree_width",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "'radix'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--prefix_cache_mode"
+          ],
+          "line": 76,
+          "primary": "--prefix_cache_mode",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--prefix_cache_max_num_recycling_seqs"
+          ],
+          "line": 77,
+          "primary": "--prefix_cache_max_num_recycling_seqs",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "'hybrid'",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--prefill_mode"
+          ],
+          "line": 78,
+          "primary": "--prefill_mode",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--context_window_size"
+          ],
+          "line": 79,
+          "primary": "--context_window_size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--sliding_window_size"
+          ],
+          "line": 80,
+          "primary": "--sliding_window_size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--attention_sink_size"
+          ],
+          "line": 81,
+          "primary": "--attention_sink_size",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--tensor_parallel_shards"
+          ],
+          "line": 82,
+          "primary": "--tensor_parallel_shards",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--pipeline_parallel_stages"
+          ],
+          "line": 83,
+          "primary": "--pipeline_parallel_stages",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "python/mlc_llm/cli/serve.py",
+          "flags": [
+            "--opt"
+          ],
+          "line": 84,
+          "primary": "--opt",
+          "type": "str"
+        }
+      ],
       "config_classes": [
         {
           "bases": [],
@@ -45213,11 +46744,368 @@
           ],
           "n_fields": 24,
           "name": "EngineConfig"
+        },
+        {
+          "bases": [
+            "BaseModel"
+          ],
+          "decorators": [],
+          "fields": [
+            {
+              "default": "None",
+              "line": 38,
+              "name": "context_window_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 39,
+              "name": "sliding_window_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 40,
+              "name": "prefill_chunk_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 41,
+              "name": "attention_sink_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 42,
+              "name": "tensor_parallel_shards",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 43,
+              "name": "pipeline_parallel_stages",
+              "type": "Optional[int]"
+            }
+          ],
+          "file": "python/mlc_llm/cli/delivery.py",
+          "line": 33,
+          "methods": [],
+          "n_fields": 6,
+          "name": "OverrideConfigs"
+        },
+        {
+          "bases": [
+            "BaseModel"
+          ],
+          "decorators": [],
+          "fields": [
+            {
+              "default": null,
+              "line": 62,
+              "name": "model_id",
+              "type": "str"
+            },
+            {
+              "default": null,
+              "line": 63,
+              "name": "model",
+              "type": "str"
+            },
+            {
+              "default": null,
+              "line": 64,
+              "name": "conv_template",
+              "type": "str"
+            },
+            {
+              "default": "Field(default_factory=list)",
+              "line": 65,
+              "name": "quantization",
+              "type": "Union[List[str], str]"
+            },
+            {
+              "default": "Field(default_factory=dict)",
+              "line": 66,
+              "name": "overrides",
+              "type": "Dict[str, OverrideConfigs]"
+            },
+            {
+              "default": "None",
+              "line": 67,
+              "name": "destination",
+              "type": "Optional[str]"
+            },
+            {
+              "default": "False",
+              "line": 68,
+              "name": "gen_config_only",
+              "type": "Optional[bool]"
+            }
+          ],
+          "file": "python/mlc_llm/cli/delivery.py",
+          "line": 46,
+          "methods": [],
+          "n_fields": 7,
+          "name": "ModelDeliveryTask"
+        },
+        {
+          "bases": [
+            "BaseModel"
+          ],
+          "decorators": [],
+          "fields": [
+            {
+              "default": null,
+              "line": 76,
+              "name": "tasks",
+              "type": "List[ModelDeliveryTask]"
+            },
+            {
+              "default": "None",
+              "line": 78,
+              "name": "default_destination",
+              "type": "Optional[str]"
+            },
+            {
+              "default": "Field(default_factory=list)",
+              "line": 79,
+              "name": "default_quantization",
+              "type": "List[str]"
+            },
+            {
+              "default": "Field(default_factory=dict)",
+              "line": 80,
+              "name": "default_overrides",
+              "type": "Dict[str, OverrideConfigs]"
+            }
+          ],
+          "file": "python/mlc_llm/cli/delivery.py",
+          "line": 71,
+          "methods": [
+            {
+              "is_async": false,
+              "line": 83,
+              "name": "from_json",
+              "params": [
+                "cls",
+                "json_dict"
+              ]
+            },
+            {
+              "is_async": false,
+              "line": 93,
+              "name": "to_json",
+              "params": []
+            }
+          ],
+          "n_fields": 4,
+          "name": "ModelDeliveryList"
+        },
+        {
+          "bases": [],
+          "decorators": [
+            "dataclasses.dataclass"
+          ],
+          "fields": [
+            {
+              "default": null,
+              "line": 26,
+              "name": "model_id",
+              "type": "str"
+            },
+            {
+              "default": null,
+              "line": 27,
+              "name": "model",
+              "type": "Path"
+            },
+            {
+              "default": null,
+              "line": 28,
+              "name": "quantization",
+              "type": "str"
+            },
+            {
+              "default": null,
+              "line": 29,
+              "name": "device",
+              "type": "str"
+            },
+            {
+              "default": null,
+              "line": 33,
+              "name": "overrides",
+              "type": "Dict[str, int]"
+            }
+          ],
+          "file": "python/mlc_llm/cli/lib_delivery.py",
+          "line": 23,
+          "methods": [],
+          "n_fields": 5,
+          "name": "ModelInfo"
+        },
+        {
+          "bases": [],
+          "decorators": [],
+          "fields": [],
+          "file": "python/mlc_llm/cli/lib_delivery.py",
+          "line": 36,
+          "methods": [
+            {
+              "is_async": false,
+              "line": 42,
+              "name": "add",
+              "params": [
+                "func"
+              ]
+            },
+            {
+              "is_async": false,
+              "line": 54,
+              "name": "create_temp_dir",
+              "params": []
+            }
+          ],
+          "n_fields": 0,
+          "name": "DeferredScope"
+        },
+        {
+          "bases": [],
+          "decorators": [
+            "dataclasses.dataclass"
+          ],
+          "fields": [
+            {
+              "default": "None",
+              "line": 19,
+              "name": "max_num_sequence",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 20,
+              "name": "max_total_seq_length",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 21,
+              "name": "prefill_chunk_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 22,
+              "name": "max_history_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 23,
+              "name": "gpu_memory_utilization",
+              "type": "Optional[float]"
+            },
+            {
+              "default": "None",
+              "line": 24,
+              "name": "spec_draft_length",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 25,
+              "name": "spec_tree_width",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 26,
+              "name": "prefix_cache_mode",
+              "type": "Optional[Literal['disable', 'radix']]"
+            },
+            {
+              "default": "None",
+              "line": 27,
+              "name": "prefix_cache_max_num_recycling_seqs",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 28,
+              "name": "prefill_mode",
+              "type": "Optional[Literal['chunked', 'hybrid']]"
+            },
+            {
+              "default": "None",
+              "line": 29,
+              "name": "context_window_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 30,
+              "name": "sliding_window_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 31,
+              "name": "attention_sink_size",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 32,
+              "name": "tensor_parallel_shards",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 33,
+              "name": "pipeline_parallel_stages",
+              "type": "Optional[int]"
+            },
+            {
+              "default": "None",
+              "line": 34,
+              "name": "opt",
+              "type": "Optional[str]"
+            }
+          ],
+          "file": "python/mlc_llm/cli/serve.py",
+          "line": 15,
+          "methods": [
+            {
+              "is_async": false,
+              "line": 65,
+              "name": "from_str",
+              "params": [
+                "source"
+              ]
+            }
+          ],
+          "n_fields": 16,
+          "name": "EngineConfigOverride"
         }
       ],
       "config_files": [
         "python/mlc_llm/serve/config.py",
-        "python/mlc_llm/interface/serve.py"
+        "python/mlc_llm/interface/serve.py",
+        "python/mlc_llm/cli/calibrate.py",
+        "python/mlc_llm/cli/chat.py",
+        "python/mlc_llm/cli/check_device.py",
+        "python/mlc_llm/cli/compile.py",
+        "python/mlc_llm/cli/convert_weight.py",
+        "python/mlc_llm/cli/delivery.py",
+        "python/mlc_llm/cli/disco_remote_socket_session.py",
+        "python/mlc_llm/cli/gen_config.py",
+        "python/mlc_llm/cli/lib_delivery.py",
+        "python/mlc_llm/cli/model_metadata.py",
+        "python/mlc_llm/cli/package.py",
+        "python/mlc_llm/cli/router.py",
+        "python/mlc_llm/cli/serve.py",
+        "python/mlc_llm/cli/worker.py"
       ],
       "engine_classes": [
         {
@@ -47026,7 +48914,7 @@
         }
       ],
       "summary": {
-        "n_cli_flags": 0,
+        "n_cli_flags": 77,
         "n_protocol_classes": 26,
         "n_routes": 13,
         "n_unique_paths": 13,
@@ -47036,6 +48924,8 @@
           "/v1/embeddings",
           "/v1/models"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/debug/cuda_profiler_start",
           "/debug/cuda_profiler_stop",
@@ -47079,6 +48969,8 @@
         "n_routes": 0,
         "n_unique_paths": 0,
         "openai_compat_paths": [],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": []
       }
     },
@@ -56858,6 +58750,8 @@
           "/v1/score",
           "/v1/tokenize"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/",
           "/abort_request",
@@ -56942,7 +58836,166 @@
       }
     },
     "tensorrt-llm": {
-      "cli_flags": [],
+      "cli_flags": [
+        {
+          "action": null,
+          "default": "'localhost'",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--host"
+          ],
+          "help": "Hostname of the server.",
+          "line": 1680,
+          "primary": "--host",
+          "style": "click",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "8000",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--port"
+          ],
+          "help": "Port of the server.",
+          "line": 1684,
+          "primary": "--port",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "'info'",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--log_level"
+          ],
+          "help": "The logging level.",
+          "line": 1685,
+          "primary": "--log_level",
+          "style": "click",
+          "type": "click.Choice(severity_map.keys())"
+        },
+        {
+          "action": null,
+          "default": "_LLM_ARGS_FIELDS['max_batch_size'].default",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--max_batch_size"
+          ],
+          "help": "Maximum batch size coalesced into a single encode() call.",
+          "line": 1689,
+          "primary": "--max_batch_size",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "8192",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--max_num_tokens"
+          ],
+          "help": "Maximum number of batched input tokens in each encode() call.",
+          "line": 1693,
+          "primary": "--max_num_tokens",
+          "style": "click",
+          "type": "int"
+        },
+        {
+          "action": null,
+          "default": "0.005",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--max_queue_delay"
+          ],
+          "help": "Dynamic-batching hold window in seconds: how long an incoming request waits for others to join its batch before being dispatched (mirrors Triton's max_queue_delay_microseconds).",
+          "line": 1698,
+          "primary": "--max_queue_delay",
+          "style": "click",
+          "type": "click.FloatRange(min=0.0)"
+        },
+        {
+          "action": null,
+          "default": "2048",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--max_queue_size"
+          ],
+          "help": "Maximum number of in-flight queued requests; further requests are rejected with HTTP 429 (mirrors Triton's max_queue_size).",
+          "line": 1705,
+          "primary": "--max_queue_size",
+          "style": "click",
+          "type": "click.IntRange(min=1)"
+        },
+        {
+          "action": null,
+          "default": "False",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--trust_remote_code"
+          ],
+          "help": "Flag for HF transformers.",
+          "line": 1711,
+          "primary": "--trust_remote_code",
+          "style": "click",
+          "type": null
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--config",
+            "--extra_llm_api_options"
+          ],
+          "help": "Path to a YAML configuration file. Explicit CLI flags take precedence over values in this file.",
+          "line": 1715,
+          "primary": "--config",
+          "style": "click",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--hf_revision",
+            "--revision"
+          ],
+          "help": "The revision to use for the HuggingFace model (branch name, tag name, or commit id).",
+          "line": 1723,
+          "primary": "--hf_revision",
+          "style": "click",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "None",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--metadata_server_config_file"
+          ],
+          "help": "Path to metadata server config file",
+          "line": 1730,
+          "primary": "--metadata_server_config_file",
+          "style": "click",
+          "type": "str"
+        },
+        {
+          "action": null,
+          "default": "True",
+          "file": "tensorrt_llm/commands/serve.py",
+          "flags": [
+            "--telemetry/--no-telemetry"
+          ],
+          "help": "Enable or disable anonymous usage telemetry collection.",
+          "line": 1734,
+          "primary": "--telemetry/--no-telemetry",
+          "style": "click",
+          "type": null
+        }
+      ],
       "config_classes": [
         {
           "bases": [
@@ -66872,7 +68925,7 @@
         }
       ],
       "summary": {
-        "n_cli_flags": 0,
+        "n_cli_flags": 12,
         "n_protocol_classes": 60,
         "n_routes": 60,
         "n_unique_paths": 34,
@@ -66892,6 +68945,8 @@
           "/v1/videos/{video_id}",
           "/v1/videos/{video_id}/content"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/_internal/tokenize",
           "/cluster_info",
@@ -67155,6 +69210,8 @@
           "/v1/completions",
           "/v1/models"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/",
           "/chat_tokenize",
@@ -69128,6 +71185,8 @@
           "/v1/files/{file_id}/content",
           "/v1/models"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/custom/synchronous-batch-completions",
           "/ping",
@@ -90193,6 +92252,8 @@
           "/v1/score",
           "/v1/unload_lora_adapter"
         ],
+        "route_prefix_caveat": null,
+        "route_prefix_maybe_undercounted": false,
         "unique_paths": [
           "/abort_requests",
           "/classify",

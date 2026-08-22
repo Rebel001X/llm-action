@@ -125,7 +125,7 @@ python -m pytest tests -q
 - ⬜ `07-KTransformers.md`
 - ⬜ `08-Mooncake传输引擎.md`
 - ⬜ `09-NVIDIA-Dynamo.md`
-- ⬜ `10-Tokasaurus.md`
+- ✅ `10-Tokasaurus.md`
 - ⬜ `11-开源推理引擎谱系图.md`
 
 ### 04-横向对比/

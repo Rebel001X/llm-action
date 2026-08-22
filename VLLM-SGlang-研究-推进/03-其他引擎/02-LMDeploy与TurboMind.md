@@ -6,7 +6,7 @@
 ## 0. 结论先行
 
 - LMDeploy 不是"一个引擎加几个后端选项"，是**两套完全独立的执行栈**：C++ 的 TurboMind（`src/turbomind/`，脱胎于 NVIDIA FasterTransformer）与纯 PyTorch 的 `pytorch` backend（`lmdeploy/pytorch/`）。两者各有一张配置表——`TurbomindEngineConfig` 42 字段（`lmdeploy/messages.py:209`）、`PytorchEngineConfig` 48 字段（`lmdeploy/messages.py:371`）——概念上重叠的不到一半，`## 3` 会逐族对比。
-- 引擎选择是**不对称**的：显式传 `PytorchEngineConfig` 会被硬锁死（`lmdeploy/archs.py:72`），但显式传 `TurbomindEngineConfig` **不会**被硬锁——`autoget_backend_config()` 仍会重新跑一遍架构核验，模型不在 TurboMind 白名单里就静默降级到 pytorch，只留一行 `logger.warning`（`lmdeploy/archs.py:41`-`43`）。这个白名单只有约 15 个架构（`lmdeploy/turbomind/supported_models.py:7`-`33`），DeepSeek 系列、GLM-4-MoE（带视觉时）、块扩散模型统统不在其中。
+- 引擎选择是**不对称**的：显式传 `PytorchEngineConfig` 会被硬锁死（`lmdeploy/archs.py:72`），但显式传 `TurbomindEngineConfig` **不会**被硬锁——`autoget_backend_config()` 仍会重新跑一遍架构核验，模型不在 TurboMind 白名单里就静默降级到 pytorch，只留一行 `logger.warning`（`lmdeploy/archs.py:41`-`43`）。这个白名单只有约 15 个架构（`lmdeploy/turbomind/supported_models.py:7`-`36`），DeepSeek 系列、GLM-4-MoE（带视觉时）、块扩散模型统统不在其中。
 - TurboMind 的"persistent batch"不是 vLLM 式"每步用队列重建批次"，而是一个**容量恒定为 `max_batch_size` 的槽位集合**：请求进 batch 占一个槽、结束释放一个槽，槽位数组本身（C++ 里的 `State::rc`）在整个服务生命周期内被复用，不是每步重新分配。`## 5` 会讲这个设计现在的真实代价。
 - LMDeploy 招牌的 KV cache INT4/INT8 量化，在 TurboMind 和 pytorch 两个后端里都是**运行时动态量化**——每次写 KV cache 时现算一个 warp/group 内的 min/max 做非对称量化（`src/turbomind/kernels/attention/quantization.h:341`-`366`），**没有任何校准（calibration）步骤**。这和 LMDeploy 自己的权重量化（AWQ，`lmdeploy/lite/quantization/calibration.py`）形成对照——后者需要跑校准数据集，前者完全不需要。
 - 最反直觉的一条：`QuantPolicy.TURBO_QUANT`（值 42，K=4bit QJL4 + V=2bit MSE）这个名字听起来专属于 TurboMind，但源码里**只有 pytorch backend 实现了它**（`lmdeploy/pytorch/kernels/cuda/fill_kv_cache.py`），TurboMind C++ 侧完全没有对应代码路径，且 `TurbomindEngineConfig.__post_init__` 也没有拦截这个值——这正是"双引擎特性漂移"的活样本。
@@ -22,8 +22,11 @@
 | KV int4/int8 量化在哪一行代码发生？要不要校准？ | `## 4` ④、`## 5` 决策 4 |
 | 为什么要养两套引擎，这笔账现在划算吗？ | `## 5` 决策 1 |
 | proxy.py 解决什么问题，和 SGLang 的 router 有什么不同？ | `## 4` ⑤、`## 6` |
+| TurboMind 独有的部分块前缀缓存检查点机制值不值得学？ | `## 5` 决策 6 |
 
 ## 1. 它在系统里的位置
+
+在往下读之前先明确一件事:本篇的"位置"不是指 LMDeploy 在开源推理引擎生态里的位置(那是 [[11-开源推理引擎谱系图]] 的任务),而是指**双引擎这件事本身在 LMDeploy 自己的代码库里落在哪一层**——它不是散落在各处的 if/else,而是收敛成一个单一的决策点(`autoget_backend_config()`)加一张单一的门面类(`AsyncEngine`),这个收敛程度本身就是 `## 5` 要讨论的"代价可控性"的前提:如果引擎选择逻辑散落在十几个入口各自判断,后果会比现在严重得多。
 
 用户面对的入口只有两个：Python 的 `lmdeploy.pipeline()`（`lmdeploy/api.py:15`-`77`，内部构造 `Pipeline` 对象，`lmdeploy/pipeline.py:34`）和 CLI 的 `lmdeploy serve api_server`（`lmdeploy/cli/serve.py:16` 的 `SubCliServe`）。两个入口最终都汇合到同一个决策点——`autoget_backend_config()`（`lmdeploy/archs.py:54`-`91`）——它读一遍模型的 HuggingFace config，判断这个模型架构能不能用 TurboMind 跑，产出 `('turbomind', TurbomindEngineConfig)` 或 `('pytorch', PytorchEngineConfig)` 这一对结果。
 
@@ -40,6 +43,10 @@
 
 再往上一层，`lmdeploy/serve/openai/` 下的 OpenAI 兼容路由、`lmdeploy/serve/anthropic/` 下的 Anthropic 兼容路由，以及独立跑在多个 LMDeploy 实例前面的 `lmdeploy/serve/proxy/proxy.py`，这三层完全不关心底层是哪个引擎——它们只认 `AsyncEngine` 暴露的统一接口。这条边界很重要：**API 表面统一，不代表两个引擎背后的能力也统一**，`## 3`/`## 5` 会用配置字段的差异把这一点坐实。
 
+这个分层结构里有一条容易被忽略的边界：往下传的配置其实分成两条完全独立的通道——**部署期**配置（`TurbomindEngineConfig`/`PytorchEngineConfig`，决定用哪个引擎、并行策略、KV cache 怎么管）只在服务启动时构造一次，构造完就固定下来；**请求期**配置（`GenerationConfig`，`## 3.3` 会展开）随每次请求单独传入，两个后端读的是同一份定义。这意味着"引擎能力差异"这件事对普通调用方几乎不可见——调用方只填 `temperature`/`top_p`/`stop_words` 这些跟后端无关的字段,真正暴露后端差异的字段全部挤在部署配置里,只有运维/部署这一侧的人才会直接碰到 `## 3.1` 表格里那些不对称的字段。
+
+再往下钻一层看 CLI：`lmdeploy` 命令行一共暴露 101 个开关（`_lab/out/api_surface.json` 的 `summary.n_cli_flags`），分散在 `lmdeploy/cli/` 下的多个子命令解析器里——`serve api_server`、`lite auto_awq`（权重量化）、`lite calibrate`（校准，`lmdeploy/lite/apis/calibrate.py`）等分属不同子命令，但都通过同一个 `ArgumentHelper` 类（`lmdeploy/cli/utils.py:104`）复用大量共享参数定义（比如 `--quant-policy`，`## 4` ④ 会展开这个字段在两个后端间如何被复用又如何分裂）。换句话说，**CLI 层的"看起来只有一套命令"，和 API 层的"看起来只有一套端点"，本质上是同一种设计取向：把分裂留在配置对象和执行层，不让它渗到用户直接打交道的表面**——这也是为什么本篇要花大量篇幅去挖配置字段和源码分支，而不是停留在命令行帮助文本的层面。
+
 ## 2. 代码地图（文件 → 职责，带行号）
 
 按"配置与选型 → C++ 引擎 → PyTorch 引擎 → API/代理"的顺序排列：
@@ -51,7 +58,7 @@
 | `lmdeploy/messages.py:371` | `PytorchEngineConfig` 类定义，48 字段 |
 | `lmdeploy/archs.py:10`-`51` | `autoget_backend()`——探测模型架构、决定用哪个后端，失败只 warning 不报错 |
 | `lmdeploy/archs.py:54`-`91` | `autoget_backend_config()`——引擎选择与配置对象构造的真正入口 |
-| `lmdeploy/turbomind/supported_models.py:7`-`33` | `SUPPORTED_ARCHS`——TurboMind 能跑的模型架构白名单，约 15 个 |
+| `lmdeploy/turbomind/supported_models.py:7`-`36` | `SUPPORTED_ARCHS`——TurboMind 能跑的模型架构白名单，约 15 个 |
 | `lmdeploy/pipeline.py:75` | `Pipeline.__init__` 里调用 `autoget_backend_config` 的确切位置 |
 | `lmdeploy/cli/serve.py:226`-`235` | CLI 侧的引擎选择逻辑，与 `pipeline()` 的路径不完全相同 |
 | `lmdeploy/serve/core/async_engine.py:90` | `AsyncEngine` 类——唯一横跨两后端的门面 |
@@ -107,6 +114,8 @@ class QuantPolicy(enum.IntEnum):
 
 两个后端共用这一份定义，但**接受的取值范围不同**：`TurbomindEngineConfig.__post_init__`（`lmdeploy/messages.py:352`-`358`）显式拒绝 `FP8`/`FP8_E5M2`；`PytorchEngineConfig.__post_init__`（`:527`-`530`）不做这层过滤，只检查 `quant_policy > 0` 时设备类型必须是 `cuda`/`ascend`（`:543`-`545`）。`TURBO_QUANT`（42）在两边的 `__post_init__` 里都没有被显式拒绝——但只有 pytorch backend 真正实现了它（`## 5` 决策 5 展开这个坑）。
 
+CLI 层还藏着一个小细节：`--quant-policy` 的参数解析（`lmdeploy/cli/utils.py:256`-`272`）除了直接接受 `QuantPolicy` 成员名的小写形式（`none`/`int4`/`int8`/`fp8`/`fp8_e5m2`/`turbo_quant`），还手工加了一条别名——`_aliases['fp8_e4m3'] = QuantPolicy.FP8.value`（`:262`）。这条别名的存在本身就是一处"命名不一致被打了补丁"的痕迹：`QuantPolicy` 枚举里没有 `FP8_E4M3` 这个成员，`FP8` 这个名字对应的注释写的却是 "float8_e4m3fn"（`lmdeploy/messages.py:25`）——枚举成员名用的是宽泛的 `FP8`，用户在 CLI 上更习惯敲精确的 `fp8_e4m3`，于是在解析层而不是枚举定义层缝了一条别名。读枚举定义本身看不出这层历史,只有对照 CLI 解析代码才看得出命名曾经不一致过。
+
 ### 3.3 `GenerationConfig`：唯一真正统一的第三张表
 
 `lmdeploy/messages.py:36`-`207`，30 字段，是每次生成请求的采样参数（`temperature`/`top_p`/`top_k`/`stop_words`/`response_format` 等）。这张表**不区分后端**——两个引擎读的是同一个 `GenerationConfig` 对象。换句话说，"用户能控制生成行为的旋钮"是统一的,"用户能控制引擎怎么跑"的旋钮是分裂的——这条边界划得很清楚：`GenerationConfig` 属于请求语义,`TurbomindEngineConfig`/`PytorchEngineConfig` 属于部署语义,只有后者暴露了双引擎的分岔。
@@ -140,6 +149,8 @@ struct State {
 
 `rc` 的长度上限由 `param_.max_batch_size` 卡死——`src/turbomind/engine/engine.cc:794`-`795` 算槽位余量的代码是 `n_free = param_.max_batch_size - st.size() + st.finish`。这就是"persistent batch"在当前源码里的真实形态：不是教科书式"预分配 N 个槽位数组、每步原地覆写"，而是一个**容量恒定、内容动态增删的 `vector`**，但概念上仍然是"batch 本身作为持久对象存在，请求进出这个对象"，而不是 vLLM 那种"每步从队列里现取现拼一个新批次描述"。
 
+对照一下 pytorch backend 自己的批次表示——`ModelInputs`（`lmdeploy/pytorch/model_inputs.py:210`-`229`）是一组 `torch.Tensor`（`input_ids`/`block_offsets`/`seq_length`/`history_lengths` 等）加若干标量字段，**每一步由 `Scheduler` 的调度结果重新构造**，不存在一个跨步持久化的"批次对象"。这一层对比比"TurboMind vs vLLM"更值得注意：LMDeploy 自己的两个后端,在"批到底是不是一个跨步存在的东西"这个问题上给出了两种相反的答案——TurboMind 选"是"（`Engine::Impl::State` 跨步持久),pytorch backend 选"否"（`ModelInputs` 每步现造),后者的选择正是 `## 5` 决策 3 里"更容易长出新调度分支"这条代价换来的收益。
+
 ## 4. 主流程走读
 
 ### ① 引擎选择：从模型路径到一对 `(backend, config)`
@@ -168,7 +179,7 @@ def autoget_backend_config(model_path, backend_config=None, trust_remote_code=Fa
 
 注意 L72 只判断 `isinstance(backend_config, PytorchEngineConfig)`——这意味着：
 - 传 `PytorchEngineConfig` ⇒ **强制** pytorch，不管模型是否被 TurboMind 支持。
-- 传 `TurbomindEngineConfig`、或什么都不传 ⇒ 总是先跑一遍 `autoget_backend()`（`lmdeploy/archs.py:10`-`51`）——它调用 `lmdeploy/turbomind/supported_models.py:38` 的 `is_supported()`，查 `SUPPORTED_ARCHS` 白名单（`:7`-`33`，`Qwen2/Qwen2Moe/Qwen2VL/Qwen3/Qwen3Moe/Qwen3_5/Qwen3_5Moe/InternVL*/InternLM2/InternLM3/Llama/Glm4MoeLite/GptOss/Mixtral`,约 15 个架构，注意**没有 DeepSeek 系列**）。查不到就 `logger.warning('Fallback to pytorch engine because ... not supported by turbomind engine.')`（`lmdeploy/archs.py:41`-`43`），静默换成 pytorch。就算用户手上明明拿着一个 `TurbomindEngineConfig` 对象传进去,如果模型不在白名单里,`autoget_backend_config()` 返回的第一个值仍然是 `'pytorch'`,只是把 `TurbomindEngineConfig` 里能对上的字段值誊抄进新建的 `PytorchEngineConfig`（`lmdeploy/archs.py:83`-`88` 的字段映射，包括 `block_size`/`cache_block_seq_len` 这一对特意做了改名映射）。
+- 传 `TurbomindEngineConfig`、或什么都不传 ⇒ 总是先跑一遍 `autoget_backend()`（`lmdeploy/archs.py:10`-`51`）——它调用 `lmdeploy/turbomind/supported_models.py:39` 的 `is_supported()`，查 `SUPPORTED_ARCHS` 白名单（`:7`-`36`，`Qwen2/Qwen2Moe/Qwen2VL/Qwen3/Qwen3Moe/Qwen3_5/Qwen3_5Moe/InternVL*/InternLM2/InternLM3/Llama/Glm4MoeLite/GptOss/Mixtral`,约 15 个架构，注意**没有 DeepSeek 系列**）。查不到就 `logger.warning('Fallback to pytorch engine because ... not supported by turbomind engine.')`（`lmdeploy/archs.py:41`-`43`），静默换成 pytorch。就算用户手上明明拿着一个 `TurbomindEngineConfig` 对象传进去,如果模型不在白名单里,`autoget_backend_config()` 返回的第一个值仍然是 `'pytorch'`,只是把 `TurbomindEngineConfig` 里能对上的字段值誊抄进新建的 `PytorchEngineConfig`（`lmdeploy/archs.py:83`-`88` 的字段映射，包括 `block_size`/`cache_block_seq_len` 这一对特意做了改名映射）。
 
 CLI 路径（`lmdeploy/cli/serve.py:226`-`235`）逻辑略有不同但结论一致：
 
@@ -229,11 +240,23 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 
 `lmdeploy serve proxy`（子命令注册在 `lmdeploy/cli/serve.py:186`,处理函数在 `:372`）启动一个独立的 FastAPI 应用（`lmdeploy/serve/proxy/proxy.py`）,核心是 `NodeManager`（`:71`）:
 
-- `add_node`/`remove_node`（路由 `/nodes/add`、`/nodes/remove`,`proxy.py:493`/`:514`）动态注册/摘除后端 LMDeploy 实例,每个 `Node`（`:55`）带一个 `Status`,其中 `role: EngineRole`（`:48`,Hybrid/Prefill/Decode）——proxy 层面天生知道 PD 分离的角色划分。
+- `add_node`/`remove_node`（路由 `/nodes/add`、`/nodes/remove`,`lmdeploy/serve/proxy/proxy.py:493`/`:514`）动态注册/摘除后端 LMDeploy 实例,每个 `Node`（`:55`）带一个 `Status`,其中 `role: EngineRole`（`:48`,Hybrid/Prefill/Decode）——proxy 层面天生知道 PD 分离的角色划分。
 - 请求到来时,`get_node_url()`（`:251`-`...`）按 `RoutingStrategy`（`lmdeploy/serve/proxy/utils.py:18`-`23`:`RANDOM`/`MIN_EXPECTED_LATENCY`/`MIN_OBSERVED_LATENCY`）三选一决定转发到哪个实例——`MIN_OBSERVED_LATENCY` 靠每个 `Status.latency`（一个定长 `deque`）滑动窗口实测延迟做决策,不是静态权重轮询。
 - proxy 自己也重新实现了一份 `/v1/chat/completions`/`/v1/completions`（`:574`/`:747`）,内部转发给挑中的后端节点——对客户端来说,proxy 和单实例 `api_server` 的 API 面完全一样,多实例这件事是透明的。
 
 它解决的问题很明确:**LMDeploy 没有把多实例负载均衡这件事完全甩给外部组件(nginx/k8s Service)**,而是自带了一个能感知 PD 角色、能按实测延迟路由的轻量代理。`## 6` 会对比 vLLM/SGLang 在同一问题上的选择。
+
+### 4.1 一个构造的例子:同一批部署决策,两条完全不同的路径(本库构造,非实测数据,仅用于说明机制)
+
+假设运维要给三个模型起服务:`Qwen2.5-7B-Instruct`(纯文本)、`DeepSeek-V3`(MoE)、一个自研的块扩散模型。三条请求分别是:
+
+| 模型 | `autoget_backend()` 的判断 | 落地后端 | 关键差异 |
+|---|---|---|---|
+| `Qwen2.5-7B-Instruct` | `Qwen2ForCausalLM` 在 `SUPPORTED_ARCHS`(`lmdeploy/turbomind/supported_models.py:9`)里 | `turbomind` | 走 `Engine::Impl::State::rc` 槽位模型,KV 量化若开启 `--quant-policy 4` 走 `warp_stats`/`quantize`(`src/turbomind/kernels/attention/quantization.h`),前缀缓存可以用 `cache_prompt=auto` 的块内边界发布 |
+| `DeepSeek-V3` | 架构名不在白名单里,`is_supported()`(`lmdeploy/turbomind/supported_models.py:39`)返回 `False` | `pytorch`(自动降级,`lmdeploy/archs.py:41`-`43` 打一行 warning) | 走 `lmdeploy/pytorch/paging/scheduler.py` 的"modify from vllm"式调度,KV 量化若开启走 `_quant_int8`/`_quant_int4`(`lmdeploy/pytorch/kernels/cuda/fill_kv_cache.py`),可以用 `enable_eplb`/`moe_tp_size` 这些 TurboMind 完全没有的字段 |
+| 自研块扩散模型 | 架构名同样不在白名单里 | `pytorch`(唯一选择,`dllm_block_length` 等字段只存在于 `PytorchEngineConfig`) | 无论用户传不传 `TurbomindEngineConfig`,`autoget_backend_config()` 都会把它换成 `pytorch` |
+
+三个模型跑在同一个 `lmdeploy serve proxy` 后面时,`NodeManager` 完全不关心每个节点背后是哪个后端——它只看 `Status.models`/`Status.latency` 这些通用字段(`lmdeploy/serve/proxy/proxy.py:46`-`53`)。这正是 `## 1` 强调的那条边界:**API 表面(以及它之上的多实例路由)统一,后端能力不统一**——运维如果不去看启动日志或主动查询 `/nodes/status`,很容易忽略"这三个模型里有两个其实根本没跑在 TurboMind 上"这件事。
 
 ## 5. 设计决策与代价
 
@@ -267,6 +290,23 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 - **不这样会怎样**:如果完全依赖外部 LB(比如只提供 `/health` 让 nginx/k8s 探活、路由策略甩给基础设施层),LMDeploy 就不用维护 `proxy.py` 这 1,083 行代码和它自己的一套请求转发/流式响应重写逻辑(`lmdeploy/serve/proxy/streaming_response.py`)——但用户要么自己再实现一层 PD 角色感知的路由,要么放弃 PD 分离在多实例场景下的自动路由能力。
 - **什么时候可以不这样**:单实例部署,或者多实例之间完全同构(没有 PD 角色区分、请求可以均匀分布)时,`proxy.py` 提供的路由策略价值有限,这时候更轻量的外部 LB(甚至 DNS 轮询)完全够用——`proxy.py` 的真正价值在 PD 分离 + 多实例这个交集场景,场景越窄,自建代理这层投入的性价比就越低。
 
+### 决策 6:TurboMind 的部分块前缀缓存检查点系统只留给自己
+
+- **为什么这么设计**:`cache_prompt`(`lmdeploy/messages.py:326`,`all`/`auto`)、`cache_generation`(`:328`,`all`/`auto`/`none`)、`cache_checkpoint_interval`(`:325`,默认 4096)、`cache_prompt_boundary_skip`(`:327`,默认 1)这四个字段互相耦合,共同实现的是"块内部分边界也能发布、复用"的前缀缓存——`src/turbomind/engine/README.md` 的 `boundary-policy` 契约单节的文字量在全篇里数一数二地长,描述的正是这套机制:一个 prompt 的边界不一定落在 KV block 的整块对齐处,`cache_prompt_boundary_skip` 排除掉聊天模板里易变的末尾几个 token(比如 `<think>\n`),让"去掉这几个易变 token 之后"的部分块内容也能被下一轮对话复用,而不必等到凑满一整块才发布。这是把 KV 前缀缓存命中率榨到极致的又一处 TurboMind 专属工程投入,和 persistent batch、动态 KV 量化站在同一条"C++ 侧为吞吐不计工程成本"的路线上。
+- **不这样会怎样**:如果只有 pytorch backend 那种更朴素的前缀缓存(`enable_prefix_caching` 开关 + `prefix_cache_state_budget`/`prefix_cache_decode_state_interval` 两个面向循环状态模型的预算/节流旋钮,`lmdeploy/messages.py:479`-`480`,**没有**块内部分边界发布这层机制),多轮对话里只要新一轮的 prompt 在某个块内部产生了哪怕一个 token 的差异(常见于聊天模板拼接方式),这个块就整体作废,无法把"块内那部分共同前缀"利用起来——命中率在非整块对齐的场景下会打折扣。
+- **什么时候可以不这样**:当部署场景里前缀复用本身就稀疏(比如离线批量评测,每条 prompt 相互独立、几乎不共享前缀),或者 prompt 天然对齐块边界(定长模板)时,这套四字段互相耦合的边界发布机制收益趋近于零,维护它的复杂度(读懂 `boundary-policy` 契约本身就要花不少功夫)相对收益就不划算——pytorch backend 选择不做这层精细化,是"多数场景够用就好"和"极限场景榨到底"两种工程优先级的又一次具体分岔,与决策 1 讲的"为什么要养两套引擎"是同一个根源在不同子系统上的重复出现。
+
+### 六条决策速览
+
+| 决策 | 一句话代价 | 什么时候可以不这样 |
+|---|---|---|
+| 1. 养两套引擎 | 配置面分裂、特性两边漂移、维护成本翻倍 | 只服务窄架构集合(纯 TurboMind)或完全不追极致时延(纯 pytorch)时可以只留一套 |
+| 2. 选型不对称锁定 | TurboMind 侧的静默降级不可见,用户可能误判自己在用哪个引擎 | 加 strict 开关后可消除这条代价(`## 8` 改进点 1) |
+| 3. persistent batch 槽位固定 | 新旁路策略(投机解码动态 K、结构化输出)更难往里插 | 需要频繁扩展调度策略的场景应选 pytorch backend 的现场重建式调度 |
+| 4. KV 量化值域共享/行为分裂 | `TURBO_QUANT` 等值在配置层合法,某后端执行层完全没实现 | 需要更严格约束时应让后端的合法取值表与执行层能力表同步维护 |
+| 5. proxy.py 内建路由 | 多养 1,083 行代码和一套转发/流式重写逻辑 | 单实例或多实例完全同构、无 PD 角色区分时用外部 LB 更轻量 |
+| 6. TurboMind 独占部分块前缀缓存检查点 | 四字段互相耦合、理解成本高,pytorch backend 完全没有对应能力 | 前缀复用本身稀疏或 prompt 天然块对齐时,这层精细化收益趋近于零 |
+
 ## 6. 同位对照:vLLM / SGLang 在同一位置怎么做
 
 | 维度 | LMDeploy | vLLM | SGLang |
@@ -277,7 +317,11 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 | 多实例路由 | 内建 `proxy.py`(FastAPI app,`lmdeploy serve proxy` 一条命令起,RANDOM/MIN_EXPECTED_LATENCY/MIN_OBSERVED_LATENCY 三种策略,天然感知 PD 角色) | 有 `DPSupervisor`(`vllm/entrypoints/openai/dp_supervisor.py`)负责多端口起多个数据并行副本,但函数命名里的 `infer_multi_port_external_lb_start_rank`/`validate_multi_port_external_lb_args` 暗示路由决策本身仍交给**外部**负载均衡器,vLLM 侧只做进程管理和健康探活(本库推断,依据是函数名里的 `external_lb` 字样,**未逐行核实**是否存在内建路由策略) | 有独立的 `sgl-router`(Rust crate,`_src/sglang/experimental/sgl-router/`),与主 Python server 分属不同代码库/语言,**未查证**其具体路由策略与 LMDeploy `RoutingStrategy` 的对应关系 |
 | API 协议覆盖 | OpenAI 兼容(8 条 `/v1/*`)+ Anthropic 兼容(`lmdeploy/serve/anthropic/endpoints/messages.py:70` 等 3 条)+ 自有 `/generate`/`/get_ppl` | 同样做了 OpenAI 兼容,且这份快照里 vLLM 也已经有 `vllm/entrypoints/anthropic/api_router.py`——Anthropic 兼容**不是** LMDeploy 独有(本库推断:两边都已实现,行业趋同,**未查证**谁先做的) | OpenAI 兼容为主,**未查证**是否已有 Anthropic 兼容端点 |
 
+| CLI 开关 / HTTP 路由数量 | 101 个 / 37 条(`_lab/out/api_surface.json` 的 `summary.n_cli_flags`/`n_routes`) | 233 个 / 63 条 | 29 个 / 83 条 |
+
 三点小结:①"KV int4/int8 量化"曾经是 LMDeploy 最鲜明的招牌,但从这份快照看,vLLM 已经在追平这条路径,**差异化正在被时间抹平**;②多实例路由这件事上,LMDeploy 把它做成了自己代码库里的一等公民,vLLM/SGLang 则倾向于外置(交给外部 LB 或独立 Rust 组件)——这也是"要不要多养一块代码"的同类权衡,只是发生在不同的子系统上;③连续批处理这件事,LMDeploy 自己的两个后端就出现了两种不同答案,读者不需要再去 vLLM/SGLang 找对照——**LMDeploy 内部本身就是一个绝佳的对照组**。
+
+CLI/路由数量这一行本身也值得多看一眼:LMDeploy 的 CLI 开关数量(101)在三者里最少,SGLang 最少(29)但 HTTP 路由数量反而最多(83);vLLM CLI 开关数量(233)远超另外两家。这组数字不能直接解读成"谁更简单/更复杂"——CLI 开关多可能是把更多旋钮暴露给用户精细控制,也可能是历史遗留参数没有清理;路由多可能是协议覆盖面更广,也可能是同一功能被不同版本的端点重复暴露。本篇不对这组数字做价值判断,只作为"双引擎+多协议"这套复杂度在数字上留下的一个侧面痕迹放在这里,更系统的横向对比留给 [[01-API兼容性横向对比]] 和 [[04-工程规模与代码结构对比]]。
 
 ## 7. 踩坑与反直觉
 
@@ -291,11 +335,15 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 
 5. **KV cache 量化"零校准"不等于"没有精度代价"。** `warp_stats()`(`src/turbomind/kernels/attention/quantization.h:341`-`366`)在一个 warp 范围内(几十个 token 量级)现算 min/max——统计窗口天然比全量校准集小得多,离群值更容易把 scale 拉宽、压缩有效量化区间。本篇没有做也不会做精度实测(本机无 GPU),只从源码结构指出:**"零校准"是"部署简单"和"统计窗口小"之间的权衡,不是免费的**。
 
-6. **`_lab/out/struct_map.json` 的 kv_cache/quantization 子系统统计口径完全看不见 C++ 代码。** `struct_map.py` 基于 Python AST 解析,`kv_cache` 子系统统计到的 5,180 行、`quantization` 子系统统计到的 8,419 行,全部落在 `lmdeploy/pytorch/` 下——`src/turbomind/kernels/attention/quantization.h` 这类 C++ 头文件不进这个统计。读这两个数字时容易误以为"LMDeploy 的量化代码主要在 pytorch 里",实际只是统计工具的语言盲区,C++ 侧同样有一整套独立的量化实现,只是没被这个特定脚本数进去。
+6. **`--quant-policy` 的 CLI 帮助文本列出了全部 6 个选项，但选了其中 3 个在默认后端下会直接报错，而不是被忽略。** `lmdeploy/cli/utils.py:276`-`278` 的帮助文本写着 "none/int4/int8/fp8/fp8_e5m2/turbo_quant"，这个参数同时挂在 `pt_group` 和 `tb_group` 下（`lmdeploy/cli/serve.py:133`/`:159`），字面上像是"六选一,哪个后端都能用"。实际上默认后端是 `turbomind`（`## 4` ①），如果用户选了 `fp8`/`fp8_e5m2`，`TurbomindEngineConfig.__post_init__`（`lmdeploy/messages.py:355`-`358`）会直接 `raise AssertionError`——这是本篇少数几个"配置层就能报错"的例子，反而比 `TURBO_QUANT` 那种"配置层放行、执行层可能才出问题"的情况更安全，但对第一次读帮助文本的用户来说，仍然是"文本说能用，实际不能用"的落差。
+
+7. **`_lab/out/struct_map.json` 的 kv_cache/quantization 子系统统计口径完全看不见 C++ 代码。** `struct_map.py` 基于 Python AST 解析,`kv_cache` 子系统统计到的 5,180 行、`quantization` 子系统统计到的 8,419 行,全部落在 `lmdeploy/pytorch/` 下——`src/turbomind/kernels/attention/quantization.h` 这类 C++ 头文件不进这个统计。读这两个数字时容易误以为"LMDeploy 的量化代码主要在 pytorch 里",实际只是统计工具的语言盲区,C++ 侧同样有一整套独立的量化实现,只是没被这个特定脚本数进去。
 
 ## 8. 可改进点
 
 (以下均为本库基于源码走读的推断,标注证据依据;**未核实**是否已有官方 issue 在跟踪。)
+
+这五个改进点有一条共同的主线:它们几乎都指向同一个根因——**双引擎带来的分裂,目前主要靠"人读源码/读日志"去弥合,而不是靠工具/接口本身显式暴露**。选型降级靠一行日志、量化能力靠源码走读才能确认边界、PD 分离端点的后端假设完全隐式、两套量化 kernel 靠人工保证数学等价。这不是说这些设计决策本身错了(`## 5` 已经逐条讲过每个决策的合理性),而是说"把分裂留在配置对象和执行层、不让它渗到用户直接打交道的表面"这个策略(`## 1` 已经点出这个策略),需要配一套"当分裂真的影响到用户时,让用户能显式看见它"的机制——目前这套机制基本不存在。
 
 **改进点 1:引擎选型缺一个"strict"模式**
 - 现状:`autoget_backend_config()`(`lmdeploy/archs.py:54`-`91`)遇到不支持的架构总是静默降级,唯一线索是一行 `logger.warning`。
@@ -317,6 +365,11 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 - 影响:数学逻辑的任何一次修正(比如量化舍入方式、饱和边界处理)都需要在两处分别改、分别测——本篇没有找到任何脚本或测试用例交叉比对两个后端在相同输入下的量化输出是否一致(**未查证**是否存在,只是没在 `tests/` 目录下看到明显对应的对拍测试)。
 - 建议方向:哪怕不合并实现,至少加一组"同一 KV 张量输入,分别过两个后端的量化路径,比对反量化误差是否落在同一量级"的测试,把"两边应该数学等价"这条隐性假设显式测出来。
 
+**改进点 5:`autoget_backend()` 的探测结果没有被缓存或暴露成可查询的诊断信息**
+- 现状:`autoget_backend()`(`lmdeploy/archs.py:10`-`51`)每次调用都要重新读一遍模型的 HuggingFace config、重新判断架构是否在白名单里,结果只体现为一次性的返回值和一行 `logger.warning`,调用方(`pipeline()`/CLI)拿到结果之后就不再保留这次判断的过程性信息(比如"因为 `quant_method=smooth_quant` 被拒绝"还是"因为架构名根本不在白名单里"这两种不同的拒绝原因,在 `is_supported()` 内部是分开判断的,`lmdeploy/turbomind/supported_models.py:66`-`68` 与 `:70`-`71`,但外部只看到一个布尔值)。
+- 影响:排查"为什么我的模型没有走 TurboMind"时,用户只能靠翻启动日志里的一行 warning,拿不到更细的原因分类;如果日志被截断或没保留,连"降级发生过"这个事实本身都可能丢失。
+- 建议方向:可以考虑让 `is_supported()` 返回一个带原因的结构(而不是纯布尔值),`/health` 或类似的诊断端点里暴露"当前实例实际选用的后端 + 选择原因",而不是只能通过读日志或者对着 `engine_config` 的字段猜。
+
 ## 9. 自测题与延伸阅读
 
 **闭卷自测题**(合上本文,尝试不看源码回答):
@@ -331,8 +384,10 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 8. `proxy.py` 的三种路由策略分别是什么?`MIN_OBSERVED_LATENCY` 依据什么数据做决策?
 9. vLLM 当前快照的 `CacheDType` 里出现了哪些和 LMDeploy KV 量化命名相似的选项?这说明"INT4/INT8 KV 量化是 LMDeploy 独有优势"这句话现在还成立吗?
 10. 推测解码在 LMDeploy 的哪个后端不被支持?这件事是通过报错还是警告体现的?
+11. `cache_prompt`/`cache_generation`/`cache_checkpoint_interval`/`cache_prompt_boundary_skip` 这四个字段只存在于哪张配置表?它们共同解决的是什么问题?
+12. `--quant-policy` 的 CLI 帮助文本列出了几个选项?其中哪几个在默认后端(`turbomind`)下会在配置构造阶段直接报错?
 
-(题 1-2 对应 `## 3.1`、`## 4` ①、`## 5` 决策 2;题 3 对应 `## 5` 决策 4、`## 7` 踩坑 2;题 4 对应 `## 4` ④;题 5 对应 `## 7` 踩坑 3;题 6-7 对应 `## 4` ②③、`## 5` 决策 3、`## 6`;题 8 对应 `## 4` ⑤;题 9 对应 `## 6`;题 10 对应 `## 7` 踩坑 4——答不上来就回对应小节重读,不用从头翻。)
+(题 1-2 对应 `## 3.1`、`## 4` ①、`## 5` 决策 2;题 3 对应 `## 5` 决策 4、`## 7` 踩坑 2;题 4 对应 `## 4` ④;题 5 对应 `## 7` 踩坑 3;题 6-7 对应 `## 4` ②③、`## 5` 决策 3、`## 6`;题 8 对应 `## 4` ⑤;题 9 对应 `## 6`;题 10 对应 `## 7` 踩坑 4;题 11 对应 `## 3.1`、`## 5` 决策 6;题 12 对应 `## 7` 踩坑 6——答不上来就回对应小节重读,不用从头翻。)
 
 **延伸阅读(本库内)**:
 
@@ -342,4 +397,4 @@ pytorch backend 有一份独立的平行实现:`lmdeploy/pytorch/kernels/cuda/fi
 
 ---
 
-读完本篇应该能回答的一句话总结:LMDeploy 的"双引擎"不是营销话术,是两套配置表、两套调度模型、两套 KV 量化 kernel 的真实并存——TurboMind 用固定容量的槽位容器和异步双线程流水线换极致性能,pytorch backend 照抄 vLLM 的调度器骨架换架构覆盖面,统一的 API 表面之下,能力边界一直在,只是被藏进了配置字段的有无、CLI 警告的字面、以及"这个端点读的字段另一个后端根本没有"这类需要读源码才能发现的细节里。
+读完本篇应该能回答的一句话总结:LMDeploy 的"双引擎"不是营销话术,是两套配置表、两套调度模型、两套 KV 量化 kernel 的真实并存——TurboMind 用固定容量的槽位容器和异步双线程流水线换极致性能,pytorch backend 照抄 vLLM 的调度器骨架换架构覆盖面,统一的 API 表面之下,能力边界一直在,只是被藏进了配置字段的有无、CLI 警告的字面、以及"这个端点读的字段另一个后端根本没有"这类需要读源码才能发现的细节里。选哪个后端从来不是"哪个更好"的问题,而是"这个模型架构和这组特性需求,把我推到了哪一边"——本篇没有替读者做这个选择,只是把两边的边界画得足够清楚,让这个选择能建立在源码事实上,而不是"TurboMind 快"这句留在 2023 年的印象上。

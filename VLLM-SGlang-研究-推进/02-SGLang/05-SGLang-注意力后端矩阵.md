@@ -8,7 +8,7 @@
 - **注意力子系统是全仓最大的一块表面积**：`_lab/out/struct_map.json` 记录 407 个文件 / 217,907 行，是 `scheduler` 子系统（35,054 行）的 6.2 倍（同一数字 [[01-SGLang-全景与代码地图]] 已引用过，本篇只在需要处复用，不重复展开"attention 最大 ≠ 自研代码量最大"这条已经讲过的坑）。
 - **backend 清单不是一个类型化枚举，是一个字符串到工厂函数的字典**：`ATTENTION_BACKENDS`（`python/sglang/srt/layers/attention/attention_registry.py:31`）由 22 次 `@register_attention_backend("名字")` 装饰器调用堆出来（`42`-`517`），对应 21 个具体类（`"nsa"` 是 `"dsa"` 的别名，指向同一个工厂函数）。CLI 层面的 `ATTENTION_BACKEND_CHOICES`（`python/sglang/srt/server_args.py:181`-`209`）多列了一个 `"compressed"`（`dsv4` 的别名），一共 23 个字符串，但走的是两条完全不同的别名机制（`## 7` 展开）。
 - **"自动选择"不是一张声明式优先级表，是一段写死在函数体里的 if/elif 决策树**：`_get_default_attn_backend()`（`python/sglang/srt/server_args.py:5914`-`5986`）用大约 30 行硬编码逻辑判断"Hopper+CUDA12.3 上用 fa3""Blackwell 上非对称 KV 用 fa4 否则 trtllm_mha""ROCm 上用 aiter"……每条分支后面跟着一条注释解释"为什么"（比如 `5944`-`5946` 行引用了一个 GitHub issue 号说明 flashinfer 0.6.1 在 Hopper 上有性能回退）。这与后面 `## 6` 要对照的 vLLM 声明式谓词表是两种完全不同的可维护性哲学。
-- **静默 fallback 不是个例，是这套系统里反复出现的模式**：本篇实测数出至少 5 处会在不报错的情况下悄悄改写用户的配置或决策——FA3 撞上 `fp8_e5m2` 自动切到 triton（`python/sglang/srt/arg_groups/overrides.py:2287`-`2296`）、7 个 MLA 系 backend 的 `page_size` 不满足内核约束时被自动改写（`python/sglang/srt/arg_groups/overrides.py:2129`-`2196`）、Intel AMX/XPU 硬件检测失败时自动降级到 `torch_native`/`triton`（`python/sglang/srt/arg_groups/overrides.py:2320`-`2341`）、`cutedsl_mla` 只设了 decode 没设 prefill 时自动填 `trtllm_mla`（`python/sglang/srt/arg_groups/overrides.py:2254`-`2285`）、以及一个更隐蔽的——DeepSeek 系模型选了一个没在 `AttentionBackendRegistry` 里注册处理函数的 backend（比如 `cutedsl_mla`、`hpc_ops`、`wave`）时，决定"这一步走 MHA 还是走吸收态 MLA"的策略会静默退化成 triton 的策略，即便真正跑 kernel 的仍是你指定的那个 backend（`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:45`-`46`，本库推断其实际影响范围，`## 7` 详述）。
+- **静默 fallback 不是个例，是这套系统里反复出现的模式**：本篇实测数出至少 6 处会在不报错的情况下悄悄改写用户的配置或决策——FA3 撞上 `fp8_e5m2` 自动切到 triton（`python/sglang/srt/arg_groups/overrides.py:2287`-`2296`）、7 个 MLA 系 backend 的 `page_size` 不满足内核约束时被自动改写（`python/sglang/srt/arg_groups/overrides.py:2129`-`2196`）、Intel AMX/XPU 硬件检测失败时自动降级到 `torch_native`/`triton`（`python/sglang/srt/arg_groups/overrides.py:2320`-`2341`）、`cutedsl_mla` 只设了 decode 没设 prefill 时自动填 `trtllm_mla`（`python/sglang/srt/arg_groups/overrides.py:2254`-`2285`）、投机解码草稿 backend 不在专属白名单里时静默换成 `triton`/`flashinfer`（`python/sglang/srt/speculative/draft_worker_common.py:39`-`48`，`## 4.7` 详述）、以及一个更隐蔽的——DeepSeek 系模型选了一个没在 `AttentionBackendRegistry` 里注册处理函数的 backend（比如 `cutedsl_mla`、`hpc_ops`、`wave`）时，决定"这一步走 MHA 还是走吸收态 MLA"的策略会静默退化成 triton 的策略，即便真正跑 kernel 的仍是你指定的那个 backend（`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:45`-`46`，本库推断其实际影响范围，`## 7` 详述）。
 - **MLA 没有独立的抽象基类**：SGLang 不像本库对照的 vLLM 那样为 MLA 单开一个 `MLAAttentionImpl` 契约，而是让 MLA 系 backend 直接实现同一个 `AttentionBackend` ABC——`FlashInferMLAAttnBackend(AttentionBackend)`（`python/sglang/srt/layers/attention/flashinfer_mla_backend.py:208`）自己就是 MLA 的"契约起点"，`FlashMLABackend`、`CutlassMLABackend`、`TRTLLMMLABackend` 全部靠**类继承**而不是**类型系统**表达"这是一个 MLA 后端"。真正决定某一步该用普通 MHA 还是吸收态 MLA 的逻辑，甚至不在 attention 子系统里，而在模型定义文件 `python/sglang/srt/models/deepseek_v2.py:2000`-`2027` 的 `dispatch_attn_forward_method()`。
 - **算子"收进自己仓库"这件事拆开看是三层不同来源，靠一个统一的 `KernelBackend` 枚举编目，不是简单的"vendor 了别人的代码"**：pip 依赖（`flash-attn-4>=4.0.0b18`、`flashinfer_python==0.6.17`，`python/pyproject.toml:35`-`36`）、原样拷贝且保留上游版权头的 vendor 代码（`python/sglang/kernels/ops/attention/flash_attn/cute/flash_fwd_sm100.py:1`-`2` 写着 "Copyright (c) 2025, Tri Dao."）、以及挂着 "Copyright 2023-2024 SGLang Team" 的自研代码（`python/sglang/kernels/ops/attention/decode_attention.py:1`）——三者共存于同一个 `python/sglang/kernels/` 命名空间下，用 `KernelSpec`/`KernelBackend`（`python/sglang/kernels/spec.py:29`-`42`）显式区分"这个算子的血统"。
 
@@ -21,6 +21,8 @@
 **运行期（每次 forward 读一次全局上下文）**：与 [[01-SGLang-全景与代码地图]] 提到的整体架构一致，SGLang 用一个**模块级全局变量**而不是 contextvar 承载"当前 forward 用哪个 backend"——`ForwardContext`（`python/sglang/srt/model_executor/forward_context.py:34`-`41`）是个只有一个字段 `attn_backend` 的冻结 dataclass，`ModelRunner._forward_raw` 在每次 forward 前把它发布出去，模型层里所有调用 `get_attn_backend()`（`66`-`67`）拿到的都是**同一个 backend 对象**，不是像 vLLM 那样每层在构建期各自缓存一份。这个差异是 `## 6` 的第一条对照。
 
 上游是 [[02-SGLang-Scheduler事件循环]] 决定的"这一步谁上场"和 [[04-SGLang-内存池与KV布局]] 决定的"KV 数据在物理池里的哪个槽位"；下游是 CUDA Graph 捕获（`init_forward_metadata_in_graph`/`out_graph` 的划分就是为它服务的，`## 3` 展开）。注意力后端自己不决定批多大、KV 放哪，只负责把已经决定好的东西翻译成某个具体 kernel 认识的张量形状，然后调用它——这一点和 vLLM 完全一致。
+
+**边界**：本篇只讲全/滑窗/MLA 这条"softmax 注意力"主线的 backend 矩阵。Mamba2/GDN/Lightning 这类线性注意力有自己独立的 `AttentionBackend` 实现族（`python/sglang/srt/layers/attention/linear/` 目录，`## 4.3` 提到的 `attn_backend_wrapper()` 是它们和主线 backend 的唯一交汇点），本篇不展开其内部算法；`## 3` 已经讲过的 RadixCache 前缀复用逻辑属于 [[03-SGLang-RadixAttention与前缀缓存]] 的范畴，本篇涉及 KV 物理布局的部分只讲"attention backend 怎么读写它"，不讲"哪些块被驱逐"。
 
 ## 2. 代码地图（文件 → 职责，带行号）
 
@@ -85,6 +87,7 @@
 - `python/sglang/kernels/ops/attention/decode_attention.py:1`-`14`、`python/sglang/kernels/ops/attention/extend_attention.py:1`-`14` —— 版权头写 "Copyright 2023-2024 SGLang Team"，triton 后端用的自研 kernel。
 - `python/sglang/kernels/ops/attention/flash_attn/cute/flash_fwd_sm100.py:1`-`2` —— 版权头写 "Copyright (c) 2025, Tri Dao." + "Copyright (c) 2026, Colfax International. (modifications)"，5,610 行，vendor 且带二次修改。
 - `python/sglang/kernels/spec.py:29`-`42` —— `KernelBackend` 枚举，11 个 provenance 值（`TORCH`/`TRITON`/`JIT`/`AOT`/`CUTE_DSL`/`FLASHINFER`/`AITER`/…），把三种来源统一编目。
+- `python/sglang/kernels/registry.py:74`-`76` —— `register_kernel(spec)`，进程级登记入口，只存元数据不触发 import；`python/sglang/kernels/selector.py:38`-`50` —— `select_kernel(op, backend=None)`，按 op id 解析出固定调用路径，多实现时要求显式指定 backend，没有优先级排序或自动 benchmark 择优。
 - `python/sglang/kernels/aot/README.md:1`-`13` —— `kernels/aot/` 即历史上独立发布的 `sgl-kernel`（PyPI 包名 `sglang-kernel`，import 路径仍是 `sgl_kernel`），[[01-SGLang-全景与代码地图]] 已引用此文件。
 - `python/sglang/srt/layers/attention/swa_mla_fallback/forward.py`、`ops.py` —— MLA×滑窗组合没有原生 kernel，靠一条 Triton/PyTorch 手写 fallback 路径顶上。
 
@@ -108,9 +111,23 @@
 
 **`AttnForwardMethod`**（`python/sglang/srt/models/deepseek_common/attention_forward_methods/forward_methods.py:4`-`42`）——`IntEnum`，12 个成员：`MHA`/`MLA`/`MHA_CHUNKED_KV`/`MHA_ONE_SHOT`/`MLA_FUSED_ROPE_ROCM`/`MLA_FUSED_ROPE_CPU`/`MHA_NPU`/`MLA_NPU`/`DSA_NPU`/`MHA_ROCM`/`MHA_ONE_SHOT_ROCM`/`MLA_ROCM`。这是 DeepSeek 系模型自己的"这一步该怎么算"决策结果类型，比 backend 层面的"用哪个 kernel 库"更细一级——同一个 `trtllm_mla` backend 在不同 forward 步骤上可能对应 `MLA` 或 `MHA_CHUNKED_KV` 两种完全不同的计算路径。
 
-**`AttentionBackendRegistry`**（`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:35`-`45`）——一个极简类属性字典 `_handlers: dict[str, Callable]`，`register()` 写、`get_handler()` 读，`get_handler()` 找不到时兜底成 `_handlers.get("triton")`（`44`-`45`）而不是抛异常——这行代码是 `## 0`/`## 7` 反复提到的那个静默 fallback 的确切位置。
+**`AttentionBackendRegistry`**（`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:35`-`45`）——一个极简类属性字典 `_handlers: dict[str, Callable]`，`register()` 写、`get_handler()` 读，`get_handler()` 找不到时兜底成 `_handlers.get("triton")`（`44`-`45`）而不是抛异常——这行代码是 `## 0`/`## 7` 反复提到的那个静默 fallback 的确切位置，完整定义只有 11 行：
 
-**`TboAttnBackend`**（`python/sglang/srt/layers/attention/tbo_backend.py:17`）——第三个"组合器"类，和 `HybridAttnBackend`（按 prefill/decode 组合）、`HybridLinearAttnBackend`（按层 id 组合全注意力/线性注意力）并列。它不组合两个不同种类的 backend，而是用同一个工厂函数 `init_new()`（`31`）造出两份**同类型**的 backend 实例，服务于 Two-Batch-Overlap（TBO，把一个大批次拆两半、通信和计算错峰）——`## 2` 提到的 `build_attention_backends()` 只在 `get_exec().overlap.enable_two_batch_overlap` 打开且不是草稿 worker 时才会走这条分支（`attention_backend_setup.py:98`-`107`）。三个组合器类的共同点：都完整实现 `AttentionBackend` 接口，对上层模型代码透明，模型层永远只看到"一个 backend"——这是 `## 5` 决策 2/3 反复出现的同一个设计模式在三个不同场景下的复用。
+```python
+# python/sglang/srt/models/deepseek_common/attention_backend_handler.py:35-45
+class AttentionBackendRegistry:
+    _handlers = {}
+
+    @classmethod
+    def register(cls, backend_name, handler_func):
+        cls._handlers[backend_name] = handler_func
+
+    @classmethod
+    def get_handler(cls, backend_name):
+        return cls._handlers.get(backend_name, cls._handlers.get("triton"))
+```
+
+**`TboAttnBackend`**（`python/sglang/srt/layers/attention/tbo_backend.py:17`）——第三个"组合器"类，和 `HybridAttnBackend`（按 prefill/decode 组合）、`HybridLinearAttnBackend`（按层 id 组合全注意力/线性注意力）并列。它不组合两个不同种类的 backend，而是用同一个工厂函数 `init_new()`（`31`）造出两份**同类型**的 backend 实例，服务于 Two-Batch-Overlap（TBO，把一个大批次拆两半、通信和计算错峰）——`## 2` 提到的 `build_attention_backends()` 只在 `get_exec().overlap.enable_two_batch_overlap` 打开且不是草稿 worker 时才会走这条分支（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:98`-`107`）。三个组合器类的共同点：都完整实现 `AttentionBackend` 接口，对上层模型代码透明，模型层永远只看到"一个 backend"——这是 `## 5` 决策 2/3 反复出现的同一个设计模式在三个不同场景下的复用。
 
 ## 4. 主流程走读
 
@@ -149,6 +166,29 @@ Out-of-tree 平台（`current_platform.is_out_of_tree()`）在函数最开头就
 
 九步里有七步是"打 warning 后静默改写"，只有两步（第 3、9 步）选择直接抛异常。这个比例本身就是 `## 5` 决策 5 要讲的设计取舍：绝大多数不兼容组合被当作"用户大概率不关心具体数值、只关心能不能跑起来"来处理。
 
+第 2 步 `_mla_backend_page_constraints`（`python/sglang/srt/arg_groups/overrides.py:2129`-`2196`）是九步里体量最大的一个，值得看一眼它的重复结构——7 个 backend 各自一段近乎相同的 if 块，逐个改写同一个局部变量 `page_size`，最后统一 diff 出结果：
+
+```python
+# python/sglang/srt/arg_groups/overrides.py:2129-2196（节选，仅保留结构骨架）
+def _mla_backend_page_constraints(view):
+    page_size = view.page_size
+    if view.attention_backend == "flashmla" or view.decode_attention_backend == "flashmla":
+        logger.warning("FlashMLA only supports a page_size of 64, ...")
+        page_size = 64
+    if view.attention_backend == "cutlass_mla" or view.decode_attention_backend == "cutlass_mla":
+        logger.warning("Cutlass MLA only supports a page_size of 128, ...")
+        page_size = 128
+    if view.attention_backend == "trtllm_mla" or view.decode_attention_backend == "trtllm_mla":
+        if page_size not in [32, 64]:
+            page_size = 64
+    # ... tokenspeed_mla / cutedsl_mla / trtllm_mha / hpc_ops 各一段同构 if 块
+    if page_size != view.page_size:
+        return {"page_size": page_size}
+    return {}
+```
+
+这段代码本身就是"白名单+补丁链"路线（`## 5` 决策 1）的一个缩影：正确性靠 7 段几乎重复的 if 块保证，不是靠一张"backend → 合法 page_size 集合"的查找表——多写几行换来的是每一段判断条件都可以独立读懂、独立修改，不需要理解一个通用的查表机制。
+
 ### 4.3 构建期：字符串变成对象，prefill/decode 可能分叉成两个实例
 
 `build_attention_backends()`（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:69`-`143`）拿到 `## 4.2` resolve 出的 `(prefill, decode)` 字符串对，交给 `_build_resolved_backend()`（`181`-`235`）：
@@ -177,6 +217,24 @@ else:
 
 `AttentionBackend.forward()`（`python/sglang/srt/layers/attention/base_attn_backend.py:216`-`258`）按 `forward_batch.forward_mode` 三路分发：`is_idle()` 直接返回空、`is_decode()` 调 `forward_decode()`、其余（含 `is_extend()`）调 `forward_extend()`——`forward_mixed()` 只在 NPU 平台的混合模式下才会被调用（`239`-`248`）。metadata 的准备发生在 `forward()` 调用之前，由调用方（`ModelRunner`/`HybridAttnBackend`）先调 `init_forward_metadata()` 或它的 out_graph/in_graph 两段式版本——这与 vLLM "每步重建 metadata、backend 实例长驻"的模式在生命周期上是一致的，差异在于 SGLang 把 CUDA Graph capture/replay 的静态/动态形状拆分做成了**两个独立方法**（`init_forward_metadata_out_graph`/`init_forward_metadata_in_graph`）而不是一个 `build_for_cudagraph_capture()`，这是 `## 6` 的第二条对照。
 
+如果这一步的 backend 恰好是 `## 3`/`## 5` 决策 3 提到的 `HybridAttnBackend`，`forward()`/`init_forward_metadata()` 实际转发给的子 backend 由同一个私有方法决定，三处调用（`forward`/`init_forward_metadata`/`init_forward_metadata_out_graph`）全部复用它，保证"这一步该问谁"这件事只判断一次：
+
+```python
+# python/sglang/srt/layers/attention/hybrid_attn_backend.py:61-80（节选）
+def _select_backend(self, forward_mode: ForwardMode) -> AttentionBackend:
+    if forward_mode.is_decode_or_idle():
+        return self.decode_backend
+    elif forward_mode.is_target_verify():
+        return (
+            self.decode_backend if self.spec_attn_is_decode
+            else self.prefill_backend
+        )
+    else:
+        return self.prefill_backend
+```
+
+`target_verify`（投机解码验证步）是唯一一个不由 `forward_mode` 单独决定的分支——还要看 `speculative_attention_mode` 这个独立配置项（`## 4.7` 提到的投机解码路径在这里和主选型逻辑短暂交汇了一次）。
+
 ### 4.5 MLA 的岔路：模型层决定走哪条路，backend 层只管执行
 
 以 DeepSeek 系模型为例，`DeepseekV2AttentionMLA` 在构造时同时建好两个 `RadixAttention`：`attn_mqa`（吸收态，`kv_lora_rank+qk_rope_head_dim=576` 维，`num_kv_heads=1`，`python/sglang/srt/models/deepseek_v2.py:1896`-`1905`）和 `attn_mha`（常规多头，`python/sglang/srt/models/deepseek_v2.py:1919`-`1928`）。每次 forward，`dispatch_attn_forward_method()`（`2000`-`2027`）先从 `get_attn_backend()` 读出这一步该用的 `prefill_attention_backend_str`/`decode_attention_backend_str`（读的正是 `## 4.3` 写回的那两个字段），再查 `AttentionBackendRegistry.get_handler(attention_backend)`（`2026`）拿到一个"这个 backend 在这一步该返回 `MHA` 还是 `MLA`"的判断函数。
@@ -191,11 +249,30 @@ ViT 编码器（`VisionAttention`，`python/sglang/srt/layers/attention/vision.p
 
 ### 4.7 投机解码草稿模型：第三条独立的选型路径，带自己的静默兜底
 
-草稿模型（EAGLE/DFLASH 等算法用的小模型）的 attention backend **不是**从目标模型的 `(prefill, decode)` 二元组直接继承来的，走的是第三条选型路径。`resolve_attention_backend_strs()`（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:158`-`178`）一开始就检查 `is_draft_worker and draft_attn_backend`（`169`）：如果这是一个草稿 `ModelRunner` 且它自己的 `draft_attention_backend` 属性非空，直接返回 `ResolvedAttentionBackendStr(prefill=draft_attn_backend, decode=draft_attn_backend, is_draft_override=True)`（`172`-`176`）——`## 4.3` 提到的 `_build_resolved_backend()` 一看到 `is_draft_override` 为真就直接走单一 backend 分支（`attention_backend_setup.py:187`-`192`），**完全跳过** `HybridAttnBackend` 组合逻辑，即便目标模型本身配置了不同的 prefill/decode backend。
+草稿模型（EAGLE/DFLASH 等算法用的小模型）的 attention backend **不是**从目标模型的 `(prefill, decode)` 二元组直接继承来的，走的是第三条选型路径。`resolve_attention_backend_strs()`（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:158`-`178`）一开始就检查 `is_draft_worker and draft_attn_backend`（`169`）：如果这是一个草稿 `ModelRunner` 且它自己的 `draft_attention_backend` 属性非空，直接返回 `ResolvedAttentionBackendStr(prefill=draft_attn_backend, decode=draft_attn_backend, is_draft_override=True)`（`172`-`176`）——`## 4.3` 提到的 `_build_resolved_backend()` 一看到 `is_draft_override` 为真就直接走单一 backend 分支（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:187`-`192`），**完全跳过** `HybridAttnBackend` 组合逻辑，即便目标模型本身配置了不同的 prefill/decode backend。
 
 `ModelRunner.draft_attention_backend` 这个属性本身的值，由 `resolve_draft_attention_backend()`（`python/sglang/srt/model_executor/model_runner.py:267`-`282`）算出来：非草稿 runner 直接返回 `None`；是草稿 runner 则优先用构造参数传入的值，其次退回 `server_args.speculative_draft_attention_backend`（`282`）。而 `speculative_draft_attention_backend` 这个 CLI 字段本身（`python/sglang/srt/server_args.py:2224`-`2227`）**没有** `choices=DRAFT_ATTENTION_BACKEND_CHOICES` 约束——`DRAFT_ATTENTION_BACKEND_CHOICES` 这张白名单实际生效的地方在另一个独立函数 `_resolve_draft_attention_backend_fallback()`（`python/sglang/srt/speculative/draft_worker_common.py:31`-`49`）里：先看 `speculative_draft_attention_backend` 是否设置，没设置就退回目标模型自己的 `attention_backend`（`35`），如果两者都是 `None` 才用硬编码默认值（`"triton"`（HIP）或 `"flashinfer"`（其他），`36`-`37`）；算出候选值后检查是否在 `DRAFT_ATTENTION_BACKEND_CHOICES` 白名单里（`39`），**不在**就打一条 warning 静默换成同一个硬编码默认值（`40`-`48`）——这是本篇找到的第 6 处静默 fallback，`## 0`/`## 7` 统一计数时把它算进去。
 
 这条路径解释了两件事：一是为什么 `DRAFT_ATTENTION_BACKEND_CHOICES` 只有 6 个值（`## 2` 已列出）——它不是"所有 backend 的子集"，而是"经过验证能在草稿模型场景下正确工作"的一个独立小名单；二是为什么 `HybridAttnBackend`（`## 5` 决策 3）的复杂度不会渗透进投机解码路径——草稿模型的 attention backend 选型，从 CLI 到实例化，是一条与目标模型平行、几乎不共享代码的独立管线，只在"没显式设置草稿 backend 时退回目标模型 backend 作为候选之一"这一处发生了浅层耦合。
+
+`_resolve_draft_attention_backend_fallback()` 的完整逻辑摘录如下（三层候选 + 一次白名单检查 + 一次静默替换）：
+
+```python
+# python/sglang/srt/speculative/draft_worker_common.py:31-49（节选）
+def _resolve_draft_attention_backend_fallback(*, server_args, algo_label):
+    draft_backend = server_args.speculative_draft_attention_backend  # 候选 1：用户显式指定
+    if draft_backend is None:
+        draft_backend, _ = server_args.get_attention_backends()      # 候选 2：目标模型自己的 prefill backend
+    if draft_backend is None:
+        return "triton" if torch.version.hip else "flashinfer"       # 候选 3：硬编码默认值
+    if draft_backend not in DRAFT_ATTENTION_BACKEND_CHOICES:          # 白名单检查
+        fallback = "triton" if torch.version.hip else "flashinfer"
+        logger.warning(...)                                          # 只打日志，不报错
+        return fallback                                              # 静默替换
+    return draft_backend
+```
+
+三层候选叠一次白名单检查——这是本篇找到的选型逻辑里嵌套层数最多的一处，也是最容易在读代码时漏看"候选 2 其实是目标模型的 backend"这一步的地方。
 
 ### 4.8 端到端走一遍：DeepSeek 系模型在 Blackwell 上不设任何 backend 参数会发生什么
 
@@ -204,9 +281,9 @@ ViT 编码器（`VisionAttention`，`python/sglang/srt/layers/attention/vision.p
 1. **CLI 解析阶段**：`_attention_backend_default()`（`python/sglang/srt/arg_groups/overrides.py:2112`-`2125`）发现三个字段都是 `None`，调用 `_get_default_attn_backend(use_mla_backend=True, model_config)`（`python/sglang/srt/server_args.py:5914`）。
 2. `_get_default_attn_backend` 走 MLA 分支（`5972`-`5986`）：`is_hopper_with_cuda_12_3()` 为假（这是 Blackwell 不是 Hopper），`is_sm100_supported()` 为真——命中 `elif is_sm100_supported(): return "flashinfer"`（`5974`-`5975`）。三个字段被统一填成 `"flashinfer"`。
 3. **兼容性补丁链**（`## 4.2`）依次跑：`_mla_backend_page_constraints` 检查 `attention_backend == "flashmla"/"cutlass_mla"/"trtllm_mla"/...`，`"flashinfer"` 都不在这几个条件里，`page_size` 不受影响；`_mla_kv_cache_dtype_checks`、`_cutedsl_prefill_backend_fill`、`_fa4_page_constraint` 同理全部跳过（条件都是别的 backend 名字）；9 步补丁链对这个具体组合实际只是空跑一遍。
-4. **构建期**（`## 4.3`）：`resolved.prefill == resolved.decode == "flashinfer"`，`_build_resolved_backend()` 走"相同"分支，不会构造 `HybridAttnBackend`；`create_flashinfer_backend(runner)`（`python/sglang/srt/layers/attention/attention_registry.py:42`-`66`）看到 `runner.use_mla_backend` 为真，实例化的是 `FlashInferMLAAttnBackend`（`flashinfer_mla_backend.py:208`）而不是普通的 `FlashInferAttnBackend`。
-5. **模型层**：`DeepseekV2AttentionMLA.dispatch_attn_forward_method()`（`## 4.5`）读到 `prefill_attention_backend_str == decode_attention_backend_str == "flashinfer"`，`AttentionBackendRegistry.get_handler("flashinfer")` 命中已注册的 `handle_attention_flashinfer`（`attention_backend_handler.py:234`）——这是 `## 7` 提到的表覆盖问题在这个具体场景下**不会**触发（`"flashinfer"` 在 13 个已注册名字里）。
-6. **运行期**：非 CUDA Graph capture 的短前缀 extend 步可能选中 `AttnForwardMethod.MHA_ONE_SHOT`（`"flashinfer"` 在 `MHA_ONE_SHOT_SUPPORTED_BACKENDS` 里，`attention_backend_handler.py:16`），调用 `self.attn_mha.forward(...)`；decode 步固定用 `AttnForwardMethod.MLA`，调用 `self.attn_mqa.forward(...)`——两者最终都落回 `get_attn_backend().forward_extend`/`forward_decode`（`## 4.4`），backend 对象自始至终是同一个 `FlashInferMLAAttnBackend` 实例。
+4. **构建期**（`## 4.3`）：`resolved.prefill == resolved.decode == "flashinfer"`，`_build_resolved_backend()` 走"相同"分支，不会构造 `HybridAttnBackend`；`create_flashinfer_backend(runner)`（`python/sglang/srt/layers/attention/attention_registry.py:42`-`66`）看到 `runner.use_mla_backend` 为真，实例化的是 `FlashInferMLAAttnBackend`（`python/sglang/srt/layers/attention/flashinfer_mla_backend.py:208`）而不是普通的 `FlashInferAttnBackend`。
+5. **模型层**：`DeepseekV2AttentionMLA.dispatch_attn_forward_method()`（`## 4.5`）读到 `prefill_attention_backend_str == decode_attention_backend_str == "flashinfer"`，`AttentionBackendRegistry.get_handler("flashinfer")` 命中已注册的 `handle_attention_flashinfer`（`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:234`）——这是 `## 7` 提到的表覆盖问题在这个具体场景下**不会**触发（`"flashinfer"` 在 13 个已注册名字里）。
+6. **运行期**：非 CUDA Graph capture 的短前缀 extend 步可能选中 `AttnForwardMethod.MHA_ONE_SHOT`（`"flashinfer"` 在 `MHA_ONE_SHOT_SUPPORTED_BACKENDS` 里，`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:16`），调用 `self.attn_mha.forward(...)`；decode 步固定用 `AttnForwardMethod.MLA`，调用 `self.attn_mqa.forward(...)`——两者最终都落回 `get_attn_backend().forward_extend`/`forward_decode`（`## 4.4`），backend 对象自始至终是同一个 `FlashInferMLAAttnBackend` 实例。
 
 这条链路里，"用户什么都没传"到"最终跑起来的具体 kernel 调用序列"之间，实际经过了 CLI 决策树、9 步兼容性补丁、构建期 backend 实例化、模型层 MHA/MLA 分流四道独立的选择，本篇 `## 5`/`## 6` 讨论的每一处设计决策，在这一条具体路径上都至少生效了一次。
 
@@ -258,7 +335,15 @@ RFC #29630（`python/sglang/kernels/README.md:3`）把历史上分散的几处�
 
 - **为什么这么设计**：草稿模型通常远小于目标模型（本篇 `## 4.7` 引用的 `speculative_draft_kv_cache_dtype` 帮助文本里提到"a 5-layer DFLASH draft"），它的 attention 计算特征（batch 极小、每步 token 数固定）和目标模型不同，能正确处理这种极端形状的 backend 集合本来就比目标模型的候选集合窄——6 个而不是 22 个是"筛选过的能力子集"，不是"随手选的一个更短列表"。独立管线还带来一个好处：目标模型换了 backend 不会连带影响草稿模型已经验证过能用的选择。
 - **不这样会怎样**：如果草稿模型直接复用目标模型解析出的 `(prefill, decode)` 二元组（`## 4.3` 的常规路径），一旦目标模型选中了 `dsa`/`cutedsl_mla` 这类没在 `DRAFT_ATTENTION_BACKEND_CHOICES` 里出现过的 backend，草稿模型大概率会在实例化阶段直接报错或者产出错误结果——因为这些 backend 的 metadata 构建逻辑可能从没在"目标批一个 token、草稿批多个候选 token"这种投机解码特有的张量形状下测试过。
-- **什么时候可以不这样**：如果一个团队确信自己的草稿模型和目标模型架构高度相似（比如同系列模型的小尺寸版本），且已经人工验证过某个不在白名单里的 backend 在草稿场景下工作正常，`speculative_draft_attention_backend` 这个 CLI 字段本身没有 `choices` 约束（`server_args.py:2224`-`2227`）——**理论上**可以手动指定；实际拦下不合法组合的是 `_resolve_draft_attention_backend_fallback()` 这一处独立校验，而不是字段定义本身的类型约束，这也是为什么这条白名单能在不改 CLI 参数定义的情况下随版本迭代扩充。
+- **什么时候可以不这样**：如果一个团队确信自己的草稿模型和目标模型架构高度相似（比如同系列模型的小尺寸版本），且已经人工验证过某个不在白名单里的 backend 在草稿场景下工作正常，`speculative_draft_attention_backend` 这个 CLI 字段本身没有 `choices` 约束（`python/sglang/srt/server_args.py:2224`-`2227`）——**理论上**可以手动指定；实际拦下不合法组合的是 `_resolve_draft_attention_backend_fallback()` 这一处独立校验，而不是字段定义本身的类型约束，这也是为什么这条白名单能在不改 CLI 参数定义的情况下随版本迭代扩充。
+
+### 决策 8：ROCm 平台用一张独立的重映射表处理 `AttnForwardMethod`，而不是让每个决策函数都写一遍平台分支
+
+`## 3` 提到的 `AttnForwardMethod` 12 个成员里，`MHA_ROCM`/`MHA_ONE_SHOT_ROCM`/`MLA_ROCM` 三个是 CUDA 版本（`MHA`/`MHA_ONE_SHOT`/`MLA`）的 ROCm 对应物。`resolve_rocm_forward_method()`（`python/sglang/srt/models/deepseek_common/attention_backend_handler.py:31`-`34`）在 `dispatch_attn_forward_method()`（`## 4.5`）的返回值外面再包一层：非 HIP 平台直接原样返回，HIP 平台查一张三项映射表 `_ROCM_FORWARD_METHODS`（`24`-`28`）做替换。
+
+- **为什么这么设计**：源码注释直接给出了理由（`19`-`23`）——ROCm 有自己专门的 `forward_mha_rocm.py`/`forward_mla_rocm.py` 实现，"the shared CUDA paths carry no AMD branches"，也就是说每个 backend handler 函数（`handle_attention_fa3`/`handle_attention_flashinfer`……）内部完全不需要关心自己是不是跑在 ROCm 上，只管返回"这一步该用哪种计算模式"这个平台无关的答案；平台特定的替换收敛成这一张表、一次查询。
+- **不这样会怎样**：如果每个 backend handler 函数自己判断"是不是 HIP，是的话返回 `_ROCM` 后缀的枚举值"，`## 2` 列出的每一个 `handle_attention_*` 函数体内都要重复一遍同样的 if-HIP 分支——13 个已注册 handler 函数，13 遍重复代码，任何一个漏写都会导致这一个 backend 在 ROCm 上走错计算路径。
+- **什么时候可以不这样**：源码注释同样交代了这张表为什么不是四项而是三项——`MHA_CHUNKED_KV` 没有 ROCm 对应条目，因为它的累加步骤需要 CUDA-only 的 `merge_state_v2` kernel（`22`-`23`）。这意味着"统一重映射表"这个模式本身有一个隐含前提：所有需要平台特化的枚举值都能在目标平台上找到对应实现；一旦某个模式在某个平台上根本没有对应 kernel，这张表就没法覆盖它，只能让上层调用方自己规避（比如 ROCm 上永远不会选出一个会触发 `MHA_CHUNKED_KV` 的 backend 组合）——重映射表解决的是"翻译"问题，不解决"这个平台压根不支持某种计算模式"这个更底层的能力缺口。
 
 ## 6. 同位对照：vLLM 在同一位置怎么做
 
@@ -270,8 +355,9 @@ RFC #29630（`python/sglang/kernels/README.md:3`）把历史上分散的几处�
 - **prefill/decode 拆分的粒度不同**：SGLang 在 CLI 层面对**所有模型**暴露 `--decode-attention-backend`/`--prefill-attention-backend` 两个独立旋钮，`## 5` 决策 3 已展开其组合器实现；vLLM 目前只在 MLA 场景才拆 prefill/decode backend（`-ac.mla_prefill_backend` 与 `-ac.backend`），非 MLA 的普通注意力层没有这个粒度的拆分。反过来，vLLM 有一个 SGLang 没有的拆分维度——`backend_per_kind`，按 `KVCacheSpecKind`（全注意力/滑窗/…）分组覆盖 backend，SGLang 目前没有等价的"按层结构类型分组选 backend"的 CLI 级配置，混合结构模型（滑窗+全注意力交替）在 SGLang 里靠模型代码自己在 `attn_backend_wrapper()` 里手工判断（`python/sglang/srt/layers/attention/attention_registry.py:352`-`509`），不是一个通用配置项。
 - **MLA 契约的抽象层级不同**：这是本篇的核心对照点。vLLM 新增了一个独立的 `MLAAttentionImpl` 抽象基类，要求 MLA 后端实现 `forward_mha`/`forward_mqa` 两个专门方法；SGLang 没有新增契约，MLA 后端复用同一个 `AttentionBackend.forward_extend`/`forward_decode`，"这一步该用吸收态还是常规 MHA"这个判断被完全下推到模型层的 `dispatch_attn_forward_method()`（`## 4.5`，`## 5` 决策 4 已展开两条路线各自代价）。换句话说：vLLM 把"MLA 有两种计算模式"这件事焊进了 attention 子系统的类型系统里；SGLang 把它当成"DeepSeek 系模型自己的业务逻辑"留在了模型定义文件里，attention 子系统本身对"MLA 有几种模式"毫不知情。
 - **多模态编码器独立选择这件事，两边都做了，暴露方式也接近**：vLLM 把 ViT 选择逻辑（`get_vit_attn_backend()`）藏进平台类内部，没有专门 CLI 旋钮；SGLang 用 `--mm-attention-backend`（`python/sglang/srt/server_args.py:1777`-`1793`）显式暴露给用户，但两边都有一个共同点——ViT 侧的候选集合比主干侧小得多、校验也简化得多（SGLang 的 `_determine_attention_backend()` 只做"平台探测优先"，没有类似主干侧那 9 个补丁函数的组合校验链）：编码器场景没有 KV 分页、没有 MLA、没有投机解码，组合爆炸的维度天然就少了几个，两个引擎不约而同地选择了更简单的选型逻辑。
-- **CUDA Graph 静态/动态形状的拆分粒度不同**：SGLang 把这件事拆成两个方法——`init_forward_metadata_out_graph`（capture/replay 之外，动态形状允许）与 `init_forward_metadata_in_graph`（capture 内部，`base_attn_backend.py:95`-`107` 的 lint 契约明确禁止在里面调 `.item()`/`.cpu()`/`.tolist()`）；vLLM 走的是"一个 `build()` 方法 + 一个专门的 `build_for_cudagraph_capture()` 变体"外加 `AttentionCGSupport` 四级枚举描述这个 backend 能被捕获到哪种批次形状。两边都承认"capture 期间不能有动态 host-device 同步"这条硬约束，但 SGLang 把它做成方法签名层面的强制拆分（写错方法会在 capture 阶段直接报错），vLLM 把它做成一个描述性枚举（写错更可能是运行时行为异常而不是显式报错）——前者对新写 backend 的人更"防呆"，后者的信息更集中在一个字段里方便查询。
+- **CUDA Graph 静态/动态形状的拆分粒度不同**：SGLang 把这件事拆成两个方法——`init_forward_metadata_out_graph`（capture/replay 之外，动态形状允许）与 `init_forward_metadata_in_graph`（capture 内部，`python/sglang/srt/layers/attention/base_attn_backend.py:95`-`107` 的 lint 契约明确禁止在里面调 `.item()`/`.cpu()`/`.tolist()`）；vLLM 走的是"一个 `build()` 方法 + 一个专门的 `build_for_cudagraph_capture()` 变体"外加 `AttentionCGSupport` 四级枚举描述这个 backend 能被捕获到哪种批次形状。两边都承认"capture 期间不能有动态 host-device 同步"这条硬约束，但 SGLang 把它做成方法签名层面的强制拆分（写错方法会在 capture 阶段直接报错），vLLM 把它做成一个描述性枚举（写错更可能是运行时行为异常而不是显式报错）——前者对新写 backend 的人更"防呆"，后者的信息更集中在一个字段里方便查询。
 - **算子来源治理的"元层"有无不同**：`## 5` 决策 6 展开的 `KernelBackend` 枚举（`python/sglang/kernels/spec.py:29`-`42`）把 pip 依赖、vendor 代码、自研代码统一编目进同一套 `KernelSpec` 登记表；vLLM 对照篇 `## 5` 决策 6 描述的"FlashAttention 走 CMake fork、FlashInfer 走纯 pip、CUTLASS 走官方仓库自写 kernel"是同样的"三明治"结构，但**没有**一个类似的统一元数据层——三种来源各自体现在 `cmake/external_projects/`、`requirements/cuda.txt`、`CMakeLists.txt` 三处不同的构建配置文件里，靠人读构建脚本才能拼出完整的来源图谱。这是"是否值得建一个统一编目"这件事上两个引擎给出的不同答案——SGLang 22 个 backend 的规模显然已经越过了这个门槛，vLLM 目前主要是 3-4 种来源，尚未看到类似的统一登记诉求。
+- **从"用户什么都不传"到"具体 kernel 被调用"要经过几层独立决策，两边数目不同**：本篇对照篇 `## 4` 给出的 vLLM 链路是三层——选 backend（声明式优先级表）、backend 内部再选版本（比如 FA2/FA3/FA4）、ViT 独立选型；本篇 `## 4.8` 给出的 SGLang 链路是六层——CLI 决策树（`## 4.1`）、9 步兼容性补丁链（`## 4.2`）、构建期实例化（`## 4.3`）、模型层 MHA/MLA 分流（`## 4.5`）、ViT 独立选型（`## 4.6`）、以及只在投机解码场景下才会插入的草稿 backend 独立管线（`## 4.7`）。层数更多不直接等于更复杂——`## 4.8` 的具体例子里，大部分组合下中间几层其实是"空跑"（9 步补丁对不匹配的 backend 名字直接跳过）——但层数本身是一个可以量化比较的"选型链路长度"指标，值得在评估两个引擎的可调试性时纳入考虑。
 
 ## 7. 踩坑与反直觉
 
@@ -282,6 +368,7 @@ RFC #29630（`python/sglang/kernels/README.md:3`）把历史上分散的几处�
 5. **`sgl-kernel` 这个名字现在指的不是一个独立仓库/独立进程，而是同一个 monorepo 里的一个子目录。** 如果只看 PyPI 页面或者旧文档，容易以为 `sgl-kernel` 是和 `sglang` 主包分开维护、分开发版的独立项目；但在本篇取证的这一版仓库里，`kernels/aot/README.md` 自己承认包名已经改叫 `sglang-kernel`（`"sgl-kernel (prior sgl-kernel)"`，`1`），源码树就在 `python/sglang/kernels/aot/` 下，和 attention backend 的其余代码同仓库、同 sha、同一次 clone 就能拿到——不需要额外再 clone 一个仓库。
 6. **草稿模型的静默 fallback 有一条容易被忽略的触发路径：目标模型自己的 backend 字符串会被拿去当草稿候选值试。** `## 4.7` 已经展开：`_resolve_draft_attention_backend_fallback()`（`python/sglang/srt/speculative/draft_worker_common.py:35`）在用户没显式设置 `--speculative-draft-attention-backend` 时，第一候选不是硬编码默认值，而是 `server_args.get_attention_backends()` 的返回值——也就是**目标模型自己解析出的 backend**。如果目标模型选中了 `dsa`（DeepSeek 稀疏注意力，`## 2` 已确认它不在 `DRAFT_ATTENTION_BACKEND_CHOICES` 6 个值里），投机解码会先把 `"dsa"` 当候选值，白名单检查失败后才静默换成 `"triton"`/`"flashinfer"`——中间那一步"试了一下目标模型的 backend 但没通过"完全体现在日志的一行 warning 里，不细看容易以为草稿 backend 是凭空选出来的默认值。
 7. **算子目录名字保留了一段命名历史，容易和已经废弃的 CLI 别名对不上号。** `python/sglang/kernels/ops/attention/nsa_triton_decode/` 这个目录名字面上对应的是 `"nsa"`（Native Sparse Attention 的缩写），但 `## 0`/`## 7` 第 1 条已经确认 `"nsa"` 在 CLI 层面只是 `"dsa"` 的 deprecated 别名——目录名没有跟着改成 `dsa_triton_decode`。这不是本库找到的一个 bug，只是提醒：仓库里的目录名、文件名不总是和当前有效的 CLI 字符串保持同步重命名，读代码定位算子实现时，历史名字和当前名字要分开对待。
+8. **`attn_backend_wrapper()` 只包一次而不是包两次，是为了不重复初始化混合模型的线性/稀疏侧 backend。** `## 4.3` 提到构造 `HybridAttnBackend` 之后还要再包一层 `attn_backend_wrapper()`；源码注释在这一处专门解释了顺序为什么不能反过来（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:198`-`203`）："Wrapping each child independently duplicates the linear/sparse side backend for hybrid models (for example, two GDN dispatchers for Qwen3.5 when prefill and decode use different MHA backends)"——如果对 `prefill_backend`/`decode_backend` 两个子 backend 分别调用 `attn_backend_wrapper()`，Qwen3.5 这类混合 GDN 模型会被初始化出**两份**独立的线性注意力 dispatcher（一份挂在 prefill 子 backend 上，一份挂在 decode 子 backend 上），而任意一次 forward 里只有其中一份真正会被用到——多出来的那一份纯粹是浪费的初始化开销和状态。这是本篇找到的又一处"组合器模式"里容易踩的顺序坑：先组合两个同类 backend，再统一包一层模型级 wrapper，不能反过来。
 
 ## 8. 可改进点
 

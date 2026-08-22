@@ -219,6 +219,7 @@
         "lines_counted": 2220830,
         "python_src_lines": 193827,
         "python_test_lines": 215985,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 1.114
       }
     },
@@ -439,6 +440,7 @@
         "lines_counted": 403076,
         "python_src_lines": 152237,
         "python_test_lines": 29114,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.191
       }
     },
@@ -626,6 +628,7 @@
         "lines_counted": 148574,
         "python_src_lines": 103709,
         "python_test_lines": 24334,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.235
       }
     },
@@ -843,6 +846,7 @@
         "lines_counted": 992377,
         "python_src_lines": 58859,
         "python_test_lines": 11033,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.187
       }
     },
@@ -1064,6 +1068,7 @@
         "lines_counted": 339214,
         "python_src_lines": 155986,
         "python_test_lines": 59422,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.381
       }
     },
@@ -1072,8 +1077,10 @@
         "cuda_examples": [],
         "cuda_files": 0,
         "files_mentioning_cutlass": 0,
-        "triton_examples": [],
-        "triton_jit_files": 0
+        "triton_examples": [
+          "python/mlc_llm/op/triton.py"
+        ],
+        "triton_jit_files": 1
       },
       "languages": [
         {
@@ -1259,6 +1266,7 @@
         "lines_counted": 100240,
         "python_src_lines": 59516,
         "python_test_lines": 10673,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.179
       }
     },
@@ -1482,6 +1490,7 @@
         "lines_counted": 548895,
         "python_src_lines": 30573,
         "python_test_lines": 33413,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 1.093
       }
     },
@@ -1721,6 +1730,7 @@
         "lines_counted": 2317985,
         "python_src_lines": 1254674,
         "python_test_lines": 605010,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.482
       }
     },
@@ -1954,6 +1964,7 @@
         "lines_counted": 2452198,
         "python_src_lines": 792216,
         "python_test_lines": 603872,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.762
       }
     },
@@ -2176,6 +2187,7 @@
         "lines_counted": 189926,
         "python_src_lines": 98255,
         "python_test_lines": 10645,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.108
       }
     },
@@ -2279,6 +2291,7 @@
         "lines_counted": 13219,
         "python_src_lines": 11405,
         "python_test_lines": 1251,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.11
       }
     },
@@ -2512,6 +2525,7 @@
         "lines_counted": 1914984,
         "python_src_lines": 932277,
         "python_test_lines": 505654,
+        "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         "test_to_src_ratio": 0.542
       }
     }

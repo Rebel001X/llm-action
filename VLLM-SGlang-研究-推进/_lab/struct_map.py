@@ -31,11 +31,19 @@ from common import (ENGINES, available_engines, count_lines, dump, dump_engines,
 # 6 文件 / 4,012 行。所以本工具的数字只配当**导航线索**，
 # 一旦要写进正文当结论，必须回源码点数复核，并在正文里写复核后的数。
 
+# 第二个已知缺陷（TGI 那篇写作时发现）：关键词表是照 **Python 项目的命名习惯**列的，
+# 对 Rust/C++ 项目有系统性盲区。TGI 真正的批处理引擎叫
+# `queue.rs` / `backend.rs` / `radix.rs` / `block_allocator.rs`，一个都不命中，
+# 于是 scheduler 桶报 0 行；而它的顶层目录恰好叫 `server/`，
+# 于是几乎全部 Python 产品码被 entrypoint 桶吸走。下面补了这些命名，但**盲区不可能补全** ——
+# 用这些数字前，永远先回源码点一次。
 SUBSYSTEMS: dict[str, list[str]] = {
     "entrypoint":        ["entrypoint", "server", "api_server", "http_server", "openai", "cli"],
-    "scheduler":         ["sched", "scheduler", "batch_sched", "policy", "waiting"],
+    "scheduler":         ["sched", "scheduler", "batch_sched", "policy", "waiting",
+                          "queue", "batcher", "batching"],
     "kv_cache":          ["kv_cache", "block_manager", "cache_engine", "memory_pool",
-                          "radix_cache", "prefix_cache", "block_pool", "kv_pool", "paged"],
+                          "radix_cache", "prefix_cache", "block_pool", "kv_pool", "paged",
+                          "radix", "block_allocator", "allocator"],
     "attention":         ["attention", "attn", "flashinfer", "flash_attn"],
     "model_exec":        ["model_runner", "model_executor", "worker", "executor", "model_loader"],
     "distributed":       ["distributed", "parallel_state", "tensor_parallel", "pipeline",
@@ -57,7 +65,9 @@ PKG_ROOTS: dict[str, list[str]] = {
     "tensorrt-llm": ["tensorrt_llm"],
     # KTransformers 2026 版把老 python 包整体挪进 archive/，新增 kt-kernel/（C++/CUDA 算子）
     "ktransformers": ["archive/ktransformers", "kt-kernel", "ktransformers"],
-    "mlc-llm": ["python/mlc_llm"],
+    # MLC-LLM 的调度器（EngineImpl::Step）与 PD 分离全在 C++ 侧，
+    # 只扫 python/mlc_llm 会得到 scheduler=0 / disagg=0 这种假的空结果
+    "mlc-llm": ["python/mlc_llm", "cpp"],
     "tokasaurus": ["tokasaurus"],
     "tgi": ["server/text_generation_server", "router/src", "backends"],
     "dynamo": ["lib", "components"],

@@ -45,8 +45,13 @@ CITE_RE = re.compile(
 BASELINE_RE = re.compile(r"本篇取证基准[^`\n]*`(?P<engine>[a-z0-9.\-]+)`\s*@\s*`(?P<sha>[0-9a-f]{7,40})`")
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 # 占位符扫描：故意**不收**「占位」二字 —— 正文里「占位 token」「占位符」是正当术语，
-# 收了就会大面积误伤（这个坑在 vLLM 解剖库踩过一次）。只认真正的施工残留标记。
-PLACEHOLDER_RE = re.compile(r"(?<![A-Za-z])(TODO|TBD|FIXME|XXX|待补|待填|\?\?\?)(?![A-Za-z])")
+# 收了就会大面积误伤（这个坑在 vLLM 解剖库踩过一次）。
+#
+# 第二层误伤：本库**本身就在统计 TODO 注释**，正文里「TODO 认领率」「TODO 的跨引擎扫描」
+# 是在把 TODO 当研究对象谈，不是施工残留。所以后面紧跟中日韩字符时不算 ——
+# 真正的残留标记后面跟的是冒号、括号、英文或行尾，不会是中文。
+PLACEHOLDER_RE = re.compile(
+    r"(?<![A-Za-z])(TODO|TBD|FIXME|XXX|待补|待填|\?\?\?)(?![A-Za-z])(?!\s*[一-鿿])")
 FENCE_RE = re.compile(r"```.*?```", re.S)
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 ROSTER_RE = re.compile(r"`(\d{2}-[^`]+?)\.md`")
@@ -190,6 +195,20 @@ def check(rep: Report, mode: str) -> None:
             lineno = int(m.group("line"))
             end = int(m.group("end")) if m.group("end") else lineno
             at = body[:m.start()].count("\n") + 1
+            # 本库可以引用**自己的**工具（讲清楚某个数字是怎么算出来的、
+            # 或者指出某个抽取脚本的缺陷时必须能指到行）。这类路径按库根解析，不走引擎。
+            if path.startswith(("_lab/", "_verify.py")):
+                rep.stats["self_citations"] += 1
+                target = ROOT / path
+                if not target.exists():
+                    rep.err(f"{rel}:{at}: 引用的本库文件不存在 → {path}")
+                    continue
+                n = file_line_count(target, line_cache)
+                if n >= 0 and end > n:
+                    rep.err(f"{rel}:{at}: 行号越界 {path}:{end}，该文件只有 {n} 行")
+                else:
+                    rep.stats["citations_ok"] += 1
+                continue
             if engine is None:
                 rep.err(f"{rel}:{at}: 代码引用 `{path}:{lineno}` 无法判定引擎（本篇无取证基准头，也没写 engine: 前缀）")
                 continue

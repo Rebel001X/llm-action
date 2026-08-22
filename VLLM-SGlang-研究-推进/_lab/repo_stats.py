@@ -40,8 +40,14 @@ LANG_BY_SUFFIX = {
     ".mojo": "Mojo",
 }
 
-# Triton kernel 的判定：文件里同时出现 triton 导入和 @triton.jit 装饰器。
-TRITON_MARK = "@triton.jit"
+# Triton kernel 的判定。
+# 第一版只认 `@triton.jit` 装饰器 —— 这是**假阴性**：MLC-LLM 把 kernel 写成
+# `triton.jit(triton_kernel)` 的**函数调用形式**再交给 TVM 的 `T.call_kernel(...)`
+# （`python/mlc_llm/op/triton.py:335` / `:453`），语义上就是手写 Triton kernel，
+# 却因为没用装饰器语法被判成 0。所以两种写法都要认。
+# 一般教训：**"仓库里搜不到某个模式"和"这个仓库没有这个功能"是两回事**，
+# 匹配规则本身就是需要被审计的对象。
+TRITON_MARKS = ("@triton.jit", "triton.jit(")
 CUTLASS_MARK = "cutlass"
 
 
@@ -87,7 +93,7 @@ def analyze(name: str) -> dict:
             cuda_files.append(r)
         if suffix == ".py":
             text = read_text(fp)
-            if TRITON_MARK in text:
+            if any(m in text for m in TRITON_MARKS):
                 triton_files.append(r)
             # 测试代码 vs 产品代码：路径里带 test 的算测试
             low = r.lower()
@@ -109,7 +115,13 @@ def analyze(name: str) -> dict:
             "lines_counted": total_lines,
             "python_src_lines": py_src_lines,
             "python_test_lines": py_test_lines,
+            # ⚠️ 这个比值**只统计 Python**，且只认路径里带 test 的文件。
+            # 对 Rust/C++ 项目严重失真：Rust 的 `#[cfg(test)]` 单元测试就写在源文件里，
+            # 完全不会被算进来。实测例子：TGI 报 0.108，但它的 `router/src/` 里有
+            # 9 个 `#[cfg(test)]` 模块、71 个 `#[test]` 函数（`queue.rs` 约三分之一是测试）。
+            # **跨语言比这个数没有意义**，正文引用时必须写明"Python 口径"。
             "test_to_src_ratio": round(py_test_lines / py_src_lines, 3) if py_src_lines else None,
+            "test_ratio_caveat": "仅统计 Python 且只认路径含 test 的文件；对 Rust/C++ 项目严重低估",
         },
         "languages": [{"lang": k, **v} for k, v in langs],
         "top_dirs": [{"dir": k, **v} for k, v in top_dirs],
@@ -142,7 +154,7 @@ def selftest() -> int:
             if not lang:
                 continue
             by_lang[lang] += 1
-            if fp.suffix == ".py" and TRITON_MARK in read_text(fp):
+            if fp.suffix == ".py" and any(m in read_text(fp) for m in TRITON_MARKS):
                 triton += 1
         if by_lang["Python"] != 2:
             print(f"FAIL python files: {by_lang['Python']}"); ok = False

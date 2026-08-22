@@ -11,8 +11,9 @@
 行号不做任何猜测：补的只是路径前缀，行号原样保留，补完仍由 `_verify.py` 核。
 
 用法:
-    python fixcite.py                  # 只报告
-    python fixcite.py --apply          # 唯一匹配的就地改写
+    python fixcite.py                          # 只报告
+    python fixcite.py --apply                  # 唯一匹配的就地改写
+    python fixcite.py --only 02-SGLang --apply # 只处理某些文件（多 agent 并行时避开在写的）
     python fixcite.py --selftest
 """
 from __future__ import annotations
@@ -65,10 +66,19 @@ def main(argv: list[str]) -> int:
     if "--selftest" in argv:
         return selftest()
     apply = "--apply" in argv
+    # --only <子串>：只处理路径含该子串的 md。多 agent 并行时用它避开别人正在编辑的文件。
+    only = None
+    if "--only" in argv:
+        i = argv.index("--only")
+        if i + 1 < len(argv):
+            only = argv[i + 1]
     indexes: dict[str, dict[str, list[str]]] = {}
     n_ok = n_fixed = n_ambig = n_missing = 0
 
     for p in md_files():
+        rel_check = p.relative_to(ROOT).as_posix()
+        if only and only not in rel_check:
+            continue
         text = p.read_text(encoding="utf-8")
         bm = BASELINE_RE.search(text)
         default_engine = bm.group("engine") if bm else None
@@ -78,6 +88,9 @@ def main(argv: list[str]) -> int:
         for m in CITE_RE.finditer(text):
             engine = m.group("engine") or default_engine
             path = m.group("path")
+            # 指向本库自己工具的引用由 _verify.py 按库根解析，不该拿去引擎源码里找
+            if path.startswith(("_lab/", "_verify.py")):
+                continue
             if engine not in ENGINE_DIRS:
                 continue
             if engine not in indexes:

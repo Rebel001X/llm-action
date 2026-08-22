@@ -6,7 +6,7 @@
 ## 0. 结论先行
 
 - **proposer 不是一种，是一整个家族。**
-  - `SpeculativeMethod`（`vllm/config/speculative.py:68-78`）枚举出 `ngram` / `medusa` / `mlp_speculator` / `draft_model` / `suffix` / `custom_class` 六个"顶层方法"，外加 `EagleModelTypes`（`eagle` / `eagle3` / `extract_hidden_states` / 24 种 MTP 模型类型 / `dflash`）和 `NgramGPUTypes`（`ngram_gpu`）、`DSparkModelTypes`（`dspark`）。
+  - `SpeculativeMethod`（`vllm/config/speculative.py:69-79`）枚举出 `ngram` / `medusa` / `mlp_speculator` / `draft_model` / `suffix` / `custom_class` 六个"顶层方法"，外加 `EagleModelTypes`（`eagle` / `eagle3` / `extract_hidden_states` / 24 种 MTP 模型类型 / `dflash`）和 `NgramGPUTypes`（`ngram_gpu`）、`DSparkModelTypes`（`dspark`）。
   - 会跑自己前向、需要管理自己 KV 缓存的一大类（EAGLE / EAGLE3 / MTP / DFlash / draft_model）共享同一个基类 `SpecDecodeBaseProposer`（`vllm/v1/spec_decode/llm_base_proposer.py:71`）。
   - 不需要模型前向的（`ngram`、`suffix`）是纯 CPU/GPU 核函数；`custom_class` 是用户自己注册的插件（`vllm/v1/spec_decode/custom_class_proposer.py:12-20`，从字符串路径动态 import）。
 
@@ -52,6 +52,7 @@
 2. **模型执行器 `GpuModelRunner`**（详见 [[06-vLLM-模型执行与CUDA-Graph]]）。它持有 `self.drafter`——一个按 `speculative_config.method` 实例化出来的具体 proposer 对象（`vllm/v1/worker/gpu_model_runner.py:632-695`）——并在 `execute_model()` / `sample_tokens()` 两次 RPC 里分别调用目标模型前向、拒绝采样验证、drafter 前向三件事，顺序细节见 `## 4`。
 3. **采样器**。`RejectionSampler`（`vllm/v1/sample/rejection_sampler.py:38`）是 `Sampler`（详见 [[06-vLLM-模型执行与CUDA-Graph]] `## 4` 提及）之外的另一条采样路径，只在 `spec_decode_metadata is not None` 时启用（`vllm/v1/worker/gpu_model_runner.py:3766-3767`）。
 4. **结构化输出**（详见 [[11-vLLM-结构化输出]]）与**KV 缓存管理**（详见 [[04-vLLM-KV缓存与前缀缓存]]）分别在 `## 5` 里各占一条：语法状态机要在草稿产出后立刻插一刀做合法性过滤，KV 缓存管理器要单开一个 lookahead 窗口容纳 drafter 提前读取的位置。
+5. **可观测性**。`SpecDecodingStats`（`vllm/v1/spec_decode/metrics.py:17-47`）和转成 Prometheus 指标的 `SpecDecodingProm`（`:177`）是唯一对外暴露接受率的通道——它只朝外走（进日志、进 `/metrics`），不朝内走（不反馈进调度器或 proposer 的任何决策），这条"只出不进"的单向性质是 `## 7` 反直觉论证的关键前提之一。
 
 一次典型的"多轮解码"里，投机解码把**串行的目标模型调用次数**换成了"目标模型验证一次多 token + 草稿模型（或非模型方法）提议若干 token"。这笔交换值不值得做、什么时候会亏本，是 `## 7` 的主题；它牵动的不只是模型执行器一处，`## 5` 会逐条展开与 CUDA Graph、结构化输出、chunked prefill、KV 缓存管理这四个既有部件的具体互动方式。
 
@@ -62,7 +63,7 @@
 | 文件:行 | 职责 |
 |---|---|
 | `vllm/config/speculative.py:85` | `class SpeculativeConfig`，35 个字段（AST 统计），`method`/`num_speculative_tokens`/`rejection_sample_method`/`draft_sample_method`/`num_speculative_tokens_per_batch_size` 等旋钮全在这 |
-| `vllm/config/speculative.py:68-79` | `SpeculativeMethod` / `EagleModelTypes` / `NgramGPUTypes` / `DSparkModelTypes` 枚举，proposer 全集的唯一权威出处 |
+| `vllm/config/speculative.py:69-79` | `SpeculativeMethod` / `EagleModelTypes` / `NgramGPUTypes` / `DSparkModelTypes` 枚举，proposer 全集的唯一权威出处 |
 | `vllm/config/speculative.py:1504-1505` | `uses_dynamic_speculative_decoding()`——是否配了动态 K 表 |
 | `vllm/v1/spec_decode/llm_base_proposer.py:71` | `class SpecDecodeBaseProposer`，EAGLE 系 proposer 的共享基类，35 方法 |
 | `vllm/v1/spec_decode/eagle.py:10` | `class EagleProposer(SpecDecodeBaseProposer)` |
@@ -76,8 +77,10 @@
 | `vllm/v1/spec_decode/ngram_proposer.py:12` | `class NgramProposer`——CPU/numba 版 prompt-lookup |
 | `vllm/v1/spec_decode/ngram_proposer_gpu.py:217` | `class NgramProposerGPU`——同一思路的 GPU 核函数版 |
 | `vllm/v1/spec_decode/custom_class_proposer.py:12-20` | `create_custom_proposer()`——从字符串路径动态 import 用户自定义 proposer |
+| `vllm/v1/spec_decode/vocab_mapping.py:68` | `class VocabMapping`——`draft_model` 异构词表（`use_heterogeneous_vocab`）场景下做 draft/target 词表 token id 互译 |
 | `vllm/v1/spec_decode/metadata.py:9-23` | `class SpecDecodeMetadata`——一步验证要用到的全部张量打包 |
 | `vllm/v1/spec_decode/metrics.py:17-47` | `class SpecDecodingStats`——纯观测性接受率统计，不反馈进控制逻辑 |
+| `vllm/v1/spec_decode/metrics.py:177` | `class SpecDecodingProm`——把 `SpecDecodingStats` 转成 Prometheus `Counter`，走 HTTP `/metrics` 端点暴露，仍然只是观测通道 |
 | `vllm/v1/spec_decode/dynamic/utils.py:77` | `build_dynamic_sd_schedule_lookup()`——把用户配的区间表展开成稠密 batch_size→K 数组 |
 | `vllm/v1/sample/rejection_sampler.py:38` | `class RejectionSampler(nn.Module)`——V1 主路径的拒绝采样器，类文档直接引用 Leviathan 2023 |
 | `vllm/v1/sample/rejection_sampler.py:715` | `rejection_greedy_sample_kernel`——贪心路径，Triton kernel |
@@ -93,6 +96,12 @@
 | `vllm/config/vllm.py:986-1002` | `_maybe_disable_dynamic_sd_for_data_parallel()`——DP>1 下禁用动态 K |
 | `vllm/v1/structured_output/backend_xgrammar.py:73-76,127` | `max_rollback_tokens=num_speculative_tokens`——xgrammar 对齐投机解码的机制 |
 | `vllm/v1/worker/gpu/spec_decode/adaptive_verification.py:114` | `class AdaptiveVerificationManager`——DSpark 专用、按置信度动态分配草稿验证预算（不是本篇主线的"动态 K"） |
+| `vllm/config/vllm.py:649` | `use_v2_model_runner` 属性——决定走 V1 (`vllm/v1/spec_decode/`) 还是 V2 (`vllm/v1/worker/gpu/spec_decode/`) proposer 实现 |
+| `vllm/config/vllm.py:658-666` | `method=="dspark"` 强制走 V2 model runner 的判定，注释原话"V1 ... can't run dspark" |
+| `vllm/config/vllm.py:702-711` | `_is_dflash2_draft()`——判定 DFlash2 checkpoint，未强制 V2 时会在 V1 静默降级成 DFlash1 |
+| `vllm/v1/spec_decode/ngram_proposer.py:55-60` | `__init__` 里主动跑一次 dummy `propose()` 触发 Numba JIT 预热 |
+| `vllm/v1/spec_decode/dynamic/utils.py:4` | `DynamicSDSchedule` 类型别名——`list[tuple[int,int,int]]`，动态 K 配置的规范形态 |
+| `vllm/config/vllm.py:2555-2564` | `_validate_v2_model_runner()`——V1/V2 特性不匹配时直接抛异常，不静默回退 |
 
 ## 3. 核心数据结构
 
@@ -119,7 +128,24 @@
 
 ### 3.1 proposer 全家福：一句话原理 + 适用场景 + 额外权重
 
-按 `SpeculativeMethod`（`vllm/config/speculative.py:68-78`）逐个方法列全，`method` 列即配置里 `speculative_config.method` 的取值：
+`SpeculativeMethod`（`vllm/config/speculative.py:69-79`）本身就是全部方法名的权威清单：
+
+```python
+# vllm/config/speculative.py:69-79
+SpeculativeMethod = Literal[
+    "ngram",
+    "medusa",
+    "mlp_speculator",
+    "draft_model",
+    "suffix",
+    "custom_class",
+    EagleModelTypes,
+    NgramGPUTypes,
+    DSparkModelTypes,
+]
+```
+
+其中 `EagleModelTypes`（`vllm/config/speculative.py:66-68`）本身又是一个嵌套的 `Literal`，展开后包含 `"eagle"`、`"eagle3"`、`"extract_hidden_states"`、24 种 `MTPModelTypes`（`vllm/config/speculative.py:37-62`）、`"dflash"`——这也是为什么本篇反复用"proposer 全家福"而不是"proposer 类型"来描述这套体系：真正独立的方法名有十几个，但配置层面暴露出来的组合数远不止这十几个（每种 MTP 模型类型都是各自独立的字符串）。按 `method` 值逐个列全，`method` 列即配置里 `speculative_config.method` 的取值：
 
 | `method` | 一句话原理 | 适用场景 | 需要什么额外权重 | proposer 类 |
 |---|---|---|---|---|
@@ -138,7 +164,21 @@
 | `step3p5_mtp` | 继承 `EagleProposer`，按层做草稿步选择（"per-layer draft-step selection"） | Step3.5 模型专用 | 模型自带的 MTP 权重，`vllm/v1/spec_decode/step3p5.py:24` |
 | `custom_class` | 非内置算法，是插件机制：从字符串路径动态 import 用户自己实现的 proposer 类 | 研究/内部实验用的自定义投机策略 | 用户自行决定，`vllm/v1/spec_decode/custom_class_proposer.py:12-20` |
 
-表里 `mlp_speculator` 一行是本篇诚实标准要求下必须标注的一处"查不到"：它在类型系统（`SpeculativeMethod` Literal）和配置解析（`SpeculativeConfig.__post_init__` 会从 `hf_config.model_type == "mlp_speculator"` 自动识别出这个方法名）两层都是完整的，但本库在 `self.drafter` 的分发链（`## 2` 已给出行号 `vllm/v1/worker/gpu_model_runner.py:632-703`）和 `vllm/v1/worker/gpu/spec_decode/`（V2 speculator 目录）里都没检索到任何一个类去处理它——按 `:700-703` 那个 `else: raise ValueError("Unknown speculative decoding method: ...")` 的兜底分支，配置 `method="mlp_speculator"` 在本快照下大概率会在模型初始化阶段直接报错。这是本库推断（基于"检索不到对应实现"这一负面证据），不代表未来版本或其他分支同样如此。
+表里 `mlp_speculator` 一行是本篇诚实标准要求下必须标注的一处"查不到"：它在类型系统（`SpeculativeMethod` Literal）和配置解析（`SpeculativeConfig.__post_init__` 会从 `hf_config.model_type == "mlp_speculator"` 自动识别出这个方法名）两层都是完整的，但本库在 `self.drafter` 的分发链（`## 2` 已给出行号 `vllm/v1/worker/gpu_model_runner.py:632-703`）和 `vllm/v1/worker/gpu/spec_decode/`（V2 speculator 目录）里都没检索到任何一个类去处理它——按 `:699-703` 那个 `else: raise ValueError("Unknown speculative decoding method: ...")` 的兜底分支，配置 `method="mlp_speculator"` 在本快照下大概率会在模型初始化阶段直接报错。这是本库推断（基于"检索不到对应实现"这一负面证据），不代表未来版本或其他分支同样如此。
+
+### 3.2 验证旋钮的组合：`rejection_sample_method` × `draft_sample_method`
+
+proposer 决定"草稿怎么来"，这两个字段决定"草稿怎么被验证"，二者可以独立组合：
+
+| `rejection_sample_method` | `draft_sample_method="greedy"`（默认） | `draft_sample_method="probabilistic"` |
+|---|---|---|
+| `"standard"`（默认） | 草稿概率按 one-hot 处理，概率比检验退化成"draft 是否等于 target 认为的高概率 token"（`## 7` 已展开的精确特例） | 用草稿模型真实的 `[num_tokens, vocab_size]` logits 做概率比检验，理论上更贴近原始 Leviathan 算法对任意 `q` 的一般表述，代价是多存一份草稿 logits |
+| `"synthetic"` | 两列的差异被屏蔽：`SYNTHETIC_MODE` 分支直接读 `synthetic_conditional_rates_ptr` 判定接受与否，完全不看真实的 draft/target 概率（`vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py:583-585` 与 `vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py:656-658`），`draft_sample_method` 取哪个值对结果没有影响 | 同左 |
+| `"block"` | 走块联合验证（Sun et al. 2024），仍然读取 draft/target 概率做残差质量估计，one-hot 与真实概率两种输入都支持 | 同左，但残差质量估计使用真实草稿 logits 会更准确 |
+
+`ngram`/`suffix`/`custom_class` 这类没有神经网络输出分布的方法，"草稿概率"这个概念本身不存在，`draft_sample_method` 字段对它们没有意义——只有 EAGLE 系（`SpecDecodeBaseProposer` 子类）和 `draft_model` 这类会真正产出 logits 的方法才需要在这一列上做选择。
+
+这张表格和 `## 5` 决策 1、决策 2 是同一件事的两个切面：决策 1、2 讲的是"为什么 `"standard"` 这一列的算法能保真"，这里补的是"另外两列（`"synthetic"`、`"block"`）和另一个维度（`draft_sample_method`）分别在什么条件下参与或不参与这个保真性论证"。
 
 ## 4. 主流程走读
 
@@ -369,8 +409,11 @@ if self._is_dflash2_draft():
 
 1. `method="dspark"` 在 V1 的 `self.drafter` 分发链（`vllm/v1/worker/gpu_model_runner.py:632-703`）里**根本没有对应分支**——`dspark` 只在 `use_eagle()` 判定里被算作真（`vllm/config/speculative.py:1492-1496`），但真正的 dispatch 顺序是先查 `use_dflash()` 再查 `use_eagle()`（`vllm/v1/worker/gpu_model_runner.py:679-685`），`dspark` 两个分支都不匹配，理论上会一路落到 `else: raise ValueError(...)`（`:699-703`）。代码注释也直接承认"V1 ... can't run dspark"——这不是本库的推断，是上游注释原话。`use_v2_model_runner` 因此把 `method=="dspark"` 列为强制切 V2 的条件之一，避免用户撞上这个报错。
 2. `dflash2` 格式的 checkpoint（`_is_dflash2_draft()` 判定，`vllm/config/vllm.py:702-711`）如果因为某种原因没有被强制切到 V2（比如显式设置了 `VLLM_USE_V2_MODEL_RUNNER=0` 覆盖掉自动判定），会落到 V1 的 `DFlashProposer`（`vllm/v1/spec_decode/dflash.py:23`）——但 V1 的 `DFlashProposer` 从不调用 DFlash2 的候选选择器，注释原话是"the draft degrades to DFlash1 silently"。也就是说**权重是按 DFlash2 训练的，跑起来的算法却是 DFlash1**，没有报错、没有警告，只是起草质量按 DFlash1 的水平打折——这正是本库反复强调的"静默降级"模式（同类问题见兄弟篇 [[06-vLLM-模型执行与CUDA-Graph]] `## 7` 的 cascade attention 案例）。
+3. 同一份强制列表里还有第三条更小众的条件：`_dflash_needs_multi_kv_group()`（`vllm/config/vllm.py:713-723`）判定 DFlash 草稿模型是否混用了滑窗注意力与全量注意力层，混用意味着需要多个 KV 缓存组，这一能力目前只有 V2 实现——命中同样强制切 V2，不属于上面两条"静默降级"的范畴，因为它是在配置阶段就被拦下，不会真的跑到 V1 上。
 
 判断当前到底跑的是 V1 还是 V2，`_get_v2_model_runner_unsupported_features()`（`vllm/config/vllm.py:2448`）还额外列出了一批 V2 尚不支持、会被强制拉回 V1 的组合——包括 `ngram`/`ngram_gpu`（`:2476-2478`）、EAGLE 的 `parallel_drafting`（`:2489-2496`）、EAGLE3 配流水线并行（`:2498-2502`）、`enable_adaptive_verification` 配 LoRA 或 `cudagraph_mode=NONE` 或流水线并行（`:2504-2530`）——两套实现各自覆盖不同的方法子集，没有哪一套是"全集"。
+
+换句话说，`use_v2_model_runner` 与 `_get_v2_model_runner_unsupported_features()` 是同一枚硬币的两面：前者列的是"这些情况必须用 V2"，后者列的是"这些情况 V2 还不能用"。两份清单一旦出现交集（比如同时要求 `dspark` 强制 V2、又用了 V2 明确不支持的组合），`_validate_v2_model_runner()`（`vllm/config/vllm.py:2555-2564`，其存在在 `:660` 处的注释里被提前提及）的设计是直接抛 `ValueError`（`:2562-2564`）而不是静默回退到跑不了 `dspark` 的 V1——这一点本身是对"静默降级"教训的正确应对，值得和上面两条真正的静默降级坑对照着读。
 
 ## 8. 可改进点
 

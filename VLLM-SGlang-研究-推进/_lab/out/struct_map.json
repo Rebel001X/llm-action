@@ -902,8 +902,8 @@
         },
         "kv_cache": {
           "key_classes": [],
-          "lines": 50091,
-          "n_files": 133,
+          "lines": 57816,
+          "n_files": 151,
           "top_files": [
             {
               "file": "lib/llm/src/block_manager/offload.rs",
@@ -926,6 +926,10 @@
               "lines": 1806
             },
             {
+              "file": "lib/llm/src/lora/routing/mcf_allocator.rs",
+              "lines": 1601
+            },
+            {
               "file": "lib/llm/src/block_manager/kv_consolidator/tracker.rs",
               "lines": 1265
             },
@@ -946,6 +950,10 @@
               "lines": 1071
             },
             {
+              "file": "lib/kv-router/src/indexer/radix_tree.rs",
+              "lines": 1066
+            },
+            {
               "file": "lib/llm/src/block_manager/distributed/worker.rs",
               "lines": 1004
             },
@@ -958,6 +966,10 @@
               "lines": 841
             },
             {
+              "file": "lib/kv-router/src/indexer/concurrent_radix_tree_compressed/node.rs",
+              "lines": 831
+            },
+            {
               "file": "lib/bindings/kvbm/src/block_manager/vllm/connector/leader.rs",
               "lines": 780
             },
@@ -967,6 +979,10 @@
             },
             {
               "file": "lib/bindings/kvbm/src/block_manager/vllm/connector/leader/recorder.rs",
+              "lines": 679
+            },
+            {
+              "file": "lib/kv-router/src/indexer/concurrent_radix_tree.rs",
               "lines": 679
             },
             {
@@ -988,22 +1004,6 @@
             {
               "file": "lib/bindings/kvbm/src/block_manager/vllm/connector/trtllm_leader.rs",
               "lines": 610
-            },
-            {
-              "file": "lib/llm/src/block_manager/distributed/zmq.rs",
-              "lines": 595
-            },
-            {
-              "file": "lib/bindings/kvbm/src/block_manager/vllm/connector/worker.rs",
-              "lines": 587
-            },
-            {
-              "file": "lib/llm/src/block_manager/block/transfer/context.rs",
-              "lines": 586
-            },
-            {
-              "file": "lib/llm/src/block_manager/distributed/transfer.rs",
-              "lines": 581
             }
           ]
         },
@@ -1465,8 +1465,8 @@
               "name": "_BenchmarkCapacityEnvelope"
             }
           ],
-          "lines": 30110,
-          "n_files": 36,
+          "lines": 31720,
+          "n_files": 40,
           "top_files": [
             {
               "file": "components/src/dynamo/vllm/instrumented_scheduler.py",
@@ -1545,6 +1545,10 @@
               "lines": 512
             },
             {
+              "file": "components/src/dynamo/vllm/multimodal_utils/custom_encoder/batcher.py",
+              "lines": 480
+            },
+            {
               "file": "lib/kv-router/src/scheduling/policy.rs",
               "lines": 445
             },
@@ -1553,20 +1557,16 @@
               "lines": 442
             },
             {
+              "file": "lib/kvbm-engine/src/offload/queue.rs",
+              "lines": 434
+            },
+            {
               "file": "components/src/dynamo/planner/plugins/scheduler.py",
               "lines": 414
             },
             {
-              "file": "lib/kv-router/src/scheduling/overlap_refresh.rs",
-              "lines": 359
-            },
-            {
-              "file": "lib/mocker/src/grouped_scheduler/compatibility.rs",
-              "lines": 306
-            },
-            {
-              "file": "lib/mocker/src/scheduler/mod.rs",
-              "lines": 299
+              "file": "lib/kvbm-logical/src/events/batcher.rs",
+              "lines": 377
             }
           ]
         },
@@ -2782,12 +2782,20 @@
               "name": "SchedulerClient"
             }
           ],
-          "lines": 234,
-          "n_files": 1,
+          "lines": 384,
+          "n_files": 3,
           "top_files": [
             {
               "file": "archive/ktransformers/server/balance_serve/sched_rpc.py",
               "lines": 234
+            },
+            {
+              "file": "kt-kernel/cpu_backend/task_queue.cpp",
+              "lines": 99
+            },
+            {
+              "file": "kt-kernel/cpu_backend/task_queue.h",
+              "lines": 51
             }
           ]
         },
@@ -5040,8 +5048,8 @@
               "name": "RadixCacheReadOnlyClient"
             }
           ],
-          "lines": 5778,
-          "n_files": 29,
+          "lines": 5869,
+          "n_files": 30,
           "top_files": [
             {
               "file": "lightllm/common/basemodel/triton_kernel/kv_cache_offload.py",
@@ -5104,6 +5112,10 @@
               "lines": 106
             },
             {
+              "file": "lightllm/server/embed_cache/allocator.py",
+              "lines": 91
+            },
+            {
               "file": "lightllm/common/kv_cache_mem_manager/deepseek2_mem_manager.py",
               "lines": 86
             },
@@ -5138,10 +5150,6 @@
             {
               "file": "lightllm/common/kv_cache_mem_manager/ppl_int4kv_mem_manager.py",
               "lines": 47
-            },
-            {
-              "file": "lightllm/common/kv_cache_mem_manager/ppl_int8kv_mem_manager.py",
-              "lines": 44
             }
           ]
         },
@@ -5540,10 +5548,247 @@
           ]
         },
         "scheduler": {
-          "key_classes": [],
-          "lines": 0,
-          "n_files": 0,
-          "top_files": []
+          "key_classes": [
+            {
+              "bases": [
+                "BaseQueue"
+              ],
+              "doc_first_line": null,
+              "file": "lightllm/server/router/req_queue/chunked_prefill/beam_impl.py",
+              "line": 7,
+              "lines": 141,
+              "methods": [
+                "__init__",
+                "_init_cache_list",
+                "_can_add_new_group_reqs",
+                "generate_new_batch",
+                "_add_to_group",
+                "_calcu_batch_token_load_batch_not_none"
+              ],
+              "n_methods": 6,
+              "name": "ChunkedBeamContinuesBatchQueue"
+            },
+            {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "lightllm/server/router/req_queue/base_queue.py",
+              "line": 13,
+              "lines": 121,
+              "methods": [
+                "__init__",
+                "free_aborted_req_cpu_cache_pages",
+                "should_release_aborted_req_in_queue",
+                "release_aborted_req",
+                "filter_aborted_reqs",
+                "extend",
+                "get_wait_req_num",
+                "is_busy",
+                "get_batch_dp_req_size",
+                "generate_new_batch",
+                "calcu_batch_token_load",
+                "_calcu_batch_token_load_batch_not_none",
+                "update_token_load"
+              ],
+              "n_methods": 13,
+              "name": "BaseQueue"
+            },
+            {
+              "bases": [
+                "BaseQueue"
+              ],
+              "doc_first_line": null,
+              "file": "lightllm/server/router/req_queue/chunked_prefill/impl.py",
+              "line": 7,
+              "lines": 105,
+              "methods": [
+                "__init__",
+                "_init_cache_list",
+                "_can_add_new_req",
+                "generate_new_batch",
+                "_calcu_batch_token_load_batch_not_none"
+              ],
+              "n_methods": 5,
+              "name": "ChunkedPrefillQueue"
+            },
+            {
+              "bases": [
+                "BaseQueue"
+              ],
+              "doc_first_line": null,
+              "file": "lightllm/server/router/req_queue/chunked_prefill/impl_for_pd.py",
+              "line": 8,
+              "lines": 88,
+              "methods": [
+                "__init__",
+                "_can_add_new_req",
+                "_caclu_batch_estimated_peak_token_num",
+                "generate_new_batch",
+                "_calcu_batch_token_load_batch_not_none"
+              ],
+              "n_methods": 5,
+              "name": "PDQueue"
+            },
+            {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "lightllm/server/router/req_queue/dp_base_queue.py",
+              "line": 11,
+              "lines": 71,
+              "methods": [
+                "__init__",
+                "release_aborted_req",
+                "get_dp_queue",
+                "get_wait_req_num",
+                "generate_new_batch",
+                "_merge_batch",
+                "extend",
+                "is_busy",
+                "update_token_load"
+              ],
+              "n_methods": 9,
+              "name": "DpQueue"
+            },
+            {
+              "bases": [
+                "ctypes.Structure"
+              ],
+              "doc_first_line": null,
+              "file": "lightllm/server/core/objs/out_token_circlequeue.py",
+              "line": 55,
+              "lines": 62,
+              "methods": [
+                "__init__",
+                "is_empty",
+                "is_full",
+                "push",
+                "pop",
+                "peek",
+                "pop_no_ret",
+                "__len__"
+              ],
+              "n_methods": 8,
+              "name": "CircularQueue"
+            },
+            {
+              "bases": [
+                "DpBalancer"
+              ],
+              "doc_first_line": "轮询负载均衡器 在队列长度最小的DP中进行轮询选择",
+              "file": "lightllm/server/router/req_queue/dp_balancer/roundrobin.py",
+              "line": 11,
+              "lines": 41,
+              "methods": [
+                "__init__",
+                "get_suggest_dp_index",
+                "assign_reqs_to_dp"
+              ],
+              "n_methods": 3,
+              "name": "RoundRobinDpBalancer"
+            },
+            {
+              "bases": [
+                "ctypes.Structure"
+              ],
+              "doc_first_line": null,
+              "file": "lightllm/server/core/objs/out_token_circlequeue.py",
+              "line": 14,
+              "lines": 39,
+              "methods": [
+                "__init__",
+                "set",
+                "get"
+              ],
+              "n_methods": 3,
+              "name": "QueueItem"
+            },
+            {
+              "bases": [
+                "DpBalancer"
+              ],
+              "doc_first_line": "This balancer is main to balance the batch size of each dp rank. Because, for dp mode, if it exists a dp rank without any request, it will padding a request and",
+              "file": "lightllm/server/router/req_queue/dp_balancer/bs.py",
+              "line": 11,
+              "lines": 35,
+              "methods": [
+                "__init__",
+                "assign_reqs_to_dp"
+              ],
+              "n_methods": 2,
+              "name": "DpBsBalancer"
+            },
+            {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "lightllm/server/httpserver/async_queue.py",
+              "line": 4,
+              "lines": 29,
+              "methods": [
+                "__init__",
+                "wait_to_ready",
+                "get_all_data",
+                "put",
+                "wait_to_get_all_data"
+              ],
+              "n_methods": 5,
+              "name": "AsyncQueue"
+            }
+          ],
+          "lines": 880,
+          "n_files": 13,
+          "top_files": [
+            {
+              "file": "lightllm/server/router/req_queue/chunked_prefill/beam_impl.py",
+              "lines": 147
+            },
+            {
+              "file": "lightllm/server/router/req_queue/base_queue.py",
+              "lines": 133
+            },
+            {
+              "file": "lightllm/server/core/objs/out_token_circlequeue.py",
+              "lines": 116
+            },
+            {
+              "file": "lightllm/server/router/req_queue/chunked_prefill/impl.py",
+              "lines": 111
+            },
+            {
+              "file": "lightllm/server/router/req_queue/chunked_prefill/impl_for_pd.py",
+              "lines": 95
+            },
+            {
+              "file": "lightllm/server/router/req_queue/dp_base_queue.py",
+              "lines": 81
+            },
+            {
+              "file": "lightllm/server/router/req_queue/dp_balancer/roundrobin.py",
+              "lines": 51
+            },
+            {
+              "file": "lightllm/server/router/req_queue/dp_balancer/bs.py",
+              "lines": 45
+            },
+            {
+              "file": "lightllm/server/router/req_queue/__init__.py",
+              "lines": 33
+            },
+            {
+              "file": "lightllm/server/httpserver/async_queue.py",
+              "lines": 32
+            },
+            {
+              "file": "lightllm/server/router/req_queue/dp_balancer/base.py",
+              "lines": 23
+            },
+            {
+              "file": "lightllm/server/router/req_queue/dp_balancer/__init__.py",
+              "lines": 13
+            },
+            {
+              "file": "lightllm/server/router/req_queue/chunked_prefill/__init__.py",
+              "lines": 0
+            }
+          ]
         },
         "speculative": {
           "key_classes": [],
@@ -6082,9 +6327,30 @@
         },
         "scheduler": {
           "key_classes": [],
-          "lines": 0,
-          "n_files": 0,
-          "top_files": []
+          "lines": 1470,
+          "n_files": 5,
+          "top_files": [
+            {
+              "file": "tools/server/server-queue.cpp",
+              "lines": 621
+            },
+            {
+              "file": "ggml/src/ggml-hexagon/htp/dma-queue.h",
+              "lines": 407
+            },
+            {
+              "file": "tools/server/server-queue.h",
+              "lines": 244
+            },
+            {
+              "file": "ggml/src/ggml-hexagon/htp/hmx-queue.h",
+              "lines": 160
+            },
+            {
+              "file": "ggml/src/ggml-hexagon/htp/work-queue.h",
+              "lines": 38
+            }
+          ]
         },
         "speculative": {
           "key_classes": [],
@@ -9118,9 +9384,19 @@
           "lines": 26176
         },
         {
+          "dir": "cpp/serve",
+          "files": 30,
+          "lines": 10102
+        },
+        {
           "dir": "python/mlc_llm/serve",
           "files": 20,
           "lines": 5888
+        },
+        {
+          "dir": "cpp/serve/engine_actions",
+          "files": 17,
+          "lines": 5490
         },
         {
           "dir": "python/mlc_llm/op",
@@ -9148,6 +9424,11 @@
           "lines": 2696
         },
         {
+          "dir": "cpp/json_ffi",
+          "files": 8,
+          "lines": 2105
+        },
+        {
           "dir": "python/mlc_llm/support",
           "files": 17,
           "lines": 2065
@@ -9158,9 +9439,24 @@
           "lines": 1897
         },
         {
+          "dir": "cpp/serve/sampler",
+          "files": 3,
+          "lines": 1509
+        },
+        {
+          "dir": "cpp/support",
+          "files": 14,
+          "lines": 1354
+        },
+        {
           "dir": "python/mlc_llm/conversation_template",
           "files": 30,
           "lines": 1264
+        },
+        {
+          "dir": "cpp/tokenizers",
+          "files": 4,
+          "lines": 1158
         },
         {
           "dir": "python/mlc_llm/protocol",
@@ -9183,6 +9479,11 @@
           "lines": 438
         },
         {
+          "dir": "cpp/multi_gpu",
+          "files": 2,
+          "lines": 427
+        },
+        {
           "dir": "python/mlc_llm/router",
           "files": 2,
           "lines": 394
@@ -9193,6 +9494,11 @@
           "lines": 303
         },
         {
+          "dir": "cpp/metadata",
+          "files": 2,
+          "lines": 270
+        },
+        {
           "dir": "python/mlc_llm/tokenizers",
           "files": 4,
           "lines": 221
@@ -9201,11 +9507,17 @@
           "dir": "python/mlc_llm",
           "files": 4,
           "lines": 203
+        },
+        {
+          "dir": "cpp",
+          "files": 1,
+          "lines": 16
         }
       ],
-      "files_scanned": 318,
+      "files_scanned": 399,
       "pkg_roots": [
-        "python/mlc_llm"
+        "python/mlc_llm",
+        "cpp"
       ],
       "ref": {
         "commit_date": "2026-08-17T13:41:45-07:00",
@@ -9230,9 +9542,18 @@
         },
         "disagg": {
           "key_classes": [],
-          "lines": 0,
-          "n_files": 0,
-          "top_files": []
+          "lines": 950,
+          "n_files": 2,
+          "top_files": [
+            {
+              "file": "cpp/serve/engine_actions/disagg_remote_send.cc",
+              "lines": 503
+            },
+            {
+              "file": "cpp/serve/engine_actions/disagg_prepare_recv.cc",
+              "lines": 447
+            }
+          ]
         },
         "distributed": {
           "key_classes": [
@@ -9502,9 +9823,13 @@
               "name": "CLIPEncoderLayer"
             }
           ],
-          "lines": 3689,
-          "n_files": 26,
+          "lines": 4440,
+          "n_files": 28,
           "top_files": [
+            {
+              "file": "cpp/json_ffi/openai_api_protocol.cc",
+              "lines": 543
+            },
             {
               "file": "python/mlc_llm/protocol/openai_api_protocol.py",
               "lines": 462
@@ -9528,6 +9853,10 @@
             {
               "file": "python/mlc_llm/model/vision/clip_vision.py",
               "lines": 231
+            },
+            {
+              "file": "cpp/json_ffi/openai_api_protocol.h",
+              "lines": 208
             },
             {
               "file": "python/mlc_llm/serve/server/popen_server.py",
@@ -9596,14 +9925,6 @@
             {
               "file": "python/mlc_llm/serve/entrypoints/metrics_entrypoints.py",
               "lines": 23
-            },
-            {
-              "file": "python/mlc_llm/serve/entrypoints/__init__.py",
-              "lines": 8
-            },
-            {
-              "file": "python/mlc_llm/serve/server/__init__.py",
-              "lines": 4
             }
           ]
         },
@@ -9627,6 +9948,29 @@
             },
             {
               "bases": [
+                "Object"
+              ],
+              "doc_first_line": "The paged radix tree to manage prefix and sequence.",
+              "file": "python/mlc_llm/serve/radix_tree.py",
+              "line": 13,
+              "lines": 142,
+              "methods": [
+                "__init__",
+                "match",
+                "add",
+                "remove",
+                "extend",
+                "rollback",
+                "fork",
+                "get",
+                "get_length",
+                "free_capacity"
+              ],
+              "n_methods": 10,
+              "name": "PagedRadixTree"
+            },
+            {
+              "bases": [
                 "TVMPagedKVCache"
               ],
               "doc_first_line": "The Paged KV Cache used in LLM batching for efficient attention computation.",
@@ -9638,18 +9982,55 @@
               ],
               "n_methods": 1,
               "name": "PagedKVCache"
+            },
+            {
+              "bases": [],
+              "doc_first_line": "Attach embedding tensor allocation Relax function to IRModule.",
+              "file": "python/mlc_llm/compiler_pass/attach_embedding_allocator.py",
+              "line": 10,
+              "lines": 30,
+              "methods": [
+                "__init__",
+                "transform_module"
+              ],
+              "n_methods": 2,
+              "name": "AttachAllocEmbeddingTensorFunc"
             }
           ],
-          "lines": 336,
-          "n_files": 2,
+          "lines": 2108,
+          "n_files": 8,
           "top_files": [
+            {
+              "file": "cpp/serve/radix_tree.cc",
+              "lines": 845
+            },
+            {
+              "file": "cpp/serve/prefix_cache.cc",
+              "lines": 442
+            },
             {
               "file": "python/mlc_llm/compiler_pass/dispatch_kv_cache_creation.py",
               "lines": 243
             },
             {
+              "file": "cpp/serve/prefix_cache.h",
+              "lines": 158
+            },
+            {
+              "file": "python/mlc_llm/serve/radix_tree.py",
+              "lines": 154
+            },
+            {
+              "file": "cpp/serve/radix_tree.h",
+              "lines": 134
+            },
+            {
               "file": "python/mlc_llm/nn/kv_cache.py",
               "lines": 93
+            },
+            {
+              "file": "python/mlc_llm/compiler_pass/attach_embedding_allocator.py",
+              "lines": 39
             }
           ]
         },
@@ -10117,24 +10498,52 @@
               "name": "AttachSpecDecodeAuxFuncs"
             }
           ],
-          "lines": 574,
-          "n_files": 7,
+          "lines": 2459,
+          "n_files": 14,
           "top_files": [
+            {
+              "file": "cpp/serve/engine_actions/eagle_new_request_prefill.cc",
+              "lines": 502
+            },
+            {
+              "file": "cpp/serve/engine_actions/eagle_batch_verify.cc",
+              "lines": 460
+            },
+            {
+              "file": "cpp/serve/engine_actions/batch_draft.cc",
+              "lines": 407
+            },
             {
               "file": "python/mlc_llm/model/eagle/eagle_model.py",
               "lines": 251
+            },
+            {
+              "file": "cpp/serve/engine_actions/eagle_batch_draft.cc",
+              "lines": 234
             },
             {
               "file": "python/mlc_llm/compiler_pass/attach_spec_decode_aux_funcs.py",
               "lines": 123
             },
             {
+              "file": "cpp/serve/draft_token_workspace_manager.h",
+              "lines": 117
+            },
+            {
               "file": "python/mlc_llm/model/eagle/eagle_loader.py",
               "lines": 105
             },
             {
+              "file": "cpp/serve/engine_actions/auto_spec_decode.cc",
+              "lines": 88
+            },
+            {
               "file": "python/mlc_llm/model/medusa/medusa_model.py",
               "lines": 81
+            },
+            {
+              "file": "cpp/serve/draft_token_workspace_manager.cc",
+              "lines": 77
             },
             {
               "file": "python/mlc_llm/model/medusa/medusa_loader.py",
@@ -10631,12 +11040,108 @@
         },
         "kv_cache": {
           "key_classes": [],
-          "lines": 106,
-          "n_files": 1,
+          "lines": 23508,
+          "n_files": 55,
           "top_files": [
             {
-              "file": "mooncake-transfer-engine/example/memory_pool.cpp",
-              "lines": 106
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/core.h",
+              "lines": 3002
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/format.h",
+              "lines": 2830
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/format-inl.h",
+              "lines": 2620
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/chrono.h",
+              "lines": 1308
+            },
+            {
+              "file": "mooncake-store/src/offset_allocator.cpp",
+              "lines": 800
+            },
+            {
+              "file": "mooncake-store/src/cachelib_memory_allocator/AllocationClass.cpp",
+              "lines": 699
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/printf.h",
+              "lines": 652
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/fake_include/folly/logging/xlog.h",
+              "lines": 651
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/compile.h",
+              "lines": 639
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/color.h",
+              "lines": 627
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/folly/Portability.h",
+              "lines": 609
+            },
+            {
+              "file": "mooncake-store/src/allocator.cpp",
+              "lines": 597
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/os.h",
+              "lines": 515
+            },
+            {
+              "file": "mooncake-store/src/storage/distributed/dfs_global_allocator.cpp",
+              "lines": 474
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/fmt/ranges.h",
+              "lines": 468
+            },
+            {
+              "file": "mooncake-store/include/offset_allocator/offset_allocator.h",
+              "lines": 466
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/MemoryAllocator.h",
+              "lines": 455
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/AllocationClass.h",
+              "lines": 454
+            },
+            {
+              "file": "mooncake-store/src/cachelib_memory_allocator/MemoryPool.cpp",
+              "lines": 407
+            },
+            {
+              "file": "mooncake-transfer-engine/src/transport/ascend_transport/ascend_allocator.cpp",
+              "lines": 394
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/MemoryPool.h",
+              "lines": 359
+            },
+            {
+              "file": "mooncake-store/include/allocator.h",
+              "lines": 344
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/include/folly/CPortability.h",
+              "lines": 330
+            },
+            {
+              "file": "mooncake-store/src/cachelib_memory_allocator/MemoryAllocator.cpp",
+              "lines": 307
+            },
+            {
+              "file": "mooncake-store/include/cachelib_memory_allocator/Slab.h",
+              "lines": 298
             }
           ]
         },
@@ -10731,12 +11236,20 @@
         },
         "scheduler": {
           "key_classes": [],
-          "lines": 968,
-          "n_files": 6,
+          "lines": 1759,
+          "n_files": 9,
           "top_files": [
+            {
+              "file": "mooncake-transfer-engine/tent/src/runtime/admission_queue.cpp",
+              "lines": 487
+            },
             {
               "file": "mooncake-store/src/tenant_quota_policy_store.cpp",
               "lines": 474
+            },
+            {
+              "file": "mooncake-transfer-engine/tent/include/tent/runtime/admission_queue.h",
+              "lines": 195
             },
             {
               "file": "mooncake-store/src/nvme_kv_key_conflict_policy.cpp",
@@ -10745,6 +11258,10 @@
             {
               "file": "mooncake-store/include/deadline_scheduler.h",
               "lines": 140
+            },
+            {
+              "file": "mooncake-transfer-engine/tent/include/tent/common/concurrent/bounded_mpsc_queue.h",
+              "lines": 109
             },
             {
               "file": "mooncake-transfer-engine/tent/include/tent/transport/rdma/promotion_policy.h",
@@ -13723,6 +14240,44 @@
               "name": "HiRadixCache"
             },
             {
+              "bases": [
+                "BaseTokenToKVPoolAllocator"
+              ],
+              "doc_first_line": "Allocator for one sub-pool over a `UnifiedKVPool`.",
+              "file": "python/sglang/srt/mem_cache/multi_ended_allocator.py",
+              "line": 102,
+              "lines": 1627,
+              "methods": [
+                "__init__",
+                "bind_peer",
+                "peer",
+                "clear",
+                "clear_inverse_history",
+                "_allocated_pages",
+                "allocated_count",
+                "is_slot_allocated",
+                "allocator_state_str",
+                "_byte_high_frontier",
+                "_byte_low_frontier",
+                "_current_gap_bytes",
+                "_available_tokens",
+                "available_size",
+                "_peer_drainable_hole_bytes",
+                "schedulable_available_size",
+                "_flush_peer_for_alloc",
+                "take_physical",
+                "_take_physical_eager",
+                "_extend_watermark",
+                "_take_physical_arange",
+                "take_physical_pages",
+                "bind",
+                "bind_pages",
+                "_alloc_bind_fast_or_slow"
+              ],
+              "n_methods": 54,
+              "name": "MultiEndedAllocator"
+            },
+            {
               "bases": [],
               "doc_first_line": "FP8 paged MQA logits kernel for Blackwell (SM100). Each CTA processes a range of (q_idx, kv_split) pairs. A split = 2 consecutive KV blocks within a sequence (o",
               "file": "python/sglang/kernels/ops/attention/cutedsl_fp8_paged_mqa_logits.py",
@@ -13736,6 +14291,46 @@
               ],
               "n_methods": 4,
               "name": "FP8MQALogitsKernel"
+            },
+            {
+              "bases": [
+                "AttentionBackend",
+                "C4IndexerBackendMixin",
+                "CompressorBackendMixin"
+              ],
+              "doc_first_line": null,
+              "file": "python/sglang/srt/layers/attention/deepseek_v4_backend_hip_radix.py",
+              "line": 411,
+              "lines": 1324,
+              "methods": [
+                "__init__",
+                "_move_to_device",
+                "init_forward_metadata_indexer",
+                "init_forward_metadata_decode",
+                "init_forward_metadata_prefill",
+                "init_forward_metadata_target_verify",
+                "init_forward_metadata_target_verify_old",
+                "make_forward_metadata_from_raw_verify",
+                "make_forward_metadata_from_raw_decode",
+                "init_forward_metadata_draft_extend",
+                "init_forward_metadata_in_graph",
+                "init_forward_metadata_out_graph",
+                "init_forward_metadata",
+                "init_cuda_graph_state",
+                "replay_cuda_graph_metadata_from",
+                "get_cuda_graph_seq_len_fill_value",
+                "on_after_cuda_graph_warmup",
+                "_attach_unified_kv_decode_streams",
+                "_attach_unified_kv_prefill_meta",
+                "_forward_unified_kv",
+                "get_swa_out_cache_loc",
+                "get_unified_swa_loc",
+                "store_cache",
+                "forward",
+                "expand_prefill_casually"
+              ],
+              "n_methods": 28,
+              "name": "DeepseekV4HipRadixBackend"
             },
             {
               "bases": [
@@ -13921,39 +14516,41 @@
             },
             {
               "bases": [
-                "BasePrefixCache"
+                "SWATokenToKVPoolAllocator"
               ],
-              "doc_first_line": null,
-              "file": "python/sglang/srt/mem_cache/radix_cache.py",
-              "line": 303,
-              "lines": 544,
+              "doc_first_line": "Composite allocator for the hybrid SWA pair (full + swa MHA sub-pools). Inherits from `SWATokenToKVPoolAllocator` only for the isinstance contract; we call gran",
+              "file": "python/sglang/srt/mem_cache/multi_ended_allocator.py",
+              "line": 2050,
+              "lines": 514,
               "methods": [
+                "size",
+                "size",
                 "__init__",
-                "create_simulated",
-                "reset",
-                "match_prefix",
-                "insert",
-                "cache_finished_req",
-                "cache_unfinished_req",
-                "pretty_print",
-                "total_size",
-                "evict",
-                "inc_lock_ref",
-                "dec_lock_ref",
-                "evictable_size",
-                "protected_size",
-                "all_values_flatten",
-                "_match_prefix_helper",
-                "_split_node",
-                "_inc_hit_count",
-                "_insert_helper",
-                "_print_helper",
-                "_delete_leaf",
-                "_update_leaf_status",
-                "_total_size_helper"
+                "available_size",
+                "_conserve_full_available_size",
+                "_conserve_swa_available_size",
+                "full_available_size",
+                "swa_available_size",
+                "schedulable_full_available_size",
+                "schedulable_swa_available_size",
+                "_flush_both_for_alloc",
+                "debug_print",
+                "get_kvcache",
+                "translate_kv_loc",
+                "translate_loc_from_full_to_swa",
+                "alloc",
+                "alloc_extend",
+                "alloc_decode",
+                "is_slot_allocated",
+                "allocator_state_str",
+                "free",
+                "free_swa",
+                "set_full_to_swa_mapping",
+                "clear_full_to_swa_mapping",
+                "free_group_begin"
               ],
-              "n_methods": 23,
-              "name": "RadixCache"
+              "n_methods": 30,
+              "name": "UnifiedSWATokenToKVPoolAllocator"
             },
             {
               "bases": [
@@ -14156,6 +14753,44 @@
             },
             {
               "bases": [
+                "BaseTokenToKVPoolAllocator"
+              ],
+              "doc_first_line": "Composite allocator for the MHA (full-attn) + Mamba hybrid pair. The token-slot surface delegates to the full-attn side (`alloc(N)` → MHA token slots). The Mamb",
+              "file": "python/sglang/srt/mem_cache/multi_ended_allocator.py",
+              "line": 1731,
+              "lines": 317,
+              "methods": [
+                "__init__",
+                "size",
+                "size",
+                "available_size",
+                "full_available_size",
+                "mamba_slot_full_token_cost",
+                "size_full",
+                "size_mamba",
+                "debug_print",
+                "get_kvcache",
+                "alloc",
+                "alloc_extend",
+                "alloc_decode",
+                "translate_kv_loc",
+                "kernel_page_multiplier",
+                "full_v2p_page_table",
+                "translate_kv_loc_dense",
+                "translate_kv_indices_for_transfer",
+                "set_disagg_move_gate",
+                "is_slot_allocated",
+                "allocator_state_str",
+                "free",
+                "free_group_begin",
+                "free_group_end",
+                "clear"
+              ],
+              "n_methods": 28,
+              "name": "UnifiedMambaTokenToKVPoolAllocator"
+            },
+            {
+              "bases": [
                 "KVCache"
               ],
               "doc_first_line": null,
@@ -14292,89 +14927,24 @@
             },
             {
               "bases": [],
-              "doc_first_line": "is_bigram=True: token_ids holds raw tokens (N+1 for N bigrams); slices share one boundary token.",
-              "file": "python/sglang/srt/mem_cache/radix_cache.py",
-              "line": 59,
-              "lines": 177,
-              "methods": [
-                "__init__",
-                "_raw_len",
-                "raw_token_ids",
-                "__len__",
-                "__iter__",
-                "__getitem__",
-                "__repr__",
-                "page_aligned",
-                "maybe_to_bigram_view",
-                "_check_compatible",
-                "match",
-                "child_key",
-                "hash_page"
-              ],
-              "n_methods": 13,
-              "name": "RadixKey"
-            },
-            {
-              "bases": [
-                "MHATokenToKVPool"
-              ],
               "doc_first_line": null,
-              "file": "python/sglang/srt/mem_cache/memory_pool.py",
-              "line": 2985,
-              "lines": 152,
+              "file": "python/sglang/srt/layers/attention/deepseek_v4_backend_hip_radix.py",
+              "line": 143,
+              "lines": 201,
               "methods": [
-                "_create_buffers",
-                "_clear_buffers",
-                "_get_key_buffer",
-                "_get_value_buffer",
-                "set_kv_buffer"
-              ],
-              "n_methods": 5,
-              "name": "MHATokenToKVPoolFP4"
-            },
-            {
-              "bases": [
-                "MHATokenToKVPool"
-              ],
-              "doc_first_line": "MHA pool with the page-major (layer-major within a page) page-granularity envelope layout. All layers/slots share one contiguous ``uint8`` ``_raw`` buffer; per-",
-              "file": "python/sglang/srt/mem_cache/memory_pool.py",
-              "line": 3139,
-              "lines": 152,
-              "methods": [
-                "__init__",
-                "_create_buffers",
-                "_store_kv_layer",
-                "_move_kv_cache_impl",
-                "get_contiguous_buf_infos",
-                "get_cpu_copy",
-                "load_cpu_copy",
-                "set_kv_buffer_prefix_valid"
-              ],
-              "n_methods": 8,
-              "name": "PageMajorMHATokenToKVPool"
-            },
-            {
-              "bases": [
-                "MHATokenToKVPool"
-              ],
-              "doc_first_line": "MHA KV pool whose `k_buffer`/`v_buffer` are strided views into a `UnifiedKVPool`. Relocation uses the native move (strided views break the tiled Triton kernel t",
-              "file": "python/sglang/srt/mem_cache/unified_memory_pool.py",
-              "line": 452,
-              "lines": 148,
-              "methods": [
-                "__init__",
-                "_create_buffers",
-                "_clear_buffers",
-                "move_kv_cache",
-                "get_kv_size_bytes",
-                "set_kv_buffer"
+                "positions",
+                "get_flashmla_metadata",
+                "copy_",
+                "init_compression_metadata",
+                "apply_cp_reindex",
+                "init_flashmla_related"
               ],
               "n_methods": 6,
-              "name": "UnifiedMHATokenToKVPool"
+              "name": "DSV4AttnMetadata"
             }
           ],
-          "lines": 32786,
-          "n_files": 47,
+          "lines": 42453,
+          "n_files": 73,
           "top_files": [
             {
               "file": "python/sglang/srt/mem_cache/memory_pool.py",
@@ -14385,12 +14955,20 @@
               "lines": 2894
             },
             {
+              "file": "python/sglang/srt/mem_cache/multi_ended_allocator.py",
+              "lines": 2563
+            },
+            {
               "file": "python/sglang/srt/mem_cache/kv_cache_configurator.py",
               "lines": 2252
             },
             {
               "file": "python/sglang/srt/mem_cache/hiradix_cache.py",
               "lines": 2022
+            },
+            {
+              "file": "python/sglang/srt/layers/attention/deepseek_v4_backend_hip_radix.py",
+              "lines": 1827
             },
             {
               "file": "python/sglang/kernels/ops/attention/cutedsl_fp8_paged_mqa_logits.py",
@@ -14433,8 +15011,20 @@
               "lines": 789
             },
             {
+              "file": "python/sglang/srt/layers/radix_attention.py",
+              "lines": 614
+            },
+            {
               "file": "python/sglang/srt/hardware_backend/npu/dsv4/dsv4_memory_pool.py",
               "lines": 588
+            },
+            {
+              "file": "python/sglang/srt/mem_cache/allocator/hisparse.py",
+              "lines": 588
+            },
+            {
+              "file": "python/sglang/srt/mem_cache/allocator/swa.py",
+              "lines": 532
             },
             {
               "file": "python/sglang/srt/mem_cache/storage/lmcache/lmc_radix_cache.py",
@@ -14445,36 +15035,16 @@
               "lines": 522
             },
             {
+              "file": "python/sglang/srt/hardware_backend/npu/dsv4/dsv4_allocator.py",
+              "lines": 500
+            },
+            {
               "file": "python/sglang/kernels/ops/attention/dsa/cutedsl_paged_mqa_logits.py",
               "lines": 475
             },
             {
-              "file": "python/sglang/srt/mem_cache/base_prefix_cache.py",
+              "file": "python/sglang/srt/distributed/device_communicators/pynccl_allocator.py",
               "lines": 437
-            },
-            {
-              "file": "python/sglang/srt/hardware_backend/mlx/kv_cache/auxiliary_state.py",
-              "lines": 416
-            },
-            {
-              "file": "python/sglang/srt/mem_cache/swa_memory_pool.py",
-              "lines": 408
-            },
-            {
-              "file": "python/sglang/srt/hardware_backend/mlx/kv_cache/attention_wrapper.py",
-              "lines": 398
-            },
-            {
-              "file": "python/sglang/kernels/ops/attention/flash_attn/cute/paged_kv.py",
-              "lines": 393
-            },
-            {
-              "file": "python/sglang/srt/mem_cache/kv_cache_builder.py",
-              "lines": 387
-            },
-            {
-              "file": "python/sglang/srt/multimodal/transport/memory_pool.py",
-              "lines": 367
             }
           ]
         },
@@ -16623,8 +17193,8 @@
               "name": "Sm100FmhaClcDynamicTileSchedulerParams"
             }
           ],
-          "lines": 35054,
-          "n_files": 81,
+          "lines": 35477,
+          "n_files": 83,
           "top_files": [
             {
               "file": "python/sglang/srt/managers/scheduler.py",
@@ -20778,6 +21348,35 @@
             },
             {
               "bases": [],
+              "doc_first_line": "FlashInfer-style single-pass multi-CTA radix top-k kernel. All CTAs in a *group* cooperatively process one row at a time. The groups are persistent and iterate ",
+              "file": "tensorrt_llm/_torch/cute_dsl_kernels/blackwell/top_k/single_pass_multi_cta_radix_topk.py",
+              "line": 151,
+              "lines": 1254,
+              "methods": [
+                "__init__",
+                "to_ordered",
+                "from_ordered",
+                "load_chunk_to_smem",
+                "_compute_prefix_mask",
+                "build_local_histogram",
+                "build_and_merge_histogram",
+                "prefix_sum_and_find_threshold",
+                "_radix_round_single_cta",
+                "_radix_round",
+                "compute_local_gt_count",
+                "_collect_pass_gt",
+                "_collect_pass_eq",
+                "collect_output",
+                "collect_output_single_cta",
+                "_single_cta_radix_select_and_collect",
+                "single_pass_multi_cta_topk_kernel",
+                "__call__"
+              ],
+              "n_methods": 18,
+              "name": "SinglePassMultiCTARadixTopKKernel"
+            },
+            {
+              "bases": [],
               "doc_first_line": "Assign one CTA to each segment/KV-head task and retain W across pages.",
               "file": "tensorrt_llm/_torch/kv_cache_compression/triattention/triattention_cute_score_fused.py",
               "line": 65,
@@ -20892,42 +21491,6 @@
               ],
               "n_methods": 57,
               "name": "KVCacheManager"
-            },
-            {
-              "bases": [],
-              "doc_first_line": "Python event queue matching the C++ KV cache event serializer contract.",
-              "file": "tensorrt_llm/runtime/kv_cache_manager_v2/_event_manager.py",
-              "line": 136,
-              "lines": 529,
-              "methods": [
-                "__init__",
-                "add_created_event",
-                "set_layer_group_window_sizes",
-                "add_stored_event",
-                "add_stored_block_event_from_block",
-                "add_stored_life_cycle_event_from_block",
-                "add_removed_event",
-                "add_removed_life_cycle_event",
-                "add_updated_event",
-                "flush_iteration_events",
-                "get_latest_events",
-                "_add_event",
-                "_add_stored_event",
-                "_replace_pending_event_unlocked",
-                "_enqueue_removed_event",
-                "_flush_removed_events",
-                "_flush_removed_events_unlocked",
-                "_flush_all_removed_events_unlocked",
-                "_add_event_unlocked",
-                "_drain_pending_events_unlocked",
-                "_publish_events_unlocked",
-                "_trim_events",
-                "_get_window_size",
-                "_iter_block_hashes",
-                "_normalize_block_hash"
-              ],
-              "n_methods": 39,
-              "name": "KVCacheEventManager"
             },
             {
               "bases": [],
@@ -21265,8 +21828,8 @@
               "name": "GpuSlotPool"
             }
           ],
-          "lines": 25021,
-          "n_files": 44,
+          "lines": 27023,
+          "n_files": 46,
           "top_files": [
             {
               "file": "tensorrt_llm/_torch/pyexecutor/kv_cache_manager_v2.py",
@@ -21287,6 +21850,10 @@
             {
               "file": "tensorrt_llm/_torch/kv_cache_compression/triattention/triattention_cute_score_fused.py",
               "lines": 1571
+            },
+            {
+              "file": "tensorrt_llm/_torch/cute_dsl_kernels/blackwell/top_k/single_pass_multi_cta_radix_topk.py",
+              "lines": 1404
             },
             {
               "file": "tensorrt_llm/runtime/kv_cache_manager_v2/_storage_manager.py",
@@ -21319,6 +21886,10 @@
             {
               "file": "tensorrt_llm/_torch/pyexecutor/connectors/kv_cache_connector.py",
               "lines": 638
+            },
+            {
+              "file": "tensorrt_llm/_torch/cute_dsl_kernels/blackwell/top_k/single_pass_multi_cta_radix_topk_cluster.py",
+              "lines": 598
             },
             {
               "file": "tensorrt_llm/runtime/kv_cache_manager_v2/_page.py",
@@ -21359,14 +21930,6 @@
             {
               "file": "tensorrt_llm/_torch/pyexecutor/kv_cache_stats.py",
               "lines": 253
-            },
-            {
-              "file": "tensorrt_llm/runtime/kv_cache_manager_v2/_eviction_controller/_eviction_controller.py",
-              "lines": 242
-            },
-            {
-              "file": "tensorrt_llm/runtime/kv_cache_manager_v2/_storage/_config.py",
-              "lines": 242
             }
           ]
         },
@@ -23343,6 +23906,31 @@
               "name": "GuaranteedNoEvictPolicy"
             },
             {
+              "bases": [],
+              "doc_first_line": "Handles basic queue operations for executor requests.",
+              "file": "tensorrt_llm/_torch/pyexecutor/executor_request_queue.py",
+              "line": 48,
+              "lines": 179,
+              "methods": [
+                "__init__",
+                "_get_request_id",
+                "_generate_child_request_ids",
+                "_enqueue_impl",
+                "enqueue_requests",
+                "enqueue_request",
+                "enqueue_cancel_request",
+                "enqueue_control_request",
+                "enqueue_shutdown_request",
+                "can_enqueue_request",
+                "get_from_request_queue",
+                "get_request_queue_size",
+                "get_request_queue",
+                "calculate_queue_latency"
+              ],
+              "n_methods": 14,
+              "name": "ExecutorRequestQueue"
+            },
+            {
               "bases": [
                 "StaticPersistentTileScheduler"
               ],
@@ -23358,6 +23946,26 @@
               ],
               "n_methods": 4,
               "name": "StaticPersistentRuntimeTileScheduler"
+            },
+            {
+              "bases": [],
+              "doc_first_line": "Async micro-batcher in front of a synchronous `encode_fn`. A single background worker drains a request queue and forms a batch, flushing it to `encode_fn` when ",
+              "file": "tensorrt_llm/serve/encode_batcher.py",
+              "line": 46,
+              "lines": 150,
+              "methods": [
+                "__init__",
+                "start",
+                "is_alive",
+                "validate_input",
+                "submit",
+                "_run",
+                "_collect_batch",
+                "_dispatch",
+                "shutdown"
+              ],
+              "n_methods": 9,
+              "name": "EncodeBatcher"
             },
             {
               "bases": [
@@ -23408,56 +24016,10 @@
               ],
               "n_methods": 9,
               "name": "MoEWorkTileInfo"
-            },
-            {
-              "bases": [
-                "ABC"
-              ],
-              "doc_first_line": "Abstract base class for MoE tile scheduler parameters. Uses unified semantics for both scenarios: - expert_shape: (expert_cnt, intermediate, hidden) For 2Dx3D: ",
-              "file": "tensorrt_llm/_torch/cute_dsl_kernels/mega_moe_nvfp4/moe_persistent_scheduler.py",
-              "line": 229,
-              "lines": 111,
-              "methods": [
-                "__init__",
-                "cluster_tile_m",
-                "cluster_tile_n",
-                "cta_tile_k",
-                "get_scheduler_type",
-                "get_grid_shape"
-              ],
-              "n_methods": 6,
-              "name": "MoESchedulerParamsBase"
-            },
-            {
-              "bases": [
-                "WaitingQueue"
-              ],
-              "doc_first_line": "A priority queue that serves higher-priority requests first. Requests with equal priority are served in FCFS order (arrival order). Priority is read from ``item",
-              "file": "tensorrt_llm/_torch/pyexecutor/scheduler/waiting_queue.py",
-              "line": 161,
-              "lines": 103,
-              "methods": [
-                "__init__",
-                "_get_priority",
-                "_push",
-                "_push_front",
-                "add_request",
-                "add_requests",
-                "pop_request",
-                "peek_request",
-                "prepend_request",
-                "prepend_requests",
-                "remove_by_ids",
-                "__bool__",
-                "__len__",
-                "__iter__"
-              ],
-              "n_methods": 14,
-              "name": "PriorityWaitingQueue"
             }
           ],
-          "lines": 10911,
-          "n_files": 13,
+          "lines": 11332,
+          "n_files": 15,
           "top_files": [
             {
               "file": "tensorrt_llm/_torch/pyexecutor/scheduler/scheduler.py",
@@ -23492,8 +24054,16 @@
               "lines": 282
             },
             {
+              "file": "tensorrt_llm/_torch/pyexecutor/executor_request_queue.py",
+              "lines": 226
+            },
+            {
               "file": "tensorrt_llm/_torch/visual_gen/cute_dsl_kernels/blackwell/video_sparse_attention/scheduler.py",
               "lines": 223
+            },
+            {
+              "file": "tensorrt_llm/serve/encode_batcher.py",
+              "lines": 195
             },
             {
               "file": "tensorrt_llm/_torch/visual_gen/models/ltx2/ltx2_core/scheduler_adapter.py",
@@ -25534,12 +26104,20 @@
               "name": "KVScales"
             }
           ],
-          "lines": 577,
-          "n_files": 3,
+          "lines": 1839,
+          "n_files": 5,
           "top_files": [
+            {
+              "file": "backends/v3/src/radix.rs",
+              "lines": 1041
+            },
             {
               "file": "server/text_generation_server/layers/attention/kv_cache.py",
               "lines": 325
+            },
+            {
+              "file": "backends/v3/src/block_allocator.rs",
+              "lines": 221
             },
             {
               "file": "backends/gaudi/server/text_generation_server/layers/attention/kv_cache.py",
@@ -26056,9 +26634,18 @@
         },
         "scheduler": {
           "key_classes": [],
-          "lines": 0,
-          "n_files": 0,
-          "top_files": []
+          "lines": 1512,
+          "n_files": 2,
+          "top_files": [
+            {
+              "file": "backends/v3/src/queue.rs",
+              "lines": 836
+            },
+            {
+              "file": "backends/v2/src/queue.rs",
+              "lines": 676
+            }
+          ]
         },
         "speculative": {
           "key_classes": [
@@ -26325,6 +26912,32 @@
         "kv_cache": {
           "key_classes": [
             {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "tokasaurus/manager/allocator.py",
+              "line": 129,
+              "lines": 290,
+              "methods": [
+                "__init__",
+                "add_floating",
+                "num_used_blocks",
+                "fraction_used",
+                "fraction_floating",
+                "sanity_checks",
+                "prefix_match",
+                "update_prefix_tree",
+                "assign_block_to_seq",
+                "num_blocks_needed",
+                "allocate_up_to_length",
+                "make_available_leaf_heap",
+                "enough_free_blocks_for_allocation",
+                "allocate_with_prefix_match",
+                "free_and_update"
+              ],
+              "n_methods": 15,
+              "name": "BlockAllocator"
+            },
+            {
               "bases": [
                 "nn.Module"
               ],
@@ -26337,11 +26950,47 @@
               ],
               "n_methods": 1,
               "name": "LayerKVCache"
+            },
+            {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "tokasaurus/manager/allocator.py",
+              "line": 12,
+              "lines": 46,
+              "methods": [
+                "is_root",
+                "detach_from_parent",
+                "wipe",
+                "__repr__",
+                "__hash__",
+                "__lt__",
+                "tree_repr"
+              ],
+              "n_methods": 7,
+              "name": "PrefixTreeBlock"
+            },
+            {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "tokasaurus/manager/allocator.py",
+              "line": 421,
+              "lines": 11,
+              "methods": [
+                "__init__",
+                "allocate",
+                "free"
+              ],
+              "n_methods": 3,
+              "name": "BatchIndexAllocator"
             }
           ],
-          "lines": 54,
-          "n_files": 1,
+          "lines": 485,
+          "n_files": 2,
           "top_files": [
+            {
+              "file": "tokasaurus/manager/allocator.py",
+              "lines": 431
+            },
             {
               "file": "tokasaurus/model/kv_cache.py",
               "lines": 54
@@ -29713,6 +30362,29 @@
             },
             {
               "bases": [],
+              "doc_first_line": "A singleton class that manages a memory pool for CUDA tensors. The memory in this pool can be offloaded or discarded when the allocator sleeps. Inside the `use_",
+              "file": "vllm/device_allocator/cumem.py",
+              "line": 82,
+              "lines": 345,
+              "methods": [
+                "get_instance",
+                "_shutdown_singleton",
+                "__init__",
+                "release_pools",
+                "close",
+                "_python_malloc_callback",
+                "_python_free_callback",
+                "sleep",
+                "discard",
+                "wake_up",
+                "use_memory_pool",
+                "get_current_usage"
+              ],
+              "n_methods": 12,
+              "name": "CuMemAllocator"
+            },
+            {
+              "bases": [],
               "doc_first_line": "This class organizes a list of KVCacheBlock objects to a doubly linked list of free blocks. We implement this class instead of using Python builtin deque to sup",
               "file": "vllm/v1/core/kv_cache_utils.py",
               "line": 228,
@@ -29730,6 +30402,28 @@
               ],
               "n_methods": 9,
               "name": "FreeKVCacheBlockQueue"
+            },
+            {
+              "bases": [],
+              "doc_first_line": "A singleton pluggable allocator helper for XPU. Note: Sleep will offload selected payloads to CPU or discard and unmap XPU physical memory. Wake-up remaps physi",
+              "file": "vllm/device_allocator/xpumem.py",
+              "line": 112,
+              "lines": 233,
+              "methods": [
+                "get_instance",
+                "_shutdown_singleton",
+                "__init__",
+                "_python_malloc_callback",
+                "_python_free_callback",
+                "sleep",
+                "discard",
+                "wake_up",
+                "release_pools",
+                "use_memory_pool",
+                "get_current_usage"
+              ],
+              "n_methods": 11,
+              "name": "XpuMemAllocator"
             },
             {
               "bases": [
@@ -29766,23 +30460,6 @@
               ],
               "n_methods": 4,
               "name": "ChunkedLocalAttentionManager"
-            },
-            {
-              "bases": [
-                "QuantizeMethodBase"
-              ],
-              "doc_first_line": "Quant method that adds `_k_scale` and `_v_scale` attributes to the Attention layer to support loading those scaling factors from checkpoints. The k/v_scale will",
-              "file": "vllm/model_executor/layers/quantization/kv_cache.py",
-              "line": 42,
-              "lines": 154,
-              "methods": [
-                "__init__",
-                "create_weights",
-                "apply",
-                "process_weights_after_loading"
-              ],
-              "n_methods": 4,
-              "name": "BaseKVCacheMethod"
             },
             {
               "bases": [
@@ -29945,6 +30622,20 @@
               "name": "UnitaryKVCacheCoordinator"
             },
             {
+              "bases": [],
+              "doc_first_line": null,
+              "file": "vllm/distributed/device_communicators/pynccl_allocator.py",
+              "line": 133,
+              "lines": 66,
+              "methods": [
+                "__init__",
+                "__enter__",
+                "__exit__"
+              ],
+              "n_methods": 3,
+              "name": "nccl_symm_mem_context"
+            },
+            {
               "bases": [
                 "SlidingWindowSpec"
               ],
@@ -30011,46 +30702,10 @@
               ],
               "n_methods": 5,
               "name": "MambaSpec"
-            },
-            {
-              "bases": [
-                "KVCacheSpec"
-              ],
-              "doc_first_line": null,
-              "file": "vllm/v1/kv_cache_interface.py",
-              "line": 374,
-              "lines": 57,
-              "methods": [
-                "__post_init__",
-                "num_heads",
-                "state_content_size_bytes",
-                "unpadded_page_size_bytes",
-                "page_size_bytes",
-                "real_page_size_bytes",
-                "max_num_blocks_per_req"
-              ],
-              "n_methods": 7,
-              "name": "AttentionSpec"
-            },
-            {
-              "bases": [
-                "AttentionSpec"
-              ],
-              "doc_first_line": null,
-              "file": "vllm/v1/kv_cache_interface.py",
-              "line": 687,
-              "lines": 55,
-              "methods": [
-                "max_admission_blocks_per_request",
-                "max_memory_usage_bytes",
-                "is_uniform_with_collection"
-              ],
-              "n_methods": 3,
-              "name": "SlidingWindowSpec"
             }
           ],
-          "lines": 9581,
-          "n_files": 13,
+          "lines": 10797,
+          "n_files": 18,
           "top_files": [
             {
               "file": "vllm/v1/core/kv_cache_utils.py",
@@ -30081,12 +30736,28 @@
               "lines": 507
             },
             {
+              "file": "vllm/device_allocator/cumem.py",
+              "lines": 426
+            },
+            {
+              "file": "vllm/device_allocator/xpumem.py",
+              "lines": 344
+            },
+            {
               "file": "vllm/models/kimi_k3/nvidia/ops/fused_mla_key_concat_kv_cache.py",
               "lines": 300
             },
             {
               "file": "vllm/v1/kv_cache_spec_registry.py",
               "lines": 209
+            },
+            {
+              "file": "vllm/distributed/device_communicators/pynccl_allocator.py",
+              "lines": 198
+            },
+            {
+              "file": "vllm/device_allocator/sleep_mode_backend.py",
+              "lines": 196
             },
             {
               "file": "vllm/model_executor/layers/quantization/kv_cache.py",
@@ -30099,6 +30770,10 @@
             {
               "file": "vllm/v1/kv_cache_layout.py",
               "lines": 58
+            },
+            {
+              "file": "vllm/device_allocator/__init__.py",
+              "lines": 52
             },
             {
               "file": "vllm/v1/attention/ops/paged_attn.py",
@@ -31755,6 +32430,35 @@
             },
             {
               "bases": [],
+              "doc_first_line": "Context manager for micro-batching synchronization using threading events.",
+              "file": "vllm/v1/worker/ubatching.py",
+              "line": 20,
+              "lines": 128,
+              "methods": [
+                "__init__",
+                "__enter__",
+                "__exit__",
+                "_restore_context",
+                "update_stream",
+                "_signal_comm_done",
+                "_signal_compute_done",
+                "_wait_compute_done",
+                "_wait_comm_done",
+                "_cpu_yield",
+                "switch_to_comm",
+                "switch_to_compute",
+                "switch_to_comm_sync",
+                "switch_to_compute_sync",
+                "maybe_run_recv_hook",
+                "yield_",
+                "yield_and_switch_from_compute_to_comm",
+                "yield_and_switch_from_comm_to_compute"
+              ],
+              "n_methods": 18,
+              "name": "UBatchContext"
+            },
+            {
+              "bases": [],
               "doc_first_line": null,
               "file": "vllm/distributed/kv_transfer/kv_connector/v1/offloading/scheduler.py",
               "line": 314,
@@ -31796,24 +32500,6 @@
               ],
               "n_methods": 1,
               "name": "SchedulerOutput"
-            },
-            {
-              "bases": [],
-              "doc_first_line": "Fixed-size block cache with FIFO eviction. Entries are keyed by content identity (e.g. mm_hash). Blocks are allocated from a free-set; when space is needed, rea",
-              "file": "vllm/distributed/ec_transfer/ec_connector/cpu/scheduler/embedding_cache.py",
-              "line": 41,
-              "lines": 91,
-              "methods": [
-                "__init__",
-                "get",
-                "alloc",
-                "mark_ready",
-                "pin",
-                "unpin",
-                "_evict_until"
-              ],
-              "n_methods": 7,
-              "name": "EmbeddingCache"
             },
             {
               "bases": [
@@ -31914,26 +32600,10 @@
               "methods": [],
               "n_methods": 0,
               "name": "GroupOffloadConfig"
-            },
-            {
-              "bases": [],
-              "doc_first_line": "A single cache entry. Read `.block_ids` and `.ready` freely; mutations only through EmbeddingCache methods.",
-              "file": "vllm/distributed/ec_transfer/ec_connector/cpu/scheduler/embedding_cache.py",
-              "line": 16,
-              "lines": 23,
-              "methods": [
-                "__init__",
-                "ready",
-                "evictable",
-                "mark_ready",
-                "pin"
-              ],
-              "n_methods": 5,
-              "name": "CacheEntry"
             }
           ],
-          "lines": 8424,
-          "n_files": 20,
+          "lines": 8665,
+          "n_files": 21,
           "top_files": [
             {
               "file": "vllm/v1/core/sched/scheduler.py",
@@ -31974,6 +32644,10 @@
             {
               "file": "vllm/v1/core/sched/interface.py",
               "lines": 262
+            },
+            {
+              "file": "vllm/v1/worker/ubatching.py",
+              "lines": 241
             },
             {
               "file": "vllm/v1/core/sched/request_queue.py",

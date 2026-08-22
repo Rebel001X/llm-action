@@ -1,0 +1,929 @@
+===== 01-vLLM\01-vLLM-全景与代码地图.md =====
+## 7. 踩坑与反直觉
+
+- **"调度器是核心"是错觉，至少不是代码量意义上的核心。** 十个子系统里 `scheduler` 只有 8,424 行，比 `structured_output`（2,808 行）大不了多少量级差异，但比 `model_exec`（392,324 行）小了近 47 倍（据 `_lab/out/struct_map.json`）。真正堆代码的地方是"同一个能力要在 N 个硬件后端、M 个模型家族上分别实现一遍"，不是调度算法本身有多精巧。
+- **"V0 已经被删掉"和"V0 的名字还在"是两回事。** `vllm/engine/llm_engine.py`、`vllm/engine/async_llm_engine.py` 这两个文件都还在仓库里、都还能 `import`，但内容只是指向 `vllm.v1.engine.*` 的别名（各 7 行）。如果只看 `import` 语句判断"这个项目是不是还在维护 V0 兼容层"，会得出错误结论——真正的实现早就只剩 V1 一份。
+- **"多进程"不代表"两个进程"。** 直觉上容易以为 vLLM 是"一个 HTTP 进程 + 一个 GPU 进程"两层结构，但源码显示是三层：前端进程、EngineCore 进程、（每个并行 rank 一个的）worker 进程（`vllm/v1/executor/multiproc_executor.py:111` 与 `:600`）。开 Rust 前端后会变成四层（Rust 进程额外托管 Python headless 引擎）。
+- **"新模型都该往新的 `vllm/models/` 布局写"是过度推断。** `vllm/models/` 目前只装了 6 个模型家族（deepseek_v32、deepseek_v4、dots3_note、inkling、kimi_k3、minimax_m3），293 个 legacy 模型完全没有跟进——本库没有找到一条"多大规模的模型必须迁移"的显式判据（`## 8` 会把这个观察写成可改进点，而不是当作既定事实）。
+- **重构信号不止一处，是三处同构的模式在同时发生。** 模型层（`model_executor/models/` vs `models/`）、算子绑定层（`csrc/torch_bindings.cpp` vs `csrc/libtorch_stable/`）、算子派发层（老式 `torch.ops._C.xxx` 硬编码 vs 新的 `vllm/kernels/` IR 派发）——三个独立的"扁平旧目录 + 隔离新目录"并存局面，各自的迁移进度还不一样（模型层只覆盖 6 个家族，算子绑定层覆盖了 184 个文件/69,144 行）。如果只读到其中一处就下结论"vLLM 在重构 X"，会漏掉这其实是一场更大范围、跨多个子系统同时进行的架构演进。
+- **测试/生产代码比 0.542 不能直接读成"测试覆盖不到六成"。** 这个比例是全仓库 Python 行数的粗口径，`tests/kernels`（93,398 行）这类目录本身就包含大量跑分脚本和对照实现，不是纯断言代码；反过来 `csrc/`（C++/CUDA，未计入这个 Python 专属比例）的正确性验证很大程度上靠 `tests/kernels` 下的 Python 测试跑，两边不是简单的一一对应关系。
+
+## 8. 可改进点
+
+以下几条标注为**本库推断**，未提交 issue 或 PR 核实维护者是否已经在计划中——单纯是读代码时观察到的、可以在后续篇目里继续深挖的方向：
+
+1. **新旧模型布局之间缺一条显式的迁移判据。** `_resolve_module_name`（`vllm/model_executor/models/registry.py:1475`-`1481`）只负责"识别一个模块名是不是已经在新布局里"，但仓库里没有找到"什么条件下一个模型应该从 `model_executor/models/` 迁到 `models/`"的书面规则——现在看起来更像是"哪个模型的作者愿意就迁"。一条可核验的判据（比如"需要 ≥2 个平台专属 kernel 实现即迁移"）会比隐性约定更容易长期维护，也更方便新贡献者判断该往哪写。同样的问题在算子绑定层（`torch_bindings.cpp` vs `libtorch_stable/`）也存在，可以用同一条判据统一处理。
+2. **Rust 路由表和 Python 路由表没有单一真源（single source of truth）。** 两边各自硬编码：Python 在 `vllm/entrypoints/*/api_router.py` 里分散声明，Rust 在 `rust/src/server/src/routes.rs` 里集中声明。`## 5` 决策五已经指出两边路径集合存在真实差异（Rust 缺 `/v1/embeddings`、`/v1/responses` 等）。一个从两侧分别抽取路径集合、跑 diff 的 CI 检查，能在"漂移"发生时给出明确报错，而不是让打开 `VLLM_USE_RUST_FRONTEND` 的用户遇到静默的 404。
+3. **`InprocClient` 的定位偏模糊。** 代码里存在（`vllm/v1/engine/core_client.py:306`），但 `make_client` 上方只有一行简短说明这是给调试用的（`vllm/v1/engine/core_client.py:97`），没有更详细的文档说明它和生产路径在正确性上是否完全等价——如果两条路径（同进程 vs 跨进程）在某些边界条件下行为不同，调试时用 `InprocClient` 复现的问题可能在生产的 `AsyncMPClient` 路径下并不存在，反之亦然。
+4. **冷启动阶段"先起 worker 再 profile 显存"这个时序，对失败场景的暴露不够直接。** `_initialize_kv_caches`（`vllm/v1/engine/core.py:254`）里 profile 出的显存不够、或者需要下调 `max_model_len` 时，走的是事后用 `collective_rpc` 同步新值（同文件 330 行）这条补救路径，而不是在 worker 启动前先做一次轻量估算、把大概率会失败的配置提前拦下——对于"模型太大、显存明显不够"这类一眼能看出来的配置错误，用户体验上要多等一轮 worker 启动 + profile 才能看到报错。
+5. **本篇给出的所有路由/文件数字是静态 AST 抽取，不是运行时验证。** `_lab/out/api_surface.json` 的路由计数依赖脚本能正确识别 `@router.post(...)` 这类装饰器模式；如果未来某个协议改用不同的注册方式（比如动态 `add_api_route`），计数会静默漏掉而不是报错——这是 `_lab/api_surface.py` 本身的已知局限，不是 vLLM 的问题，但读本篇数字时要记住这一点。
+
+
+===== 01-vLLM\02-vLLM-V1架构与EngineCore循环.md =====
+## 7. 踩坑与反直觉
+
+1. **`EngineCoreOutput` 里真的没有 `text` 字段**——第一次读代码会下意识以为 EngineCore 至少会把 detokenize 后的增量文本传回来，实际上 `vllm/v1/engine/__init__.py:196-234` 逐字段看下来只有 `new_token_ids: list[int]`，文本要等到前端进程的 `vllm/v1/engine/output_processor.py:677` 才第一次出现。这意味着如果你想在 EngineCore 进程里插桩打印"生成了什么文字"，插不到——那里从头到尾只有数字。
+2. **空载 EngineCore 的两层等待策略不一致，容易类比错**：`input_queue.get(block=True)`（`vllm/v1/engine/core.py:1447`）是真阻塞，0 CPU 占用；但 Worker RPC 广播队列的 `SpinCondition.wait()`（`vllm/distributed/device_communicators/shm_broadcast.py:191`）默认会先忙轮询 1 秒（`busy_loop_s=1`，`vllm/distributed/device_communicators/shm_broadcast.py:134`）。如果拿"EngineCore 空载不占 CPU"去推断"Worker 空载也不占 CPU"，会得出错误结论——Worker 进程在最后一个请求处理完之后的 1 秒内，其实还在原地 spin。
+3. **`enable_envs_cache()` 在 `EngineCore.__init__` 末尾调用**（`vllm/v1/engine/core.py:251`），注释写"Enable environment variable cache (e.g. assume no more environment variable overrides after this point)"——也就是说 EngineCore 初始化完成后，**再改环境变量对已经跑起来的 EngineCore 进程不会生效**，这个坑常见于"以为改了 env var 就能热更新某个开关，结果毫无反应"，其实是进程内部已经把 env 值缓存死了。
+4. **`freeze_gc_heap()`（`vllm/v1/engine/core.py:246`）把启动时的堆标记为静态**，目的是让 Python 的分代 GC 跳过它，减少老年代扫描的停顿——这意味着 EngineCore 进程启动阶段分配的对象（包括模型权重的 Python 侧句柄等）之后基本不会被 GC 主动扫描，如果这期间有对象被错误地长期持有引用导致的"内存泄漏"，靠等 GC 是等不到的。
+5. **起点线索里给的 `vllm/v1/engine/processor.py` 已经不存在**——本次取证时它已经被拆分/改名为 `vllm/v1/engine/input_processor.py`，这与 `_PLAN.md` §7 已知的"entrypoints 已经拆包"是同一类教训：**vLLM 主干迭代很快，任何写死的路径线索都可能在下次取证时失效，必须用 `grep`/`Read` 现场核实，不能直接照抄提示里的路径去引用行号**。
+6. **`step_with_batch_queue()`（`vllm/v1/engine/core.py:638`）不是"什么时候都更快"的升级版**——它是专门为流水线并行（PP）设计的：PP 下如果严格"发一批→等结果→再发下一批"，流水线中间会出现气泡（bubble）；用批队列让调度和执行提前重叠、异步深度到 `max_concurrent_batches`，才能把 PP 的气泡填掉。非 PP 场景下 `batch_queue_size` 默认不大于 1（`vllm/v1/engine/core.py:210-216`），走的还是普通 `step()`，两条路径不是谁比谁高级，是两种流水线深度的选择。
+7. **`RequestStatus`（`vllm/v1/request.py:364`）判断"请求是否结束"靠的是整数比较，不是显式的枚举成员检查**——`is_finished()`（`vllm/v1/request.py:386-387`）实现是 `status > RequestStatus.PREEMPTED`，依赖 `IntEnum` 成员按代码里出现的先后顺序自动编号（`WAITING=1 ... PREEMPTED=6, FINISHED_STOPPED=7 ...`）。注释在第 373-374 行专门提醒"anything after PREEMPTED will be considered as a finished status"——这是一个**顺序即语义**的设计，如果未来有人往 `PREEMPTED` 之前插入一个新状态，或者不小心把某个"未结束"状态排到了 `PREEMPTED` 后面，`is_finished()` 会静默返回错误结果，不会有任何类型检查或运行时错误提醒你哪里错了。
+8. **EngineCore 进程崩溃不是靠单独的心跳 socket 发现的**，而是复用输出 PUSH socket：`EngineCoreProc.ENGINE_CORE_DEAD`（`vllm/v1/engine/core.py:1024`）是一个哨兵字节串，进程异常退出前会尽力把它塞进正常的输出 socket 发一次（`vllm/v1/engine/core.py:1828-1831`），前端侧 `MPClient.validate_alive()`（`vllm/v1/engine/core_client.py:490`）在解码每一帧输出前先检查"这是不是那个特殊的单帧死亡消息"，命中就抛 `EngineDeadError`。这个机制依赖"进程在死之前还有机会往 socket 里写一个字节串"——如果是被 `SIGKILL` 或者硬件层面直接中断，这条哨兵消息根本发不出去，前端只能靠另一条独立的进程存活监控线程（`start_engine_core_monitor()`，`vllm/v1/engine/core_client.py:711`）通过操作系统层面的进程退出码来兜底，两套机制互为补充，不是只有一套。
+
+---
+
+## 8. 可改进点
+
+以下按"本库推断"标注，均基于本篇读到的代码结构，未验证上游是否已有相关讨论/PR（遵守 `_PLAN.md` §1.6 不编 PR 号/issue 号的红线）：
+
+- **共享内存 RPC 广播的 `busy_loop_s=1` 是硬编码常量**（`vllm/distributed/device_communicators/shm_broadcast.py:134`），没有暴露成可调 CLI/env 开关。对延迟极其敏感、又明确知道自己的流量模式（比如始终高 QPS 不间断）的部署场景，理论上可以把这个值调大甚至设为"永不降级"以换取更稳定的尾延迟；反过来对间歇性低流量场景，调小能省 Worker 进程的空转 CPU/功耗。目前只能改源码常量，没有配置入口。
+- **`process_output_sockets()` 的缓冲区复用池 `max_reuse_bufs = len(sockets) + 1`**（`vllm/v1/engine/core.py:1824`）是一个相当保守的固定上限，在多前端进程（`--api-server-count` > 1）且输出体积差异很大（比如既有短聊天回复又有长文档生成）的场景下，复用池可能频繁分配新 `bytearray` 而不是命中缓存，值得做一次实测（本机无 GPU，此处不产出实测数字，仅指出观察点）。
+- **`EngineCoreOutputs` 里 `outputs: list[EngineCoreOutput]` 是逐请求的对象列表**（`vllm/v1/engine/__init__.py:265`），代码注释里作者自己也留了话（`vllm/v1/engine/__init__.py:259-260` "We could consider ways to make this more compact, e.g. columnwise layout"）——高并发小 batch 场景下逐请求 msgspec.Struct 编码可能比列式（columnar）布局多付出一些每对象的元数据开销，这是上游代码自己标注的已知可优化点，不是本库新发现。
+- **`RequestStatus.is_finished()` 的"顺序即语义"设计（本篇 `## 7` 第 7 条）没有任何编译期或运行时的防护**——一个 `assert` 或者在 `RequestStatus` 定义处加一行注释断言（比如启动时自检 `PREEMPTED` 在所有 `FINISHED_*` 之前）成本很低，能把"未来有人误改枚举顺序导致状态判断静默出错"这种事故从"运行时才发现"提前到"改动当时就报错"。
+- **共享内存队列的忙轮询窗口 `busy_loop_s` 和输入队列的纯阻塞是两套独立实现的等待策略**（`## 5` 决策 4 已展开），如果 EngineCore 侧的 `input_queue.get(block=True)` 也能感知"最近是否高频有请求进来"并做类似的短暂自适应忙轮询，理论上能在持续高 QPS 场景下省掉一部分线程唤醒开销——但这会让本来简单的"真阻塞"逻辑变复杂，是否值得要看实际请求到达模式，`未查证`：没有证据表明上游认为这是当前的瓶颈点。
+
+---
+
+
+===== 01-vLLM\03-vLLM-调度器解剖.md =====
+## 7. 踩坑与反直觉
+
+1. **`long_prefill_token_threshold` 默认是 `0`，但语义是"关闭这个上限"，不是"上限为 0"。** `vllm/config/scheduler.py:70`-`72` 的字段注释原话是 "0 disables the cap (default)"。第一次读代码容易以为默认状态下每步只能给长 prefill 分 0 个 token；实际上默认状态下这个专门的裁剪完全不生效，真正限制单步 chunk 大小的是 `token_budget`/`input_budget` 这两个全局预算（`vllm/v1/core/sched/scheduler.py:571`-`572` 只有 `long_prefill_token_threshold > 0` 才会介入）。
+
+2. **`max_num_scheduled_tokens` 和 `max_num_batched_tokens` 是两个不同的旋钮，容易被当成同一个东西。** 前者对应 `schedule()` 里的 `token_budget`（真正能塞进这一步前向传播的 token 数），后者对应 `input_budget`（略宽松，给投机解码等场景的额外 slot 留空间）。`vllm/config/scheduler.py:119`-`123` 的 fallback 逻辑显示：不显式设置 `max_num_scheduled_tokens` 时它直接等于 `max_num_batched_tokens`，两个变量在默认配置下数值相同、语义却不同，只有显式调小前者才会看出分叉。
+
+3. **`watermark` 默认 `0.0`（关闭），且哪怕开了也只对 `WAITING`/`PREEMPTED` 状态的请求生效，还要求"已经有至少一个请求在跑"才生效。** `vllm/config/scheduler.py:136`-`141` 给出默认值；`vllm/v1/core/kv_cache_manager.py:467`-`473` 的判断条件是 `has_scheduled_reqs and request.status in (WAITING, PREEMPTED)`——单请求场景下 watermark 形同虚设。这条经常和"vLLM 会主动为高峰期预留内存"的直觉相反：**默认配置下 vLLM 会用满几乎全部 KV cache 直到装不下才触发抢占，不会提前留白**。
+
+4. **`--swap-space` 在 V1 已被删除，日志里 `PreemptionMode.RECOMPUTE` 这个名字是历史包袱。** 见 `docs/configuration/optimization.md:34`（示例警告日志）与 `docs/design/metrics.md:505`-`513`（"The `--swap-space` flag has been removed as this feature is no longer used in V1"）。网上搜到的"调 swap space 防 OOM"的旧教程，是 v0 时代的建议，V1 根本没有这个旋钮。
+
+5. **同一个 `schedule()` 函数内部，"这个请求这步排不上"的处理方式并不对称。** RUNNING 循环遇到 `num_new_tokens == 0` 走 `continue`（`vllm/v1/core/sched/scheduler.py:630`-`634`，源码自己承认"不严格 FCFS"）；WAITING 循环遇到多数申请失败情况（关闭 chunked prefill 时塞不下、DP 节流、`allocate_slots` 返回 `None` 等）走的是 `break`（分别见 L933、L972、L1011、L1062）——直接终止本步 WAITING 准入，不会跳过队首继续看后面更小的请求。读代码时不能假设两个循环有一致的公平性语义，这也是队头阻塞（见 `## 8`）的根源。
+
+6. **`scheduler_reserve_full_isl` 默认是 `True`，和"chunked prefill 允许只要第一块塞得下就先收下请求"这个直觉相反。** 很多人第一次接触 chunked prefill 会以为"只要这一步能塞进第一个 chunk 就先准入，剩下的慢慢切"——但 `vllm/config/scheduler.py:130`-`134` 的默认配置要求：admission 时必须确认**整条序列**能放进 KV cache（`full_sequence_must_fit=True` 传进 `allocate_slots`，`vllm/v1/core/kv_cache_manager.py:475`-`491`），只是当前这一步先算第一个 chunk。换句话说，chunked prefill 决定的是"一步算多少"，不是"要不要先收下这个请求"——一个长到无论如何也塞不满 KV cache 的请求，在默认配置下从一开始就不会被准入，不会出现"admit 了但后面几步发现根本放不下"的情况。
+
+7. **`get_grammar_bitmask()` 不在 `schedule()` 内部，是 `EngineCore.step()` 单独调用的下一个方法。** 见 `## 1` 的代码片段（`vllm/v1/engine/core.py:610`）——容易以为结构化输出的语法约束是 `SchedulerOutput` 里现成算好的一个字段，实际上 `SchedulerOutput` 只带了一个布尔标记 `has_structured_output_requests`（`vllm/v1/core/sched/output.py:251`）,真正的 bitmask 要在 `schedule()` 返回之后再调一次 `get_grammar_bitmask()`（`vllm/v1/core/sched/scheduler.py:1720`-`1742`）才算出来，属于两次独立的方法调用、两份独立的返回值。
+
+## 8. 可改进点
+
+（以下均为本库基于源码走读的推断，标注证据依据；未核实是否已有官方 issue 在跟踪，未查证部分已明确标出。）
+
+**改进点 1：PRIORITY 抢占的受害者选择是 O(n) 线性扫描**
+- 现状：`max(self.running, key=lambda r: (r.priority, r.arrival_time))`（`vllm/v1/core/sched/scheduler.py:651`-`655`）每次抢占都要扫一遍整个 `self.running`。
+- 影响：若一步内连续触发多次抢占（比如新来一个超大 prompt 一次性挤出好几个低优先级请求），退化成 O(n²)。正常部署下 `self.running` 规模不大（`max_num_seqs` 默认 128，`vllm/config/scheduler.py:44`），影响有限，但在 `priority` 模式 + 高并发 + 频繁抢占的场景值得关注。
+- 建议方向：把 `self.running` 换成按 `(priority, arrival_time)` 维护的小顶堆能把单次选择降到 O(log n)，代价是"按下标扫描 RUNNING 循环"这个当前实现依赖的顺序语义要重新设计——不是一个孤立的小改动。
+
+**改进点 2：WAITING 准入循环的"一次拒绝就 break"可能造成隐性队头阻塞**
+- 现状：若关闭 `enable_chunked_prefill` 又混合了长短 prompt，队首一个长 prompt 排不下时会直接终止本步准入（`vllm/v1/core/sched/scheduler.py:966`-`972`），不像 RUNNING 循环那样 `continue` 尝试下一个（`## 7` 踩坑 5）。
+- 影响：后面能一次性塞进剩余预算的短 prompt 本步完全没有机会被调度，即便它本可以立刻跑完——这是经典的队头阻塞（head-of-line blocking），只在 `enable_chunked_prefill=False` 这个非默认配置下出现。
+- 建议方向：可以考虑参照 RUNNING 循环放宽成 `continue`，但要小心不要破坏 FCFS 的可预测性（本来靠前的请求可能被无限期饿死在队列里）；SGLang 式的做法是在队列层面重排（`LPM`/`LOF`）而不是放宽单次准入判断，两种思路对可预测性的影响不同，值得先想清楚要保哪种保证。
+
+**改进点 3：队列侧完全没有前缀缓存感知**
+- 现状：vLLM 的前缀命中优化只发生在 block 分配层（`KVCacheManager.get_computed_blocks`），如果同一批等待请求里有大量共享前缀，谁先被准入纯粹看到达顺序/优先级，不考虑"谁先准入能让 block 复用更多"。
+- 影响：极端场景下（大量请求共享同一个长系统提示词）,FCFS 顺序可能让本该背靠背命中前缀缓存的两个请求被无关请求隔开，中间那段时间前缀 block 可能因为 LRU 被挤出去，命中率打折扣。
+- 建议方向：对照 SGLang 的 `LPM` 策略（`## 6`）,这是一个潜在的优化空间——**未查证**是否已有相关 vLLM 官方讨论或 issue 在跟踪，也未验证在真实流量下这个效应的量级是否值得为此增加队列复杂度。
+
+**改进点 4：`AsyncScheduler` 的正确性依赖"乐观计数"字段两两对齐，缺少内建一致性校验**
+- 现状：`## 3.4` 列出的 `num_output_placeholders`/`num_in_flight_tokens`/`num_stale_output_tokens` 等字段要靠 `_update_after_schedule` 和 `update_from_output` 在不同时间点分别加、分别减,才能保持"乐观值"和"实际值"最终一致（例如投机解码被拒绝时要在 `vllm/v1/core/sched/scheduler.py:1855`-`1859` 回滚 `num_computed_tokens`/`num_output_placeholders`）。
+- 影响：这类"两处分别维护、必须相互对齐"的状态，历史上是并发/异步系统里最容易滋生难复现 bug 的地方——本篇通读代码没有发现运行时断言在每步结束后校验这些计数器的不变量（比如 `num_output_placeholders >= 0` 只在个别写入点用 `assert` 兜底，见 `vllm/v1/core/sched/async_scheduler.py:63`，不是在每步收尾统一校验）。
+- 建议方向：**未查证**是否已有专门的调试模式或测试覆盖这类不变量；作为读者的自查清单，改这部分代码前建议先搞清楚 `## 3.4` 表里每个字段在哪几处被写、哪几处被读。
+
+
+===== 01-vLLM\04-vLLM-KV缓存与前缀缓存.md =====
+## 7. 踩坑与反直觉
+
+1. **"Mamba 状态占用不随生成长度增长"，与"KV 缓存随生成长度线性增长"的直觉相反**。`MambaSpec.max_memory_usage_bytes` 在非 `"all"` 模式下恒定是 `page_size_bytes * (1 + num_speculative_blocks)`（`vllm/v1/kv_cache_interface.py:847`）——每个请求只占 1（或 2，`"align"` 模式下）个状态块，无论生成了 10 个 token 还是 10 万个 token。这是 SSM/线性注意力架构相对 Transformer 全注意力在长序列场景下的核心显存优势，代码里体现得非常直白：`max_num_blocks_per_req` 在 `"align"` 模式外根本不看 `max_len` 参数（`vllm/v1/kv_cache_interface.py:860` 走的是 `max_memory_usage_bytes // page_size_bytes`，与 `max_len` 无关）。
+2. **"LRU" 驱逐并不是严格按最后访问时间排序的 LRU**。真正决定一个块在空闲队列里位置的，是它"进入队列那一刻"是走 LIFO 还是 FIFO 路径（§5.3）、以及释放批次内部的顺序（§5.4）——一个块被 `touch()` 命中并不会让它在队列里"往后挪"，因为被 touch 的块此时 `ref_cnt > 0`，根本不在空闲队列里；它只有在 `ref_cnt` 重新归零、被下一次 `free_blocks` 调用送回队列时，才会按"最新一批释放"的规则重新排位。这是一种"近似 LRU"，精确程度取决于批调度的粒度，不是教科书意义上"每次访问都更新时间戳"的严格 LRU。
+3. **混合模型的前缀命中判定不是一次查表就能拿到答案，可能要跑多轮不动点迭代**（§4.2）。只有"全注意力 + 恰好一种其他类型"这种最常见情形被特判成一轮收敛（`is_simple_hybrid`），更复杂的组合（比如同时有滑窗和 Mamba 两种非全注意力组）理论上需要多轮，循环终止条件是"这一轮没有任何组再缩短候选长度"——虽然收敛性有保证（长度单调递减且下界为 0），但迭代轮数不是一个可以提前静态算出的常数。
+4. **张量并行/流水线并行下，KV 缓存池的大小由"最穷"的那个 worker 决定**。`get_kv_cache_configs` 最后一步显式 `min(kv_cache_config.num_blocks for kv_cache_config in kv_cache_configs)`，再把其余 worker 的分配按这个最小值重新收缩（`vllm/v1/core/kv_cache_utils.py:2201`）——如果集群里某张卡因为被其他进程多占了一点显存导致 profile 出的可用内存更少，**全体 worker 的 KV 缓存池都会被拉低到这张卡的水平**，不是"各用各的"。
+5. **SlidingWindowManager 的命中查找是官方自己标注的次优实现**：代码里留了一条待办注释，说当前从右向左逐块扫描的复杂度是 `O(max_num_blocks)`，在命中率低的场景下本可以优化到 `O(max_num_blocks / sliding_window_contiguous_blocks + sliding_window_contiguous_blocks)`（`vllm/v1/core/single_type_kv_cache_manager.py:937`）——这条直接留在源码里，见 §8。
+6. **`num_gpu_blocks` 里永远有一个块用不上，而且这不是四舍五入误差，是刻意预留**。`get_kv_cache_configs` 在做容量检查前，会先从 `available_memory` 里减掉一个块的字节数再检查（`check_memory = avail_mem - _pool_bytes_per_block(groups)`，`vllm/v1/core/kv_cache_utils.py:2166`），注释直接写明理由："Reserve the null block BlockPool permanently holds back, so auto-fit and the capacity check both plan against usable blocks"——也就是说，即便某次部署完全用不到滑动窗口/混合注意力这些需要 `null_block` 的特性，容量规划公式依然会先扣掉一个块的预算，"能用的块数"永远比"分配到的块数"少一。这在块数动辄上万的场景下完全不可感知，但如果有人试图用 §4.4 那样的公式去精确对账"我这台机器理论上应该有多少块"，会发现比实测数字系统性地多算了（大约）一个块——差值就来自这条预留。
+7. **不加密的哈希算法（`xxhash`/`xxhash_cbor`）在跨进程场景下默认不可复现，即使内容完全相同**。`NONE_HASH`（每条哈希链的起点种子）在使用加密哈希（`sha256`/`sha256_cbor`）时用固定的默认种子 `"vllm-none-hash"`（`vllm/v1/core/kv_cache_utils.py:108`），保证不同进程对相同内容算出相同的块哈希；但非加密哈希算法因为不具备抗碰撞性，如果种子固定就可能被攻击者离线预计算出碰撞（`vllm/v1/core/kv_cache_utils.py:100` 注释直接引用了 issue #12621），所以 `resolve_none_hash_seed` 对非加密算法**默认用每进程随机种子**（`os.urandom(32).hex()`，`vllm/v1/core/kv_cache_utils.py:129`）。反直觉的地方在于：如果一个多实例部署想要跨实例共享前缀缓存（比如通过 P/D 分离或外部 KV 存储比对哈希），换成 `xxhash` 追求哈希速度的同时，会**默认静默失去跨进程可复现性**——除非显式设置 `PYTHONHASHSEED` 环境变量统一种子（代码里也确实检查了这个环境变量优先级最高，`vllm/v1/core/kv_cache_utils.py:125`）。不设置的话不会报错，只会在跨进程比对时"莫名其妙"地全部 miss。
+
+## 8. 可改进点
+
+1. **`SlidingWindowManager.find_longest_cache_hit` 的线性扫描可以按源码里留的待办注释优化**（`vllm/v1/core/single_type_kv_cache_manager.py:937`）：低命中率场景下，每次 cache miss 后可以直接把扫描游标跳过一整个 `sliding_window_contiguous_blocks` 长度，而不是逐块递减；这是源码作者自己承认的已知次优点，不是本库的猜测。
+2. **`BlockHashToBlockMap` 不做内容去重**（`vllm/v1/core/block_pool.py:47` NOTE #1）是为了保证块表 append-only，但代价是"同一段内容被不同请求各自计算出块哈希后各占一份物理块"这种情况下无法共享——**本库推断**：如果能在不破坏 append-only 的前提下，为"新算出的块哈希已存在于表中"这种情况提供一种延迟合并（比如后台异步把新块标记为可驱逐并把引用指向已存在的块），理论上能进一步提高高重复度工作负载（比如多个请求各自独立生成但恰好走到完全相同的推理路径）下的缓存命中率；但这需要打破"block_id 分配后永不改变"这条当前贯穿调度器和模型执行器的核心不变式，改造成本很高，本库判断短期内不会有人做，标注为长期可探索方向而非可落地 PR。
+3. **`metrics_collector` 是可选注入**（`vllm/v1/core/block_pool.py:196`），默认不开启；即使开启，`sample_rate` 默认也只有 0.01（§3.9），运维方如果不主动传入一个 `KVCacheMetricsCollector` 实例并调高采样率，就只能看到聚合的 `PrefixCacheStats`，看不到块级驻留时间/复用间隔分布。**本库推断**：把最基础的一层轻量统计（比如驱逐年龄分布的直方图，全量而非采样，因为直方图分桶本身的开销远小于保存完整访问历史）做成默认开启、零额外内存分配的路径，能让运维方在不改配置的情况下就获得"我的 `gpu_memory_utilization` 设置是不是导致了过度驱逐"这类调优信号，当前这个信号必须主动配置且承受采样偏差才能拿到。
+4. **跨 worker（TP/PP）取最小 `num_blocks` 再统一收缩**（`vllm/v1/core/kv_cache_utils.py:2201`，见 §7 第 4 条）是目前"最简单能保证正确性"的方案，但代价是"一张卡的一点点显存波动，会拉低整个集群的 KV 缓存容量"。**本库推断**：如果 worker 间的显存差异是长期稳定的（比如流水线并行不同 stage 的层数天然不均衡，导致某个 stage 的非 KV 内存占用系统性更高），理论上可以让每个 worker 独立持有自己的 `num_blocks`，代价是调度器发往不同 worker 的 `block_table` 不能再假设"同一个 `block_id` 在所有 worker 上都有效"——这是一处"简单正确 vs 榨干每一分显存"的典型权衡，短期看不出有人会为了这点收益去承担这个复杂度，标注为长期方向而非可落地 PR。
+
+
+===== 01-vLLM\05-vLLM-注意力后端与算子层.md =====
+## 7. 踩坑与反直觉
+
+1. **`VLLM_ATTENTION_BACKEND` 环境变量已经不存在了，但网上大量教程还在用它。** 本库对整个 `_src/vllm` 做了 `grep -rln "VLLM_ATTENTION_BACKEND"`，零命中——不是某个文件里没写，是这一版代码库里彻底没有这个环境变量了。现在唯一入口是 `--attention-backend` CLI 参数（`vllm/engine/arg_utils.py:976`）或 `AttentionConfig.backend`，二者互斥（`vllm/engine/arg_utils.py:2401`-`2406`）。如果你在这一版 vLLM 上设了这个环境变量，它会被安静地忽略——不会报错，也不会生效，这是最容易踩的一个坑。
+2. **`AttentionBackendEnum.NO_ATTENTION` 指向一个不存在的文件。** 枚举里写的是 `"vllm.v1.attention.backends.no_attention.NoAttentionBackend"`（`vllm/v1/attention/backends/registry.py:112`），但本库对整个 `_src/vllm` 搜索 `NoAttentionBackend`/`no_attention.py`，唯一命中就是这一行声明本身——对应的实现文件根本不存在。如果代码路径真的选到了 `NO_ATTENTION`，`resolve_obj_by_qualname` 会在 `import` 时抛 `ModuleNotFoundError`。这条不是"本库读代码读错了"，是这版快照里真实存在的死引用（本库推断：大概率是一个正在废弃或从未完成的预留条目，**未查证**具体是历史遗留还是开发中特性）。
+3. **vLLM 的招牌手写 kernel `paged_attention_v1`/`v2` 在 CUDA 路径上已经消失。** 全仓搜索这两个函数名，唯一命中在 `vllm/v1/attention/backends/rocm_aiter_fa.py:1164,1243,1362`，且那里调用的是 `torch.ops.aiter.paged_attention_v1`——这是 AMD AITER 库自己的算子，恰好同名，和 vLLM 论文里那个手写 CUDA kernel没有任何关系。原来的 `csrc/attention/attention_kernels.cu` 已经不在这版代码里，`csrc/attention/` 目录现在只剩 6 个数据类型转换的 `.cuh` 头文件。这个反直觉之处在于：很多人心目中"vLLM = PagedAttention 的手写实现"这个印象，在当前这版代码里已经不成立——PagedAttention 描述的**内存管理思想**（分块、间接寻址）还在，但**计算 kernel 本身**已经全面外包给了 FlashAttention/FlashInfer/Triton。
+4. **TPU 支持被整体抽出到了一个外部包。** `vllm/platforms/tpu.py` 只有 20 行，核心逻辑是 `try: from tpu_inference.platforms import TpuPlatform as TpuInferencePlatform`（`9`-`14`），失败就打一条"请安装 tpu_inference"的错误日志然后什么都不做。这意味着本篇 `## 2` 列出的整套 CUDA/ROCm/CPU 平台选择逻辑（`_get_backend_priorities`、`get_attn_backend_cls` 的具体实现）在 `_src/vllm` 这份快照里对 TPU **完全不存在**——TPU 的注意力后端选择逻辑活在一个本库没有 clone 的独立仓库里，**未查证**其内部实现是否遵循同一套 `AttentionBackend` 契约。
+5. **选 backend 便宜，建 metadata 不便宜——但这个不对称容易被"selector 有缓存"这句话误导。** `_cached_get_attn_backend`（`vllm/v1/attention/selector.py:194`）和 `_get_backend_priorities`（`vllm/platforms/cuda.py:82`）都套了 `@cache`，容易让人以为"注意力这块都是缓存友好的"；但 `builder.build()` 这个真正每步都要跑的调用完全没有等价的跨步缓存（`## 4.2`/`## 5` 决策 4 已详细展开）——"选型"和"填数据"是两件成本量级完全不同的事，不能因为前者便宜就假设后者也便宜。
+6. **`DiffKV` 这个名字第一眼容易读成"差分 KV 压缩"，其实是"K 和 V 的 head dim 不一样"。** `FlashAttentionDiffKVBackend`（`vllm/v1/attention/backends/flash_attn_diffkv.py:35`-`52`）的文档字符串明确写"DiffKV (hdim_qk != hdim_v) requires FA3 or FA4"——这里的 "Diff" 是 "different"（不同）的缩写，不是 "differential"（差分/增量）。同样的命名陷阱在 `TRITON_ATTN_DIFFKV` 上也存在。这条容易在跨团队沟通时产生误解：以为这是又一种类似 TurboQuant 那样的 KV 压缩方案，实际上它和压缩完全无关，只是放宽了"Q/K 头维度必须等于 V 头维度"这个假设。
+7. **"vLLM 支持哪些 attention backend" 这个问题在这版代码里没有唯一答案。** `## 4.6` 已经展开：解码器侧的普通/MLA 注意力走 `_get_backend_priorities()` 的完整声明式校验（37 个后端参与竞争），ViT 编码器侧走 `get_supported_vit_attn_backends()`/`get_vit_attn_backend()` 一条独立的、只查三项谓词的简化路径（`vllm/platforms/cuda.py:504`-`558`，固定备选集只有 4 个）。读文档或者读代码时如果不区分"问的是哪一侧"，很容易把两份不同的清单混着引用。
+
+## 8. 可改进点
+
+（以下均为本库基于源码走读的推断，标注证据依据；**未查证**是否已有官方 issue 在跟踪。）
+
+- **`NO_ATTENTION` 这类死引用应该有 CI 兜底。** 目前没有发现任何测试遍历 `AttentionBackendEnum` 全部成员并尝试 `get_class()` 来确认每条都能真正 `import` 成功（`CUSTOM` 除外，它本来就要求先注册）。加一个这样的测试，`registry.py` 里出现死引用会在 CI 阶段就暴露，而不是等到用户真的选中那个从未存在的 backend 才在运行时炸掉。
+- **组合校验只在真正构建这一层时才跑，用户可能要等模型加载到一半才发现某个 backend 选不了。** `validate_configuration()`（`vllm/v1/attention/backend.py:263`）是在 `Attention.__init__` 阶段才被调用的（间接经由 `get_attn_backend`），如果一个大模型有几十层，理论上可以在 CLI 参数解析完成、模型权重还没开始下载/加载之前，先用模型配置文件里已知的 `head_size`/`dtype`/结构信息跑一遍"影子校验"，把不兼容的 backend 选择在几秒内报出来，而不是让用户等到显存分配、权重加载这些更耗时的步骤都做完才失败。
+- **AST 静态解析生成的文档矩阵可能跟不上运行时才能确定的能力。** `docs/mkdocs/gen_files/generate_attention_backends.py` 用 Python `ast` 模块解析每个 backend 文件的方法体来抽取能力矩阵，这个思路本身很好（文档和代码同源），但 `supports_combination()`（比如 `vllm/v1/attention/backends/flash_attn.py:173`-`207`）里调用的 `flash_attn_supports_kv_cache_dtype()` 这类需要运行时查询已安装 FlashAttention 版本才能确定结果的函数，静态 AST 解析未必能完整还原其语义（**本库推断**，未逐行验证该生成脚本对这类运行时依赖分支的具体处理方式，也未实际跑过这个脚本比对输出）。
+- **`MultipleOf` 只声明"倍数关系"，没有声明"倍数选大了会不会浪费显存"。** `get_preferred_block_size()`（`vllm/v1/attention/backend.py:149`-`158`）在用户没显式设置时，只要满足 `supports_block_size(default_block_size)` 就直接用默认值，否则退化到 `min(supported_sizes)`——这中间没有一个信号告诉用户"选了这个 block_size 之后，这个 kernel 内部实际会按多大的物理 tile 对齐、是否存在因为对齐而多分配的显存"。对于显存紧张、想精细控制 KV cache 大小的部署场景，这部分信息目前只能靠读 kernel 源码或者实测显存占用来倒推（**未查证**是否有专门的日志或诊断接口暴露这个信息）。
+- **ViT 侧的选择逻辑（`## 4.6`）和解码器侧完全独立维护，容易在新增一个 backend 时漏掉一边。** `get_supported_vit_attn_backends()`（`vllm/platforms/cuda.py:504`-`519`）里的四个候选是手写的固定列表，不是从 `AttentionBackendEnum` 全量派生再过滤出"支持 encoder-only 场景"的子集——如果未来给 37 个后端里的某一个加上了 ViT 场景支持，需要有人记得手动把它加进这个列表，`AttentionBackendEnum` 本身的注册不会自动让它出现在 ViT 候选集里。
+
+
+===== 01-vLLM\06-vLLM-模型执行与CUDA-Graph.md =====
+## 7. 踩坑与反直觉
+
+**陷阱：cascade attention 打开会静默把 FULL 图降级掉，不报错、不崩溃，只是那一步偷偷变慢。**
+
+`_determine_batch_execution_and_padding()` 里判定要不要用 FULL 图时，直接把 `use_cascade_attn`（以及 encoder-decoder 场景的 `has_encoder_output`）作为 `disable_full` 的条件传进去：
+
+```python
+# vllm/v1/worker/gpu_model_runner.py:4095-4107
+def dispatch_cudagraph(num_tokens, disable_full=False, valid_modes=None):
+    return self.cudagraph_dispatcher.dispatch(
+        num_tokens=num_tokens, has_lora=has_lora, uniform_decode=uniform_decode,
+        num_active_loras=num_active_loras,
+        valid_modes={CUDAGraphMode.NONE} if force_eager else valid_modes,
+        invalid_modes={CUDAGraphMode.FULL} if disable_full else None,
+    )
+
+cudagraph_mode, batch_descriptor = dispatch_cudagraph(
+    num_tokens_padded, disable_full=use_cascade_attn or has_encoder_output
+)
+```
+
+`AttentionCGSupport` 的枚举文档本身就写死了"cascade attention... currently it is never cudagraph supported"（`vllm/v1/attention/backend.py:568-570`）——这不是某个 backend 的临时限制，是整个 cascade attention 特性和 CUDA Graph 结构性冲突：cascade attention 需要按共享前缀长度动态分两段算 attention，这个"分几段、每段多长"本身就是运行时才知道的动态形状，没法固定进一份预先捕获好的图里。
+
+`CudagraphDispatcher.dispatch()` 的兜底逻辑在满足 `num_tokens > max_size`、或 `allowed_modes` 被削减到只剩 `NONE` 等条件时，直接返回 `CUDAGraphMode.NONE`（`vllm/v1/cudagraph_dispatcher.py:274-281`）；`CUDAGraphWrapper.__call__()` 里一旦发现运行时模式和自己的模式不匹配，**直接把调用转发给底层 `self.runnable(*args, **kwargs)`**：
+
+```python
+# vllm/compilation/cuda_graph.py:244-254
+if (
+    cudagraph_runtime_mode == CUDAGraphMode.NONE
+    or cudagraph_runtime_mode != self.runtime_mode
+):
+    # CUDAGraphMode.NONE could mean the profile run, a warmup run, or
+    # running without cudagraphs.
+    return self.runnable(*args, **kwargs)
+```
+
+没有异常、没有默认打印的日志，这一步就是安安静静地跑了一次没有 Graph 加速的 forward。
+
+**怎么在日志里认出来**：默认情况下这条路径完全不出声。要看见它，得显式打开 `--cudagraph-metrics`（对应 `observability_config.cudagraph_metrics`，默认 `False`，`vllm/config/observability.py:68`）——打开之后 `_determine_batch_execution_and_padding()` 每步都会构造一个 `CUDAGraphStat(runtime_mode=str(cudagraph_mode), ...)`（`vllm/v1/worker/gpu_model_runner.py:4147-4154`），`CUDAGraphLogging.generate_metric_table()`（`vllm/compilation/cuda_graph.py:71-118`）会把所有观测到的 `(unpadded tokens, padded tokens, paddings, runtime mode)` 组合聚合成一张 Markdown 表格打到日志里——如果这张表里某一行的 `Runtime Mode` 列写的是 `NONE`，且出现频次不低，那就是有一批批次一直在走 eager，而不是你以为的"图已经生效"。另一条独立线索是 `_prepare_kv_sharing_fast_prefill()`（`vllm/v1/worker/gpu_model_runner.py:2994-3016`）——它对 KV sharing fast-prefill 场景显式传了 `invalid_modes={CUDAGraphMode.FULL}`（`vllm/v1/worker/gpu_model_runner.py:3009-3010`），说明这是一个已知会被排除在 FULL 图之外的特性组合，不是 bug，是设计使然。
+
+**次要陷阱：encoder-decoder 模型第一遍（带 encoder 输入）的步骤会被强制走 eager。** `set_forward_context(..., skip_compiled=has_encoder_input)`（`vllm/v1/worker/gpu_model_runner.py:4552`，`has_encoder_input` 定义于 `vllm/v1/worker/gpu_model_runner.py:4526-4528`）把这个标志一路传到 `support_torch_compile` 生成的 `__call__()`，命中就直接走原始 `forward`（`## 4.4` 已展开代码），源码注释解释原因："tensor shapes/types vary across invocations, preventing the capture of a single computational graph"（`vllm/compilation/decorators.py:510-511`）。这条路径同样不报错，只是这一类模型的这一类步骤永远吃不到编译/图加速的红利——查代码前光看日志很难分辨"这个模型本来就不支持"还是"配置错了"。
+
+## 8. 可改进点
+
+以下均为本库阅读代码后的推断，未在上游 issue/PR 中核实是否已有讨论（诚实标准第 6 条：不编 issue 号）。
+
+1. **`--cudagraph-metrics` 默认关闭，观测门槛偏高。** cascade attention/encoder-decoder 这类"静默降级"场景（`## 7`）只有在用户主动打开这个 flag 之后才能在日志里看见；对于排障，默认打开一个采样频率很低（比如每 N 步一次）的轻量版统计、或者在检测到某个 batch shape 连续多次落进 `NONE` 分支时打一条 `logger.warning_once`，会显著降低用户"以为开了图、实际一直在吃 eager"的踩坑概率。
+2. **`condense()`（`vllm/v1/worker/gpu_input_batch.py:708-840` 起）的正确性高度依赖多处状态数组同步移动**——`token_ids_cpu`、`spec_token_ids`、`block_table`、`num_computed_tokens_cpu` 等十几处字段都要在同一次 `empty_index`/`last_req_index` 交换里各自搬一遍，任何一次新增字段忘了在这里补一行都是一个隐蔽的状态错位 bug，且大概率只在"请求被移除导致压缩"这种非最常见路径上触发，日常小规模测试很难覆盖到。给 `InputBatch` 补一个"字段清单自检"（比如遍历 `__init__` 里所有 `(max_num_reqs,)` 形状的属性，断言 `condense()` 确实处理过每一个），能把这类疏漏从运行时踩坑前移到 CI 阶段。
+3. **`load_weights()` 的"严格性检查"（`## 4.6` 第 3 步）默认只在非量化模型上开启**（`vllm/model_executor/model_loader/default_loader.py:436-438` 的 `default_enable_weights_track` 判断），量化模型的权重覆盖情况因此少了这道安全网——量化路径本身逻辑更复杂（在线量化、layerwise 处理），恰恰更需要这类"谁没被加载"的检查，而不是默认豁免。把追踪逻辑扩展到能正确处理量化场景的"预期被跳过的参数名单"（而不是整体关闭检查），能补上这块盲区。
+
+
+===== 01-vLLM\07-vLLM-分布式与并行策略.md =====
+## 7. 踩坑与反直觉
+
+1. **`struct_map.json` 的"distributed 138 文件/54,851 行"里，59% 是 KV 传输代码，不是并行策略代码**——`## 2` 已经用真实的 `wc -l` 复核过：`kv_transfer/` 32,609 行、`ec_transfer/` 1,806 行，两者合计约 63% 的行数属于 [[12-vLLM-PD分离与KV-Connector]] 的地盘。任何用"文件路径含 distributed 关键词"做粗口径统计的工具，在这个目录上都会得到失真的规模印象——这条踩坑在写这篇之前就被 `_PLAN.md` 提前警告过（"这是文件名关键词匹配的粗口径，有假阳性"），实测确认警告是对的。
+2. **`ParallelConfig.world_size` 不包含 `data_parallel_size`**（`vllm/config/parallel.py:858`-`862`）——第一次读代码容易把 `self.world_size` 当成"总 GPU 卡数"，实际上它只是 `pp × tp × pcp`，DP 是独立的多副本维度，要用 `world_size_across_dp`（`vllm/config/parallel.py:573`-`575`）才是真正意义上的全局进程数。
+3. **`_SUPPORTED_WORLD_SIZES = [2, 4, 6, 8, 16]`（`vllm/distributed/device_communicators/custom_all_reduce.py:57`）里的 16，对 `all_reduce` 并不生效**——`should_custom_ar()` 一进来就 `if self.disabled or self.world_size > 8: return False`（`vllm/distributed/device_communicators/custom_all_reduce.py:349`），16 这一档只用于 `all_gather`/`reduce_scatter` 的 MNNVL（多机 NVLink）路径（`vllm/distributed/device_communicators/custom_all_reduce.py:401`-`403`、`455`-`457`）。只看"支持的 world_size 列表"很容易误以为 16 卡的 TP/EP 组也能走自定义 all-reduce。
+4. **DP 的全局完成度判定不是每步都同步**——`_has_global_unfinished_reqs()`（`vllm/v1/engine/core.py:2267`-`2274`）表面上看是每步都调用，但函数体里第一句就是 `self.step_counter += 1; if self.step_counter % 32 != 0: return True`——只在第 32 步的倍数才真正发起 all-reduce，中间 31 次直接假定"还在跑"直接返回。不往函数体里看，只看调用点，会以为这是个每步都做的同步点。
+5. **`reconfigure_for_independent_dp_rank()` 会让同一个 `ParallelConfig` 对象里两个"看起来同义"的字段产生分歧**：非 MoE 模型的 DP rank 被重配置后，`data_parallel_rank` 被强制清零（`vllm/config/parallel.py:1070`），但 `data_parallel_index` 仍然保留原始的 dp_rank——源码注释原话是"Note that parallel_config.data_parallel_index will still reflect the original DP rank"（`vllm/v1/engine/core.py:1327`-`1328`）。如果日志或调试代码里习惯性地读 `data_parallel_rank` 来判断"这是第几个 DP 副本"，在非 MoE 场景下会读到一个恒为 0 的错误值，得改读 `data_parallel_index`。
+6. **`_EP` 进程组存在，不代表 MoE 层真的在用 expert-parallel 路由**——`## 4` ①里 `initialize_model_parallel()` 建 EP 组的条件只看 `config.model_config.is_moe`（`vllm/distributed/parallel_state.py:1926`），完全不检查 `enable_expert_parallel`；但 MoE 层内部真正决定"要不要按专家切分"的开关是另一处：`FusedMoEParallelConfig` 里 `use_ep = (dp_size × pcp_size × tp_size > 1) and vllm_parallel_config.enable_expert_parallel`（`vllm/model_executor/layers/fused_moe/config.py:1212`-`1214`）。`enable_expert_parallel` 默认是 `False`（`vllm/config/parallel.py:165`）——也就是说，一个 MoE 模型即使跑在多卡上，只要没显式加 `--enable-expert-parallel`，`_EP` 进程组会被建出来，但 MoE 层实际上并不使用它做专家路由（退化成专家权重在 TP 维度上复制/切分的另一套路径）。只看"这个进程组存不存在"来判断"是不是在用 EP"，会得出错误结论。
+7. **`VLLM_DISTRIBUTED_USE_SPLIT_GROUP` 不是默认值，但代码路径永远在**——`GroupCoordinator.__init__` 里 `if envs.VLLM_DISTRIBUTED_USE_SPLIT_GROUP`（`vllm/distributed/parallel_state.py:436`）这个分支平时不会被走到（默认 `False`，`vllm/envs.py:66`），容易被当成"死代码"跳过不看；但只要环境变量一开，全部 8 个进程组的建组方式都会切换成 `_create_subgroups_split_group()`（`vllm/distributed/parallel_state.py:282`）这条路径，行为差异（尤其是失败时的报错信息、超时行为）没有被本篇验证过是否完全一致——读代码时两条路径都要过一遍，不能只读默认分支。
+
+## 8. 可改进点
+
+以下均为**本库推断**，未在上游 issue/PR 中核实过，标注依据：
+
+1. **EPLB 的重排触发条件可以引入类似 SGLang 的利用率门控**——当前 `step_interval` 是固定步数（`## 5` 决策 6），意味着系统本来就很闲、负载均衡收益微乎其微的时段，也会按部就班触发一次真实的权重搬运；而系统正忙、最需要腾出带宽跑推理请求的时段，也可能恰好撞上重排窗口。SGLang 的 `eplb_min_rebalancing_utilization_threshold`（`## 6`）提供了一个"挑系统较闲时机做"的思路，vLLM 目前没有等价的门控信号。
+2. **`disable_nccl_for_dp_synchronization` 的隐式默认值不够显眼**——字段类型是 `bool | None`，`None` 时的真实行为（"async scheduling 时为 True，否则 False"）写在字段的 docstring 里（`vllm/config/parallel.py:227`-`231`），但要理解这个默认值真正落地的地方得去翻 `field_validator`（`vllm/config/parallel.py:422`起）。对一个会决定"DP 同步走 NCCL 还是 CPU gloo"这种性能敏感开关，`None` sentinel + 文档字符串的组合比直接暴露一个只读 property 更容易被漏读。
+3. **`vllm/distributed/` 目录把"并行策略"和"KV 跨进程搬运"混在一起，是 `## 2`/`## 7` 那条统计失真问题的根源**——如果像 SGLang 把 EPLB 独立成 `srt/eplb/` 顶层包一样，把 `kv_transfer/`、`ec_transfer/` 提升成 `vllm/kv_transfer/`、`vllm/ec_transfer/` 顶层包，不需要改变任何运行时逻辑，就能让"这个目录在讲什么"从路径本身读出来，减少后续代码审计、新人上手、以及像本库这样做自动化代码地图统计时的混淆成本。
+4. **`enable_expert_parallel` 和"是否建 `_EP` 组"这两件事可以在日志里显式对齐**——`## 7` 踩坑 6 发现的"组建了但没用上"这种状态，目前只能靠交叉读两处源码才能确认；`initialize_model_parallel()` 末尾已经有一条 `logger.info_once` 打印每个 rank 的 DP/PP/PCP/TP/EP/EPLB rank（`vllm/distributed/parallel_state.py:1982`-`1994`），顺手加一行"`enable_expert_parallel=False`，EP 组已建但 MoE 层不会使用"这样的显式告警，能让这条踩坑在启动日志阶段就被发现，而不是等看到 MoE 层性能不如预期才回头查配置。
+
+
+===== 01-vLLM\08-vLLM-HTTP-API表面全解.md =====
+## 7. 踩坑与反直觉
+
+1. **"63 条路由"是源码里声明的数量，不是任意一次启动实际会响应的数量**：光是 `VLLM_SERVER_DEV_MODE`（默认关）就影响 13 条路由的生死（`## 2.2` G 族），`VLLM_ENABLE_COHERE_API` + SDK 探测影响 1 条，`args.tokens_only` 影响 1 条（`/abort_requests` scale-out 版），`args.enable_fault_tolerance` 影响 2 条，`--enable-tokenizer-info-endpoint` 影响 1 条，`VLLM_ALLOW_RUNTIME_LORA_UPDATING` 影响 2 条——**一次典型的默认配置启动（不开任何这些旗标）实际暴露的路由数是 63 减去至少 20 条**。这不是 AST 抽取器的 bug（每条路由的装饰器都是合法的字面量，抽取器该抽的都抽到了），是"路由存在于源码"和"路由存在于运行时"这两个概念本身就不该混为一谈——本篇 `## 2.2` 每张表都专门标了"注册条件"这一列，正是为了避免读者把 63 当成"随便起个 server 就有这么多攻击面"。
+2. **`/abort_requests` 这个路径被两个完全不同文件的两个不同函数注册，谁生效取决于注册顺序**：dev 族的版本（`vllm/entrypoints/serve/dev/rlhf/api_router.py:95`，需要 `VLLM_SERVER_DEV_MODE=1`）在 `register_api_routers()` 里于第 37 行（`vllm/entrypoints/launchers/api_server/routers.py:34-37`）就注册了；scale-out 族的版本（`vllm/entrypoints/scale_out/token_in_token_out/api_router.py:80`，需要 `args.tokens_only=True`）要等到第 55 行（`:52-55`）才注册。FastAPI/Starlette 的路由匹配是按注册顺序取第一个精确匹配，**如果一次启动同时把 `VLLM_SERVER_DEV_MODE=1` 和 `--tokens-only` 都打开**（两个条件互不冲突，完全可能同时为真），dev 族版本的 `/abort_requests`（无 `request_ids` 时 abort 全部在途请求）会先注册、拿到路由匹配优先权，scale-out 族那个专门为"Disaggregated Everything"场景写的、语义略有差异的 `/abort_requests`（同样逻辑但直接调 `engine_client(raw_request).abort(request_ids)`，`vllm/entrypoints/scale_out/token_in_token_out/api_router.py:88-89`）会变成永远匹配不到的死代码（**本库推断**：基于 Starlette 路由匹配"先注册先匹配"的通用行为，未实测验证，仅从注册顺序推出结论）。
+3. **`vllm/entrypoints/openai/api_server.py` 这个文件名本身就是一个陷阱**：任何习惯了"OpenAI 兼容层入口在 `openai/api_server.py`"这个心智模型的人（这也是本篇任务书最初给的假设），第一次打开这个文件会发现它只有 59 行、通篇是 `warnings.warn` 和 re-export（`:5-22,24-30,50-59`），真正的逻辑已经全部搬到 `vllm/entrypoints/launchers/` 下。这不是死代码——`__all__` 里导出的每个名字仍然可以被外部代码 `from vllm.entrypoints.openai.api_server import build_app` 这样导入且能正常工作（因为是原样转发），只是**这个文件已经不是"读源码找主装配点"时该打开的第一个文件**了。
+4. **`--api-key` 保护的端点列表和"标准 OpenAI 客户端能访问的端点列表"并不完全重合**：`docs/usage/security.md:153-176` 列出的"受保护端点"里包含 `/v1/load_lora_adapter`（"only available when `--enable-lora` is set and `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True`"）——这条路由即使配了 `--api-key`，也要先满足另外两个独立的开关才会真的存在（`vllm/entrypoints/serve/lora/api_router.py:26-29`）。"受 `--api-key` 保护"和"这条路由存在"是两个独立的问题，一个查 `GUARDED_PREFIX`，一个查各自的注册条件，两者互不蕴含。
+5. **`/server_info`（dev-only）会把服务器完整配置和全部 `VLLM_*` 环境变量原样吐出来**：`show_server_info()`（`vllm/entrypoints/serve/dev/server_info/api_router.py:43-59`）把 `PydanticVllmConfig.dump_python(vllm_config, ...)`（`:53`）、`_get_vllm_env_vars()`（`:25-35`，遍历 `dir(envs)` 里所有 `VLLM_` 开头且不含 `KEY` 的变量）、`get_env_info()`（`:39-40`，系统环境信息）三块一起塞进响应体。`KEY` 过滤只挡住了变量名里带 `KEY` 的（比如不会泄漏 `VLLM_API_KEY` 本身），但完整的并行策略、模型路径、量化配置等信息全部暴露——这条端点需要 `VLLM_SERVER_DEV_MODE=1` 才存在，但如同 `## 4.1` 说的，同样不受 `--api-key` 保护。
+6. **`ChatCompletionResponse` 里也有 `kv_transfer_params`/`ec_transfer_params`（`vllm/entrypoints/openai/chat_completion/protocol.py:143,146`），和 `ChatCompletionRequest` 里同名的两个字段（`:480,485`）容易被当成同一处定义**——前者出现在 `ChatCompletionResponse` 类体内（`:127-150`），是引擎回传给调用方的 PD 分离元数据；后者出现在 `ChatCompletionRequest` 类体内（`:213-1046`），是调用方主动传入的 PD 分离参数。两者字段名相同、语义相反（一个是"引擎告诉你"，一个是"你告诉引擎"），只看字段名不看所在类容易搞反方向。
+7. **`stream_options.include_usage` 之外，vLLM 也有一个不严格遵循标准 OpenAI 语义的服务端级默认值**——`enable_force_include_usage` 出现在 `init_generate_state()` 构造 `OpenAIServingChat`/`OpenAIServingCompletion`/`AnthropicServingMessages`/`CohereServingChatV2` 时统一传入的参数（`vllm/entrypoints/generate/api_router.py:145,168,209,229`），命名和语义都与 SGLang 的 `stream_response_default_include_usage`（`sglang:python/sglang/srt/entrypoints/openai/utils.py:97-98`）同构——**两家各自独立地在标准协议之外加了一个"服务端强制打开 usage 统计"的开关**，本篇没有深入这个字段具体从哪个 CLI 旗标控制（留给 `[[09-vLLM-Python-API与EngineArgs]]` 核实），但两家收敛到同一种"运营方想统一采集计费数据，不想依赖每个客户端配合"的加法特性，是又一处跨引擎共性观察。
+8. **`/ping` 用同一个函数堆叠两个装饰器注册成两条方法记录，容易被误读成"这里一定有两个实现"**：`@router.post("/ping", ...)` 和 `@router.get("/ping", ...)`（`vllm/entrypoints/serve/sagemaker/api_router.py:47-48`）连续两行分别装饰同一个 `async def ping(raw_request)`（`:50`），这是 `_lab/out/api_surface.json` 里 `n_routes=63` 但 `n_unique_paths=61` 之所以只差 2 的一半原因（另一半是 `/abort_requests` 的双文件重复，见第 2 条）。只看 `api_surface.json` 的 JSON 数组本身分不清这两种"重复"——`/ping` 是"同一个 handler、两个方法"，`/abort_requests` 是"两个 handler、同一条路径、注册条件互斥"，语义完全不同，但都会让 `n_routes - n_unique_paths = 2` 这个数字算出来一样，必须回到 `routes` 数组本身逐条核对文件路径和 `handler` 字段才能分辨——这是"一个汇总数字掩盖了两种不同性质的重复"的具体案例，和 SGLang 篇 `## 7` 提到的"扫了但贡献 0 条路由"是同一类"数字骗人"的坑。
+9. **`OnlineRenderer` 在完整 server 和 render-only server 两种部署形态下，是两处独立的构造点，不是同一个跨进程共享的单例**：`vllm/entrypoints/launchers/api_server/app_state.py:82` 和 `vllm/entrypoints/launchers/render/app_state.py:50` 各自 `state.online_renderer = OnlineRenderer(...)`，两个进程各自持有自己的实例——`## 5` 决策 4 说"render 和生成路径共用同一份渲染逻辑"指的是**同一个类的两份独立实例、跑在两个不同进程里**，不是字面意义上的"同一个对象"。如果两个进程的 `chat_template`/`tool_parser` 等构造参数没有严格保持一致（比如只在完整 server 的启动命令里传了 `--chat-template`，render-only 进程漏传），两边渲染出来的 token 序列会出现细微不一致，而这种不一致不会在任何一边单独测试时暴露出来，只有把两边的输出拿去对比才能发现。
+10. **`n_cli_flags=233`（`_lab/out/api_surface.json` 的 `engines.vllm.summary.n_cli_flags`）这个数字里混着影响 HTTP 表面和完全不影响 HTTP 表面的旗标，不能直接拿来跟 SGLang 的 CLI 旗标数对比"谁的旋钮更复杂"**：本篇提到的 `--tokens-only`、`--enable-fault-tolerance`、`--enable-tokenizer-info-endpoint`、`--api-key` 这些直接决定路由生死或认证范围，但 233 个旗标的绝大多数（并行策略、量化配置、调度器参数……）跟 HTTP 层完全无关，只是恰好和路由注册逻辑共享同一个 `argparse.Namespace`。把"CLI 旗标总数"当成"HTTP API 复杂度"的代理指标是一种常见但不成立的简化——这一点留给 `[[09-vLLM-Python-API与EngineArgs]]` 按子系统拆分统计。
+
+---
+
+## 8. 可改进点
+
+以下均按 `本库推断` 标注，基于本篇读到的代码结构，不涉及编造 PR/issue 号（遵守 `_PLAN.md` §1.6）：
+
+- **`AuthenticationMiddleware` 的 `GUARDED_PREFIX` 白名单模型值得改成 SGLang 式的默认保护、显式豁免**：现状是"不在白名单里就不查"，任何新增的、没有刻意挂在 `/v1`/`/v2`/`/inference`/`/cohere` 下的路由（无论是核心团队自己加的还是第三方插件加的）都会**默认不设防**，这个默认值的方向和大多数安全实践（"默认拒绝，显式放行"）是反的。改成"默认所有非 `/health` 路径都要 `--api-key`，只有显式标注的端点（health/metrics/ping 这类）例外"，能一次性堵住 `/invocations`、`/generative_scoring`、`/pooling`、`/classify`、`/score`、`/rerank` 这批已经在文档里被点名的暴露面，且未来新增路由不需要开发者记得"要不要挂在受保护前缀下"。
+- **`/abort_requests` 的双重注册应该在其中一个注册点加一次"路径已存在"检测并主动报错**：`register_api_routers()`（`vllm/entrypoints/launchers/api_server/routers.py:12`）目前对 `VLLM_SERVER_DEV_MODE=1` 和 `args.tokens_only=True` 是否同时为真没有任何校验，`## 7` 第 2 条推断出的"其中一个版本会变成永远匹配不到的死代码"这种情况，本该在启动时就用一次路由表遍历检查出来并报错或至少打印警告，而不是留给运行时静默发生。
+- **`/tokenizer_info`（`--enable-tokenizer-info-endpoint`）和 dev 族的 `/server_info` 都涉及"配置/模板信息泄露"这一类风险，但门控方式不统一**：前者是独立 CLI 旗标，后者绑在 `VLLM_SERVER_DEV_MODE` 这个大开关上——如果一个运维只想开 `/server_info` 用于内部监控，却不想连带打开 `/collective_rpc` 这种"extremely dangerous"级别的端点，目前没有办法只开一部分 dev 族路由，只能全开或全不开（`## 5` 决策 5 已经展开这一点）。可以考虑把 `/server_info`、`/reset_prefix_cache` 这类"只读或低风险"操作从 `VLLM_SERVER_DEV_MODE` 里拆出来，单独给一个风险级别更低的开关。
+- **Cohere 兼容三个端点（`/cohere/v2/chat`、`/v2/embed`、`/v2/rerank`）的可用性策略不统一，容易让用户以为"配了 `VLLM_ENABLE_COHERE_API` 就等于完整 Cohere 兼容"**：实际上 `/v2/embed`/`/v2/rerank` 从来不受这个环境变量影响（`## 5` 决策 6 已展开）。值得在文档或 `/v1/models`/`/server_info` 之类的自省端点里显式列出"当前这次启动实际生效的 Cohere 兼容端点有哪些"，而不是让用户靠翻源码才能确认。
+- **`_lab/api_surface.py` 的路由抽取器应该额外标注每条路由的"注册条件"字段**：目前 `api_surface.json` 的每条路由记录只有 `path`/`method`/`handler`/`file`/`line`，没有记录这条路由是否被包在 `if envs.VLLM_SERVER_DEV_MODE:`、`if "generate" in supported_tasks:` 这类条件语句内部——本篇 `## 2.2` 的"注册条件"列完全是人工读代码补上去的。如果抽取器能顺带记录"这个 `@router.post` 调用所在的最近一层 `if` 条件表达式的源码文本"（AST 层面可以做，遍历到装饰器所在函数时记录外层 `ast.If` 节点的 `test` 字段），下游文章和自动化审计都能省掉这一步人工核对。
+- **`n_routes`/`n_unique_paths` 之间的差值应该拆成"同 handler 多方法"和"多 handler 同路径"两类分别计数，而不是合成一个数字**：`## 7` 第 8 条已经展开这个问题——当前 `summary` 里 `n_routes - n_unique_paths = 2` 这个差值无法直接看出到底是良性的方法复用（`/ping`）还是需要注意注册顺序的路径冲突（`/abort_requests`）。抽取器完全可以在遇到路径重复时，判断命中的是同一个 `(file, line, handler)` 还是不同的，分别计入两个独立字段（比如 `n_multi_method_paths` 和 `n_conflicting_paths`），后者出现时甚至可以直接在抽取阶段打印警告，因为这正是 `_PLAN.md` §1.1 强调的"空结果/异常结果要当 bug 查"的同类情形。
+
+---
+
+
+===== 01-vLLM\09-vLLM-Python-API与EngineArgs.md =====
+## 7. 踩坑与反直觉
+
+1. **"离线批量推理"不等于"同进程直接跑模型"。** `LLM` 类默认(`VLLM_ENABLE_V1_MULTIPROCESSING` 默认 `True`,`vllm/envs.py:157`)也是通过 `SyncMPClient` 起一个后台子进程 `EngineCoreProc`,经 ZMQ 通信——这意味着离线场景下每个请求的 `SamplingParams`/`EngineCoreRequest` 同样要经过 `msgspec` 序列化跨进程边界,`## 3.1` 讲的"跨进程传输快"这个 msgspec 选型理由,对 `LLM` 类同样成立,不是只有在线服务才用得上。
+2. **`EngineArgs` 233 个字段里,有 6 个字段完全没有对应的 CLI flag。** 本库用一段 AST 脚本核实（提取 `EngineArgs` 类体全部字段名,和 `vllm/engine/arg_utils.py` 全文件里出现过的 `"--xxx"` 字面量做差集）：`model_weights`、`_api_process_count`、`_api_process_rank`、`enable_mm_processor_stats`、`mamba_config`、`tokens_only` 六个字段在全文件范围内找不到任何匹配的 flag 文本。其中 `_api_process_count`/`_api_process_rank` 下划线开头,本来就是内部字段,不奇怪;`model_weights` 是 `ModelConfig.model_weights`（默认 `""`）在模型拉取阶段（`vllm/config/model.py:1075`-`1087`)派生填充的,不是用户输入项,也说得通;但 `enable_mm_processor_stats`（`vllm/engine/arg_utils.py:677`)、`mamba_config`（`:684`,`MambaConfig` 类型,和同样是嵌套 Config 的 `compilation_config`/`attention_config`/`kernel_config` 待遇不一致——那几个都有对应的 `--xxx-config` JSON 输入口）、`tokens_only`（`:756`,纯 `bool`)这三个看起来更像是遗漏,只能通过 `LLM(...)`/`EngineArgs(...)` 的 Python API 直接传参,CLI 用户完全够不着。
+3. **`SamplingParams` 贪心采样时的字段覆盖是全篇唯一没有任何日志的一处。** `## 4.4` 表格最后一列列出的 6 个每进程级别覆盖都至少有 `info`/`warning` 级别日志,但 `vllm/sampling_params.py:529`-`534` 的 `temperature < 1e-5` 时重置 `top_p`/`top_k`/`min_p` 完全静默——考虑到这是**每请求**都可能触发的路径（用户传 `temperature=0` 做贪心解码是很常见的用法）,静默覆盖意味着用户如果同时传了 `top_p=0.9` 会完全不知道这个值被忽略了,只能靠读源码或读文档字符串才能发现。
+4. **`kv_cache_memory_bytes` 不是"和 `gpu_memory_utilization` 二选一生效",而是设置了就让整段显存 profiling 逻辑被跳过。** `vllm/v1/worker/gpu_worker.py:495`-`517` 显示,一旦 `cache_config.kv_cache_memory_bytes` 非空,`profile_run()` 之后直接按这个值分配显存,连"实测剩余显存 × `gpu_memory_utilization`"这套逻辑都不会跑——日志原话是"This does not respect the gpu_memory_utilization config."。这不是 `EngineArgs`/`VllmConfig` 层面的字段覆盖(两个字段各自保留用户设的值,`CacheConfig` 里都还在),而是**下游 `Worker` 的一个 if 分支直接短路了另一半逻辑**,和 `## 4.4` 的"字段被改写"是不同性质的坑,容易被放进同一张表里误判。
+5. **`max_tokens` 在 HTTP 层已经被标 `deprecated`,但 Python 层 `SamplingParams` 里仍然只有 `max_tokens`,没有对应的 `max_completion_tokens`。** `vllm/entrypoints/openai/chat_completion/protocol.py:220`-`223` 给 `ChatCompletionRequest.max_tokens` 标了 `deprecated="max_tokens is deprecated in favor of the max_completion_tokens field"`,`ChatCompletionRequest.to_sampling_params()` 内部（未在本篇展开）会把两者归一到同一个 `SamplingParams.max_tokens`——HTTP 用户看到的是"两个字段选一个填",Python API 用户从来没有 `max_completion_tokens` 这个选项,`SamplingParams.max_tokens`（`vllm/sampling_params.py:278`-`279`)本身没有被标记废弃。
+
+## 8. 可改进点
+
+（以下均为本库基于源码走读的推断,标注证据依据;未核实是否已有官方 issue 在跟踪。）
+
+- **"静默覆盖"缺少统一的日志规范,`## 4.4` 表格最后一列的不一致就是证据**：`enforce_eager` 联动走 `warning_once`,RISC-V 强制关闭走 `info`,`enable_cumem_allocator` 走 `info_once`,`SamplingParams` 贪心覆盖完全没有日志——同样是"用户设了但被覆盖",四种不同的可见度。给这类覆盖定一条统一约定(至少统一到 `warning` 级别,且格式包含"原值 → 新值 → 触发原因"三段)成本不高,收益是排障时能直接从日志定位,不用去翻四个文件的 `__post_init__`（本库推断,依据：`## 4.4` 表格本身就是从四个不同文件、四种不同日志级别的代码里手工核对拼出来的,说明目前没有集中的可发现性）。
+- **`enable_mm_processor_stats`/`mamba_config`/`tokens_only` 三个字段没有 CLI flag,和其余同类型字段的待遇不一致。** `compilation_config`/`attention_config`/`kernel_config` 这些同样是嵌套 `Config` 类型的字段都有 `--xxx-config` JSON 输入口,`mamba_config` 没有;`enable_mm_processor_stats`/`tokens_only` 是普通 `bool`,和其他几百个 `bool` 字段相比没有任何特殊之处却缺了 flag。补上对应的 `add_argument` 调用(或者显式在类文档字符串里注明"这几个字段刻意不开放 CLI,原因是 X")能消除 `## 7` 第 2 条这种"读源码才发现的不一致"（本库推断,依据：`## 7` 第 2 条的 AST 核实结果,以及没有在源码注释里找到解释这三个字段为何被排除在外的说明,未查证是否是历史遗留)。
+- **`create_engine_config` 单个方法约 600 行、`VllmConfig.__post_init__` 约 1100 多行,两处都混杂了"字段分发"和"跨 Config 校验"两类不同性质的逻辑。** 例如 `create_engine_config` 里 `## 4.3` 第 7 步的 attention/mamba/kernel 三处"顶层字段覆盖已构造 Config"逻辑(`vllm/engine/arg_utils.py:2399`-`2475`),和纯粹的"构造 CacheConfig"逻辑（`:2019`-`2041`）混在同一个方法体里,读者需要自己分辨哪几行是"构造",哪几行是"覆盖判断"。拆成几个命名清晰的私有方法（类似 `_resolve_attention_config`/`_resolve_mamba_config`）不改变行为,但能让 `## 4.4` 路线 A/B 两类逻辑在代码层面就有可见的边界,而不是需要读者自己从散落的 `if`/`raise` 里归纳出来（本库推断,依据：本篇 `## 4.3`/`## 4.4` 的归纳过程本身,就是从 600+1100 行里手工提取出来的,说明当前的组织方式对读者不友好)。
+
+- **"dict → Config 实例"的归一化逻辑在两处独立实现,没有共享代码。** `## 4.3` 开头提到,`LLM.__init__` 里的 `_make_config`（`vllm/entrypoints/llm.py:260`-`266`）和 `EngineArgs.__post_init__` 里的一串 `isinstance(self.xxx_config, dict)` 判断（`vllm/engine/arg_utils.py:773`-`800`）做的是同一件事——把用户传的字典归一化成对应的 Config 实例,但 `_make_config` 用 `is_init_field` 过滤字段、`__post_init__` 直接 `cls(**self.xxx_config)` 不做过滤,两处的容错行为并不完全一致（`_make_config` 能容忍字典里混入非构造参数字段,`__post_init__` 那条路径遇到不认识的键会直接从 `cls(**kwargs)` 抛 `TypeError`）。抽成一个共享工具函数(两处都能复用 `is_init_field` 过滤)能消除这种行为不一致,且是纯重构、不改变任何默认行为(本库推断,依据：两段代码逻辑意图相同但实现方式不同,是本篇写作过程中对照读出来的差异,未查证是否已有 issue 跟踪)。
+
+
+===== 01-vLLM\10-vLLM-投机解码.md =====
+## 7. 踩坑与反直觉
+
+**反直觉：投机解码在高并发下经常是负收益，本质原因是它把"用空闲算力换更少串行步数"这笔交易在算力不再空闲时继续做了一遍。**
+
+- 单请求或小 batch 的 decode 步本质上是访存带宽瓶颈——GPU 的计算单元大部分时间在等 KV 缓存和权重从显存搬过来。此时让草稿模型多做一次前向，只要不把访存也挤爆，"顺便"验证 K 个 token 的边际算力代价很低，能省下的却是原本要串行跑 K 次的目标模型前向。
+- 但当并发请求数涨起来、decode batch 已经把 GPU 的计算单元喂满（从访存瓶颈切换到算力瓶颈）之后，草稿模型的这次额外前向不再是"顺便"，它在直接和验证前向抢同一批计算单元——而验证前向本身已经因为要处理 `1+K` 倍的 token 数而变贵了。
+- 这时"省下的串行步数"这笔收益是否能盖过"草稿前向 + 更贵的验证前向"这笔支出，不再是显然的。
+
+vLLM 源码里能找到的、承认这一点的证据是**间接的**：
+
+- `num_speculative_tokens_per_batch_size` 这个配置项存在本身（允许把大 batch 档位的 K 配成 0）就是承认"K 应该随 batch size 变化"。
+- `_maybe_override_dynamic_sd_cudagraph_mode()`（`vllm/config/vllm.py:967-984`）和 `_maybe_disable_dynamic_sd_for_data_parallel()`（`:986-1002`）这两处防御性代码进一步说明这个特性被认真实现过、而不是一个摆设配置项。
+- 但**vLLM 没有内置的默认表、没有运行时接受率反馈、也没有基于当前 batch size/GPU 利用率的自动降级**——搜索 `vllm/config/speculative.py` 与 `vllm/v1/spec_decode/*.py` 全文找不到任何"memory-bound"/"compute-bound"/"large batch"式的注释来解释这个权衡（已核实，未查证到解释性注释，只查到功能性代码），意味着这条决策的"为什么"停留在配置项存在这一层，没有写进代码注释或文档。
+
+对照组是 SGLang：`## 6` 里展示的 `DEFAULT_ADAPTIVE_CONFIG["64"]["candidate_steps"] = [0]` 和 `sglang:python/sglang/srt/speculative/eagle_worker_v2.py:1206-1209` 那条 `"Drafting disabled (high batch size)"` 的注释，是本库目前读到的、**两个引擎里唯一一处用自然语言明确写出"高 batch size 应该关闭投机解码"这条设计理由的位置**——但要强调，这在 SGLang 里同样是 opt-in（`speculative_adaptive` 默认 `False`），不是任何一个引擎的默认行为。
+
+**踩坑：贪心草稿（`draft_sample_method="greedy"`）把草稿概率当 one-hot，这不是简化，是数学上仍然精确的特例。**
+
+`vllm/config/speculative.py:290-296` 的字段文档写："'greedy' always picks the argmax token, and the draft probabilities are treated as one-hot during rejection sampling."——第一次读容易以为这是一种为了省内存的近似（不存草稿完整 logits，当然会损失精度）。但重新看 `## 5` 决策 1 的算法：
+
+- Leviathan 算法本身对任意草稿分布 q 都成立，包括 q 是退化到单点的 Dirac（one-hot）。
+- `sample_recovered_tokens_kernel` 里 `NO_DRAFT_PROBS` 分支直接把目标概率在 `draft_token_id` 处置零当残差（`vllm/v1/sample/rejection_sampler.py:900-909`），这正是把通用公式 `max(target_prob - draft_prob, 0)` 代入 one-hot 的 `draft_prob` 后的解析特例，分布保真性没有丢失。
+- 丢失的只是"drafter 可以按自己的概率而不是仅按 argmax 采样"这个自由度（这个自由度由 `draft_sample_method="probabilistic"` 换回来，代价是要多存一份 `[num_tokens, vocab_size]` 的草稿 logits，`:294-296` 原话是"comes at the cost of additional GPU memory usage"）。
+- `ngram`/`suffix` 这类没有神经网络输出分布的方法则更彻底——它们的"草稿"本来就不是从某个概率分布采样出来的，而是确定性查找的结果，天然只能是 one-hot，谈不上"退化"。
+
+**踩坑：spec decode 源码里其实有两套并行实现，一套默认关闭；`dspark` 强制切到那一套，`dflash2` 格式的 checkpoint 在默认关闭的那套上会静默降级。**
+
+`## 2` 代码地图里出现的两组目录容易让人以为是同一套代码的两份拷贝，实际是两套独立实现：
+
+- `vllm/v1/spec_decode/`（本篇 `## 2`~`## 6` 走读的主线）挂在 `GpuModelRunner`（"V1"）上，是否启用取决于 `VllmConfig.use_v2_model_runner` 这个属性（`vllm/config/vllm.py:649`）——默认读环境变量 `VLLM_USE_V2_MODEL_RUNNER`（`vllm/envs.py:300`，默认 `None`），未显式设置时按一串启发式规则决定。
+- `vllm/v1/worker/gpu/spec_decode/`（"V2"，`## 2` 表里 `AdaptiveVerificationManager` 那一行已经点出这个目录）是另一套更晚近的实现，有自己独立的 `RejectionSampler`（`vllm/v1/worker/gpu/spec_decode/rejection_sampler.py:75`）和 proposer 类层级（`AutoRegressiveSpeculator`、`DFlashSpeculator`、`MultiModuleMTPSpeculator` 等）。
+
+`use_v2_model_runner` 属性里的启发式规则，读起来就是一份"V1 覆盖不到的场景清单"：
+
+```python
+# vllm/config/vllm.py:658-677（节选）
+# DSpark is implemented only by the V2 GPU model runner, and DeepSeek-V4
+# is not otherwise a default-V2 architecture, so force V2 for it. If V2
+# is unsupported for the rest of the config, _validate_v2_model_runner
+# raises rather than silently falling back to V1 (which can't run dspark).
+if (
+    self.speculative_config is not None
+    and self.speculative_config.method == "dspark"
+):
+    return True
+...
+# The DFlash2 candidate selector exists only in the V2 speculator. On V1
+# the same checkpoint drafts through DFlashProposer, which never calls
+# it, so the draft degrades to DFlash1 silently. Force V2 as for dspark.
+if self._is_dflash2_draft():
+    return True
+```
+
+两处注释各点出一个真实的坑：
+
+1. `method="dspark"` 在 V1 的 `self.drafter` 分发链（`vllm/v1/worker/gpu_model_runner.py:632-703`）里**根本没有对应分支**——`dspark` 只在 `use_eagle()` 判定里被算作真（`vllm/config/speculative.py:1492-1496`），但真正的 dispatch 顺序是先查 `use_dflash()` 再查 `use_eagle()`（`vllm/v1/worker/gpu_model_runner.py:679-685`），`dspark` 两个分支都不匹配，理论上会一路落到 `else: raise ValueError(...)`（`:699-703`）。代码注释也直接承认"V1 ... can't run dspark"——这不是本库的推断，是上游注释原话。`use_v2_model_runner` 因此把 `method=="dspark"` 列为强制切 V2 的条件之一，避免用户撞上这个报错。
+2. `dflash2` 格式的 checkpoint（`_is_dflash2_draft()` 判定，`vllm/config/vllm.py:702-711`）如果因为某种原因没有被强制切到 V2（比如显式设置了 `VLLM_USE_V2_MODEL_RUNNER=0` 覆盖掉自动判定），会落到 V1 的 `DFlashProposer`（`vllm/v1/spec_decode/dflash.py:23`）——但 V1 的 `DFlashProposer` 从不调用 DFlash2 的候选选择器，注释原话是"the draft degrades to DFlash1 silently"。也就是说**权重是按 DFlash2 训练的，跑起来的算法却是 DFlash1**，没有报错、没有警告，只是起草质量按 DFlash1 的水平打折——这正是本库反复强调的"静默降级"模式（同类问题见兄弟篇 [[06-vLLM-模型执行与CUDA-Graph]] `## 7` 的 cascade attention 案例）。
+3. 同一份强制列表里还有第三条更小众的条件：`_dflash_needs_multi_kv_group()`（`vllm/config/vllm.py:713-723`）判定 DFlash 草稿模型是否混用了滑窗注意力与全量注意力层，混用意味着需要多个 KV 缓存组，这一能力目前只有 V2 实现——命中同样强制切 V2，不属于上面两条"静默降级"的范畴，因为它是在配置阶段就被拦下，不会真的跑到 V1 上。
+
+判断当前到底跑的是 V1 还是 V2，`_get_v2_model_runner_unsupported_features()`（`vllm/config/vllm.py:2448`）还额外列出了一批 V2 尚不支持、会被强制拉回 V1 的组合——包括 `ngram`/`ngram_gpu`（`:2476-2478`）、EAGLE 的 `parallel_drafting`（`:2489-2496`）、EAGLE3 配流水线并行（`:2498-2502`）、`enable_adaptive_verification` 配 LoRA 或 `cudagraph_mode=NONE` 或流水线并行（`:2504-2530`）——两套实现各自覆盖不同的方法子集，没有哪一套是"全集"。
+
+换句话说，`use_v2_model_runner` 与 `_get_v2_model_runner_unsupported_features()` 是同一枚硬币的两面：前者列的是"这些情况必须用 V2"，后者列的是"这些情况 V2 还不能用"。两份清单一旦出现交集（比如同时要求 `dspark` 强制 V2、又用了 V2 明确不支持的组合），`_validate_v2_model_runner()`（`vllm/config/vllm.py:2555-2564`，其存在在 `:660` 处的注释里被提前提及）的设计是直接抛 `ValueError`（`:2562-2564`）而不是静默回退到跑不了 `dspark` 的 V1——这一点本身是对"静默降级"教训的正确应对，值得和上面两条真正的静默降级坑对照着读。
+
+## 8. 可改进点
+
+以下均为本库阅读代码后的推断，未在上游 issue/PR 中核实是否已有讨论（诚实标准第 6 条：不编 issue 号）。
+
+1. **动态 K 表没有配套的离线画表工具，门槛集中在用户身上。** `num_speculative_tokens_per_batch_size` 要求用户自己跑出不同 batch size 下不同 K 的实测效果再手填三元组，`vllm/v1/spec_decode/dynamic/utils.py` 里只有"把配好的表展开成稠密数组"的逻辑（`validate_and_normalize_dynamic_sd_schedule` / `build_dynamic_sd_schedule_lookup`），没有任何采集/画曲线/推荐配置的辅助脚本。对照 `## 6` 里 SGLang 自带 `DEFAULT_ADAPTIVE_CONFIG` 这个"至少能用的默认档位表"，vLLM 在这一点上把认知负担全部转嫁给了用户。补一个基于 `SpecDecodingStats`（已经在采集接受率了）离线聚合、按 batch size 分桶输出建议表的小工具，不需要改动核心执行路径，纯粹是"把已经在收集的数据用起来"。
+2. **`SpecDecodingStats` 采集的数据完全没有反馈通道，是一个"写了但没人读"的度量。** `vllm/v1/spec_decode/metrics.py:17-47` 里的 `observe_draft()` 逐位记录接受 token 数，最终只流向 `SpecDecodingLogging`（Prometheus/日志），全仓库找不到任何地方把这份统计读回来调整 `num_speculative_tokens` 或 `dynamic_sd_lookup`。哪怕不做 SGLang 那种全自动 EMA 闭环，先把"当前接受率是否长期低于某阈值"做成一条 `logger.warning_once`（类比兄弟篇 [[06-vLLM-模型执行与CUDA-Graph]] `## 8` 里对 CUDA Graph 静默降级提的同类建议），也能帮用户更快发现"这个草稿模型/这批数据其实不划算"。
+3. **`SpecDecodeBaseProposer.validate_same_kv_cache_group()`（`vllm/v1/spec_decode/llm_base_proposer.py:1708-1728`）用 `assert` 硬编码"草稿层必须全部落在同一个 kv_cache_group"这一假设，报错信息里没有指出具体是哪个 group 冲突。** 这类断言失败通常发生在用户手动拼接自定义 draft 模型结构（比如 `draft_model` 方法接一个和 target 层数结构差异较大的模型）时，把断言信息里的 `kv_cache_groups` 映射也打印出来，能省下一轮"翻源码猜断言原因"的调试时间。
+4. **静态 K 的 CUDA Graph 填充分支（`## 4` 4.2，`pad_spec_decode`）和动态 K 是互斥的两条路径，没有中间档。** 一旦打开动态 K，`## 5` 决策 3 提到的 padding 逻辑整体失效（判定条件里的 `self.dynamic_sd_lookup is None` 直接把这条分支锁死），CUDA Graph 模式也被迫整体降到 PIECEWISE（`vllm/config/vllm.py:967-984`）——用户没有办法"只在某几档 batch size 上用动态 K，其余档位仍吃 FULL 图"。给 `_maybe_override_dynamic_sd_cudagraph_mode()` 补一个"按档位判定是否需要降级"的精细化路径（比如只在真正跨档切换 K 的那一步临时切到 PIECEWISE，其余步骤仍用 FULL 图 replay），理论上能拿回一部分被牺牲掉的 CUDA Graph 收益，但需要先确认 CUDA Graph 捕获集合能否支持"按 K 值分别捕获"（`## 6` 提到 SGLang 用 `SpecRuntimeState` 为每个候选步数各自维护一套 CUDA Graph runner，这条路径本库判断值得借鉴，但涉及较大改动，仅记录方向不展开设计）。
+5. **`mlp_speculator` 是一个在类型系统里活着、在执行路径里已经死掉的方法名。** `## 3.1` 表格脚注已经指出：`SpeculativeMethod` Literal（`vllm/config/speculative.py:69-79`）和 `SpeculativeConfig.__post_init__` 的自动识别逻辑（`hf_config.model_type == "mlp_speculator"` 时把 `method` 设成它）都完整存在，但 `GpuModelRunner.__init__` 的 `self.drafter` 分发链（`vllm/v1/worker/gpu_model_runner.py:632-703`）和 V2 speculator 目录都没有任何分支处理这个取值——配置成它大概率在模型初始化阶段直接撞上 `:699-703` 那个 `else: raise ValueError(...)`。这类"配置层还认得、执行层已经不认得"的方法名，要么该在 `SpeculativeMethod` 里加一条弃用注释、要么该在 `__post_init__` 解析到它时提前给出比"Unknown speculative decoding method"更明确的报错（比如直接提示"mlp_speculator 在当前版本没有对应的 proposer 实现"），现状是把这个诊断成本留给了第一个踩到的用户。
+
+
+===== 01-vLLM\11-vLLM-结构化输出.md =====
+## 7. 踩坑与反直觉
+
+**陷阱一：`backend="auto"` 时，后端选择是"整个引擎生命周期里第一个成功的请求说了算"，不是"每个请求各自决定"。** `## 5.1` 已经指出后端是进程级单例；这里更具体的坑是：如果引擎启动后收到的第一个结构化输出请求恰好用了一个 xgrammar 编译不了的 schema（比如带 `multipleOf` 的 JSON Schema），`_validate_structured_outputs()` 的 `auto` 回退链（`vllm/sampling_params.py:1150-1193`）会把这第一个请求的 `_backend` 设成 `"guidance"`，`grammar_init()` 第一次调用时就把 `StructuredOutputManager.backend` 建成了 `GuidanceBackend` 实例。**之后所有请求，哪怕它们的 schema 本来能被 xgrammar 完美编译，也会被 `_create_grammar()` 里 `self.backend.compile_grammar(...)` 用 guidance 编译**——`_backend` 字段虽然在每个请求自己的 `SamplingParams` 上仍然正确地写着 `xgrammar`（因为每个请求各自跑一遍 `## 4.1` 描述的回退链），但真正被使用的 `StructuredOutputManager.backend` 早就定死了。这不是一个断言失败或者报错的场景——两个后端库对同一个 JSON Schema 生成的合法输出集合、空白符处理策略（`disable_any_whitespace`）等细节并不完全一致，用户会观察到"同一个 schema，不同时间发的请求，输出风格不完全一样"却查不到日志报错。
+
+**陷阱二：`guidance`/`lm-format-enforcer` 后端没有请求间去重缓存，重复 schema 会被反复编译。** `## 5.2` 已经指出这一点，这里补一句更直接的后果：如果一个服务大量请求共享同一个（或近似的）系统级 JSON Schema（常见于"每个请求都要求同一种输出格式"的应用场景），选择 `backend="auto"` 大概率落到 xgrammar 或 guidance（取决于 schema 特性），如果落到 guidance，**每一个请求都要重新走一遍 `llguidance.LLMatcher(...)` 构造**（`vllm/v1/structured_output/backend_guidance.py:122-126`），这部分开销在高 QPS 场景下会被反复摊销而不是被摊销一次——这不是 bug，是当前代码结构下的一个已知不对称,`## 8` 会给出可改进的方向。
+
+**陷阱三（反直觉但验证下来是"安全"的）：抢占 + 前缀缓存命中不会让语法状态错位，但这依赖的是隐式假设而不是显式契约。** `## 5.5` 已经详细展开机制本身，这里强调的是"为什么容易让人误判有 bug"：直觉上，KV 前缀缓存能让请求"跳过一大段重新计算"，很容易联想到"那语法状态是不是也要跟着跳"——但语法约束从来不作用于 prompt 部分（`## 4.2` 提到 `is_prefill_chunk` 排除逻辑），且 FSM 状态活在 Python 对象里、由输出 token 序列驱动而非由 KV 计算驱动，所以两者根本不会打架。本库没有在测试或注释里找到任何显式声明"这两套状态是解耦的、可以放心不管"——这是读代码推出的结论,如果未来有人往 `_preempt_request()` 或 KV 缓存驱逐路径里加"清理请求相关状态"的通用逻辑,很容易在不知情的情况下把 `structured_output_request` 也清了,从而真正制造出一个当前并不存在的 bug。
+
+**陷阱四：`lm-format-enforcer` 后端和投机解码硬冲突,是显式报错而不是静默失效。** `LMFormatEnforcerBackend.compile_grammar()` 里有一条硬编码检查：
+
+```python
+# vllm/v1/structured_output/backend_lm_format_enforcer.py:128-137
+max_rollback_tokens = (
+    self.vllm_config.speculative_config.num_speculative_tokens
+    if self.vllm_config.speculative_config is not None else 0
+)
+if max_rollback_tokens > 0:
+    raise ValueError(
+        "LM Format Enforcer backend does not support speculative tokens"
+    )
+```
+
+这是四个后端里唯一一个显式拒绝"结构化输出 + 投机解码"组合的——xgrammar/guidance/outlines 都在 `compile_grammar()` 里接受 `max_rollback_tokens`/`num_speculative_tokens` 参数并据此配置匹配器的回滚能力（分别是 `max_rollback_tokens=self.num_speculative_tokens`、`max_rollback=max_rollback_tokens`，`vllm/v1/structured_output/backend_xgrammar.py:127`、`vllm/v1/structured_output/backend_outlines.py:100`），只有 lm-format-enforcer 选择直接报错。这条报错在**编译时**触发（也就是 `grammar_init()` 异步编译失败,请求以 `FINISHED_ERROR` 结束,`## 8`/失败模式一节展开),不是在运行期悄悄跳过投机解码或悄悄跳过语法约束。
+
+## 8. 可改进点
+
+以下均为本库阅读代码后的推断，未在上游 issue/PR 中核实是否已有讨论（诚实标准第 6 条：不编 issue 号）。
+
+1. **前端探测性编译（`SamplingParams.verify()`）和引擎侧运行时编译（`grammar_init()`）完全独立，编译结果不复用。** `## 5.2` 已指出这一点。如果两次编译发生在同一进程内（比如 in-process 模式、非多进程 executor 的部署形态），理论上可以把探测性编译的产物缓存下来，`grammar_init()` 优先查这个缓存——目前两次编译无论是否同进程都各自从头来过，对编译本身开销较大的复杂 schema（尤其是大型嵌套 JSON Schema）是双倍浪费。
+2. **`guidance`/`lm-format-enforcer` 后端补一层和 outlines 对齐的请求间缓存。** `outlines_core.Index` 有基于 `(vocabulary_hash, regex_string)` 的显式缓存（`## 5.2`），xgrammar 委托给自己库的 `GrammarCompiler` 缓存，这两个后端目前每个请求都从零构建匹配器对象——给 `GuidanceBackend`/`LMFormatEnforcerBackend` 各加一层基于 `StructuredOutputKey` 的 `LRUCache`（缓存的是可复用的中间表示，比如 `serialized_grammar` 字符串或已解析的 `character_level_parser`，而不是绑定了每请求状态的匹配器实例本身),能补上 `## 7` 陷阱二指出的不对称。
+3. **`should_fill_bitmask`/`should_advance` 里 reasoning 相关的分支逻辑高度依赖多个布尔标记的时序一致性。** `StructuredOutputManager.should_fill_bitmask()`（`vllm/v1/structured_output/__init__.py:370-392`）和 `should_advance()`（`:394-452`）都要在"是否在推理内容里"（`reasoning_ended`）、"这一步是否检测到推理结束标记"、"是否开启 `enable_in_reasoning`"之间做判断，`grammar_bitmask()` 内部（`:298-359`）还有一层 `post_reasoning_end_in_window` 状态跟踪跨窗口的推理结束时刻——这段逻辑目前只靠代码注释（例如 `:210-212` 提到的"for thinking support, we will need to reset..."）维护正确性,没有看到针对"推理恰好在投机解码窗口中间结束"这类边界场景的专门测试文件（本库在 `tests/v1/structured_output/` 下没有找到对应用例，**未查证**是否在别处有覆盖）。给这个状态机补显式的状态图注释或者专门的边界测试,能降低未来改动这段代码引入 regression 的风险。
+
+
+===== 01-vLLM\12-vLLM-PD分离与KV-Connector.md =====
+## 7. 踩坑与反直觉
+
+1. **`kv_load_failure_policy` 默认是 `"fail"`，不是很多人直觉里"分布式系统总该优雅降级"的 `"recompute"`**（`vllm/config/kv_transfer.py:69`）。§4.6/§5.4 已经拆解过这个设计的合理性，但对第一次从单机切到 PD 分离的用户，"外部 KV 加载失败会让请求直接报错"是一个容易被忽略、直到生产环境第一次网络抖动才发现的默认行为。
+2. **`kv_recompute_threshold=64` 这个很小的数字，揭示的是"网络拉取存在固定开销"这个在同机房 RDMA 场景下容易被忽视的事实**——直觉上 RDMA 已经足够快，但握手、通知这类操作本身有和传输字节数无关的固定延迟，vLLM 自己的代码选择用一个写死的 token 数门槛来承认这一点，而不是假装网络传输永远比本地重算划算。
+3. **官方使用文档写"Now supports 9 types of connectors"（`docs/features/disagg_prefill.md:20`），但 `factory.py` 实际注册了 16 个**（§2.1）——文档滞后于代码是常态，本库的立场（[[00-总览与阅读地图]] 第 1 条）是一律以源码注册表为准，这也是本篇没有直接照抄文档列表、而是重新逐条核对 `factory.py` 的原因。
+4. **"Disaggregated prefill DOES NOT improve throughput" 是官方文档自己的原话**（`docs/features/disagg_prefill.md:16`），不是本库的推断或贬低——这条经常被"PD 分离=更快"这种简化叙事掩盖，但源头文档从一开始就没有承诺吞吐收益，承诺的是 TTFT/ITL 的独立可调性。
+5. **NIXL 生产者侧的"租约"（`_kv_lease_duration` 默认 30 秒）是清理机制，不是重试机制**（`vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py:2127`）——租约到期只代表"生产者不再无限期占着这些块等消费者来拿"，不代表消费者一定会重新发起请求；如果消费者那侧的请求还活着，它要走 §4.6 第 2 层防线（`invalid_block_ids`/`kv_load_failure_policy`）单独处理这次失败，两套机制互不知晓对方的存在。
+6. **层内（layer-by-layer）的 `wait_for_layer_load`/`save_kv_layer` 不是包在模型外层的一个循环，而是一个函数装饰器直接挂在每个 attention 层的 `forward` 方法上**（`maybe_transfer_kv_layer`，`vllm/model_executor/layers/attention/kv_transfer_utils.py:15`）——这意味着理论上任何调用 attention 层 `forward` 的代码路径都会自动被这层装饰器接管，模型定义代码本身完全不用感知 PD 分离的存在，这是一种相当彻底的横切关注点分离，但也意味着调试"这层 KV 到底有没有被正确加载"时，断点要下在装饰器里而不是模型代码里。
+
+## 8. 可改进点
+
+1. **`kv_load_failure_policy` 默认 `"fail"` 这个容易被忽略的默认值，可以在 connector 初始化时显式提示一次**。`KVConnectorBase_V1.__init__`（`vllm/distributed/kv_transfer/kv_connector/v1/base.py:203-206`）已经在打印一条"experimental API"的警告，**本库推断**：可以在同一处顺带打印一条"当前 KV 加载失败策略为 fail，加载失败将直接终止请求"的提示，把一个容易被忽略的配置默认值变成一个启动时就能看到的显式声明，成本极低（一行日志），收益是让运维方在第一次读到日志时就知道这个行为，而不是等第一次网络抖动、请求报错时才去翻文档。
+2. **`get_block_ids_with_load_errors` 的时序契约完全靠子类自觉遵守，没有运行时校验**。方法文档字符串明确要求"failed blocks must appear here no later than the same pass where the request ID is returned by `get_finished()`"（`vllm/distributed/kv_transfer/kv_connector/v1/base.py:379-386`），但基类没有任何断言去校验一个具体实现是否真的遵守了这条时序约束。**本库推断**：可以在 `_get_kv_connector_output`（`vllm/v1/worker/kv_connector_model_runner_mixin.py:69`）里加一个仅在调试模式生效的一致性检查（比如校验 `finished_recving` 里的请求 ID 是否在 `invalid_block_ids` 涉及的请求集合之外，或者两者的时序关系是否符合文档承诺），第三方 connector 一旦违反这条契约会在开发阶段就暴露出来，而不是在生产环境里静默漏报失败块、直到很久之后才被发现（表现为"某个块偶尔读到脏数据但没有任何报错"这类最难排查的故障）。
+3. **`kv_recompute_threshold` 是一个部署时写死的常量（默认 64），没有考虑当时实际的 RTT/带宽**。§5.5/§5.6 已经论证过它承认的原理（固定开销 vs 重算成本）是对的，但阈值本身是静态的——同一个部署在网络状况好的时段（比如夜间低峰）和网络拥塞的时段，"值不值得跨节点拉"这个判断的最优阈值理论上是不同的。**本库推断**：可以把这个阈值改成基于最近若干次实际传输延迟的滑动窗口自适应估计（比如 `NixlKVConnectorStats` 已经在收集传输统计，`vllm/distributed/kv_transfer/kv_connector/v1/nixl/stats.py`，未查证其中是否已包含可直接复用的延迟分布），但这会引入"阈值本身随时间漂移，同一份配置在不同时刻行为不同"的新的可观测性负担，需要权衡是否值得。
+
+
+===== 02-SGLang\01-SGLang-全景与代码地图.md =====
+## 7. 踩坑与反直觉
+
+- **"SGLang"这个名字最容易造成的误解**：以为这个项目的核心是"一门给 LLM 编程的结构化生成语言"。实测下来，`lang/` 只有 4,644 行，占 `python/sglang` 主要包总量的 0.36%；`srt/` 才是真正的重头戏。今天大多数生产部署根本不会碰 `sgl.gen()` 这套 DSL，直接打 `srt` 暴露的 OpenAI 兼容 HTTP 接口。
+- **`kernels/` 目录名字暗示"这里都是 SGLang 自己写的"，其实至少两类子目录是原样拷贝。** `kernels/ops/attention/flash_attn/cute/` 和 `kernels/ops/attention/fa4_sm120/` 的每个文件顶部都还留着 Tri Dao 等原作者的版权声明——如果只看目录路径 `python/sglang/kernels/...` 判断"这是 SGLang 的自研 kernel"，会得出错误结论。判断一个 kernel 文件是自研还是 vendored，目前只能靠打开文件读版权头，仓库里没有统一的清单（`## 8` 会把这个写成可改进点）。
+- **`server_args.py` 一万行不是"没人管的技术债"。** 类文档字符串里专门有贡献指南，`__post_init__` 编排了 63 个命名规范的 `_handle_*` 方法——这是刻意为之的集中式设计，不是失控增长后的产物；批评它"应该拆分"之前，至少要先承认它是经过设计的，代价是可衡量的（review 成本），不是"混乱"两个字能概括的。
+- **Rust 出现在这个仓库的两个位置，性质完全不同，不要混着讲。** `rust/sglang-server`（嵌入式 PyO3 扩展，跑在调度器进程内的线程）和 `sgl-model-gateway`（独立部署的网关服务）都叫"Rust"，但一个是"给单实例加速协议解析"，一个是"给多实例做流量路由"——审计"SGLang 用了多少 Rust"时，把两者的行数简单相加（156,078 行）会掩盖它们完全不同的部署形态和开关方式。
+- **`multimodal_gen` 不是"让 LLM 支持看图/生成图文混排回复"。** 那是 `srt/multimodal/` 的范畴，仍然在 `srt` 运行时内、复用同一个调度器和 KV 缓存。`multimodal_gen` 是完全独立的**图像/视频生成**引擎（扩散模型），两者名字都带"multimodal"，职责完全不同，容易在快速浏览目录树时搞混。
+- **"attention 子系统 217,907 行"读成"SGLang 的注意力实现有 21.8 万行独有代码"是过度推断。** `struct_map.json` 的子系统统计按关键词+AST 定位，不区分文件来源；这 21.8 万行里，`flash_fwd_sm100.py`（5,610 行）、`fa4_sm120/flash_fwd.py`（4,552 行）这类 vendored 文件占了相当比例。读这类统计数字时，要意识到"某子系统行数最大"和"SGLang 团队在这个子系统上投入的自研工作量最大"是两个不同的结论，中间隔着一层"这些代码到底是谁写的"。
+
+## 8. 可改进点
+
+以下几条标注为**本库推断**，未提交 issue 或 PR 核实维护者是否已在计划中，是读代码时观察到的方向：
+
+1. **vendored kernel 目录缺一份集中清单。** 现在判断"`kernels/ops/` 下哪些子目录是原样拷贝、来自哪个上游仓库、对应哪个上游 commit/版本"只能逐文件打开看版权头。一份 `VENDORED.md`（列出目录、上游仓库地址、拷贝时的上游版本/commit、license）能让贡献者和安全审计者不用逐文件排查就知道"这段代码谁负责同步"。
+2. **`ServerArgs` 的分组约束目前只停留在文档层面，没有运行时校验。** 类文档字符串要求新字段"放进正确的分组注释块"，但这是靠 review 时人工检查的软约束——没看到自动化脚本检查"新增字段是否落在某个 `# XXX` 注释块下面"。476 个字段的规模下，人工约束的可靠性会随时间推移而下降；一个轻量的 lint 脚本（检查每个字段紧邻的注释块归属）能把这条规则变成可自动执行的。
+3. **两条 Rust 集成路径之间缺少选型指南。** `SGLANG_RUST_SERVER`（单实例内加速）和 `sgl-model-gateway`（多实例路由）功能上有一定重叠（两者都涉及请求路由、协议处理），但本次检索没找到一篇文档明确回答"单机部署该不该开 `SGLANG_RUST_SERVER`，多机部署是否还需要额外部署 `sgl-model-gateway`，两者能不能同时开"——一张决策表能减少用户在两个开关之间的选型困惑。
+4. **`srt` 和 `multimodal_gen` 各自维护一份 `ServerArgs`，字段有概念重叠但没有共享基类。** 两边都有 `attention_backend`、量化相关配置的字段（`python/sglang/multimodal_gen/runtime/server_args/server_args.py:212` 的 `_adjust_quant_config`、`_normalize_attention_backend_name` 方法名和 `srt/server_args.py` 里同类字段的处理逻辑在概念上高度相似），但 `struct_map.json` 显示这是两个完全独立的类定义，没有共享的基类或 mixin。长期看，两边配置语义独立演进，容易在字段名相同但含义细微差异的场景下产生混淆（比如某个量化选项在两边的合法取值范围不一致而没有文档说明）。
+
+
+===== 02-SGLang\02-SGLang-Scheduler事件循环.md =====
+## 7. 踩坑与反直觉
+
+**反直觉一：LPM 排序没有防饥饿机制，且 128 的阈值是性能兜底不是公平性设计。**
+直觉上"调度策略"应该内建某种防止某类请求永远排不上号的保护，但读 `schedule_policy.py` 通篇找不到任何基于等待时长的加权或老化（aging）机制——`_sort_by_longest_prefix()`（`python/sglang/srt/managers/schedule_policy.py:381-391`）纯粹是按 `-num_matched_prefix_tokens` 排序，一个前缀完全不匹配（`num_matched_prefix_tokens=0`）的请求会被排到最后，且没有随等待轮数增加而被"提权"的逻辑。唯一的兜底是等待队列长度超过 128 时自动退化到 FCFS（`_determine_active_policy`，`python/sglang/srt/managers/schedule_policy.py:290-294`），但这条判据的动机写在注释里是"关掉昂贵的前缀匹配和排序计算"（性能），只是顺带带来了公平性的副作用，不能当成显式的防饥饿设计来依赖。
+
+**反直觉二：overlap 调度不是"另开一个线程跑 GPU"，而是单线程发射到多个 CUDA stream。**
+直觉上"CPU 与 GPU 重叠"容易联想到经典的生产者-消费者线程模型（一个线程管前向计算、一个线程管其它一切），但 SGLang 现在的实现（`python/sglang/srt/managers/scheduler.py:1783-1855`、`python/sglang/srt/managers/scheduler.py:3741-3862`）完全在单个 Python 线程里跑，靠给不同工作分配不同 CUDA stream（`schedule_stream`/`forward_stream`/`copy_stream`）加显式 `Event` 依赖来实现物理上的并发执行。仓库约定文件里对应的坑：`schedule-batch-out-of-place-mutation.md` 明确写了"`copy()` 快照和重叠调度器排队的引用依赖老对象保持冻结"——这条约束就是因为单线程发射到多 stream 的设计要求 CPU 侧不能过早原地改写还被 GPU 侧引用着的张量。
+
+**反直觉三：默认情况下"退回"（retract）并不会把 KV 备份到 host，而是直接丢弃重算。**
+容易望文生义地以为"回退"意味着有某种断点续算机制，但 `release_req()`（`python/sglang/srt/managers/schedule_batch.py:1913-1948`）里明确写着：只有 `disaggregation_mode == "decode"` 时才会走 `retraction_backup()` 把 KV 拷到 host（`python/sglang/srt/managers/schedule_batch.py:1932-1940`），普通单机模式下 `release_kv_cache(req, tree_cache, is_insert=False)`（`python/sglang/srt/managers/schedule_batch.py:1942`）直接释放显存且**不**插入 radix 树（`is_insert=False`），意味着这部分 KV 连"下次可能命中缓存"的机会都没有。已生成的 `output_ids` 文本内容本身没丢，但对应的 KV 需要从零重新计算（相当于把已生成的文本重新当成一段更长的 prompt 去做 prefill）。
+
+**反直觉四：`prefill_decode_interval` 的默认值是 0（关闭），这意味着"prefill 优先"在默认配置下没有任何限速阀。**
+很多读者会假设生产环境默认配置已经考虑了 TTFT/TPOT 的权衡，但 `server_args` 里 `prefill_decode_interval` 默认值为 `0`（表示禁用节流），配合 `_should_defer_prefill()`（`python/sglang/srt/managers/scheduler.py:1203-1208`）在 `remaining == 0` 时直接返回 `False`（不推迟），也就是说**默认配置下每一步都会先检查是否有新 prefill 可跑，有就跑，不受任何"最近跑过几次 decode"的约束**——高并发场景下如果 prefill 请求持续到达，decode 请求的单步间隔（直接影响 TPOT）理论上可以被无限期推迟，直到 prefill 队列暂时清空。
+
+**反直觉五："三进程模型"里其实只有两个真正意义上独立跑起来的新进程。**
+容易把"三进程"理解成三个对等的、由 `mp.Process` 启动的实体，但实际只有 `Scheduler`（`python/sglang/srt/managers/scheduler.py:5140` 的 `run_scheduler_process`）和 `DetokenizerManager`（`python/sglang/srt/managers/detokenizer_manager.py:516` 的 `run_detokenizer_process`）是这样启动的；`TokenizerManager` 是在主进程里直接 `TokenizerManagerClass(server_args, port_args)` 构造出来的普通对象（`python/sglang/srt/entrypoints/engine.py:162`），和承载 HTTP 服务的 FastAPI/uvicorn 事件循环共享同一个进程。称呼上说"三进程"是从"三个逻辑角色"的角度说的，不是"三个 `mp.Process`"。
+
+**反直觉六："prefill 批和 decode 批互斥"这句话不总是成立。**
+`## 4` 第 2 步说的"非此即彼"是默认行为，但 `self.is_mixed_chunk`（`python/sglang/srt/managers/scheduler.py:1185-1187`，由 `chunked_prefill_size` 已设置且 `enable_mixed_chunk` 打开共同决定）打开之后，`PrefillAdder` 构造时会把当前 `running_batch` 的请求数 `running_bs` 作为 `num_mixed_decode_tokens` 传进去（`python/sglang/srt/managers/scheduler.py:3333`）——意味着这一步的 prefill 批预算里，会预留出正在 decode 的请求继续往下走一步所需的 token 名额，两类请求被塞进**同一个物理批次**里一起前向。这是为什么 `ForwardMode` 里专门有一个 `MIXED` 取值（见 `## 3`）：它不是 `EXTEND` 和 `DECODE` 的中间态，而是"两者都在同一批里发生"的显式标记。默认 `enable_mixed_chunk=False`，所以本篇 `## 4`/`## 5` 决策一描述的"严格非此即彼"是绝大多数部署的实际行为，但不是源码里唯一的路径。
+
+## 8. 可改进点
+
+以下判断标注为「本库推断」，未在上游 issue/PR 中核实，仅基于代码读到的行为提出、供讨论：
+
+1. **LPM 策略缺少等待时长因子。**
+   目前的排序 key 只有 `num_matched_prefix_tokens`（`python/sglang/srt/managers/schedule_policy.py:386`），可以考虑改成 `(某种前缀匹配得分) - w * 等待时长` 的复合 key，在不牺牲太多前缀命中率的前提下给长时间等待的请求一个逐渐提升的优先级，避免理论上的无限期推迟（`## 7` 反直觉一提到的问题）。
+   风险：需要调好权重 `w`，调不好可能反而破坏 LPM 本来想最大化的前缀复用率，需要用真实流量分布做 A/B 才能验证收益。
+
+2. **retract 后的重排队没有区分"刚被打断"和"全新到达"。**
+   让 `is_retracted=True` 的请求在重新计算 `SchedulePolicy` 排序分数时获得一个小的固定加成（而不是像现在完全一视同仁），可以在不引入专门优先队列的前提下，缓解"回退请求可能被反复退回"的尾部风险。
+   vLLM 的 `prepend_request`（`vllm:vllm/v1/core/sched/scheduler.py:1387`）是更激进的版本，直接给最高优先级——SGLang 如果照搬这个做法，需要考虑它和 LPM 排序的交互（插到队首会绕过前缀匹配排序，可能反而降低批内前缀复用率）。
+
+3. **单机（非 PD-disaggregation）模式下的 retract 直接丢弃 KV，损失了本可利用的复用机会。**
+   `release_req()`（`python/sglang/srt/managers/schedule_batch.py:1913`）目前只在 decode-disaggregation 模式下走 host 备份路径；把这条路径的条件放宽到"host 内存池有空间"而不局限于 disaggregation 模式，理论上能降低单机高负载场景下 retract 的重算成本。
+   代价：要权衡额外的 D2H/H2D 拷贝开销是否划算——这本身就是一个需要实测数据才能下结论的问题（本库不产出性能数字，留待读者验证）。
+
+4. **`prefill_decode_interval` 默认关闭，缺少一个自适应版本。**
+   现状是用户要么完全不管（默认 `0`，无限制 prefill 优先），要么手动配一个固定的"跑 N 轮 decode 才能插一次 prefill"。可以考虑让这个间隔根据当前 running_batch 里 decode 请求的实际尾延迟动态调整，而不是让用户猜一个静态值。
+   代价：多了一个反馈回路，需要证明它比"用户手动调参"更稳定，不会引入震荡。
+
+5. **`event_loop_normal` 和 `event_loop_overlap` 的公共前半段（收请求、定批）目前是两份几乎相同的代码。**
+   对比 `python/sglang/srt/managers/scheduler.py:1748-1782` 和 `python/sglang/srt/managers/scheduler.py:1783-1812` 会发现"收请求 → `process_input_requests` → `get_next_batch_to_run`"这几行在两个函数里逐字重复。抽成一个共享的私有辅助方法（`_recv_and_schedule()` 之类）能减少后续改动时"改了一处忘了另一处"的风险。
+   代价：几乎没有——这是一处纯粹的重复代码消除，唯一的成本是需要小心两个循环各自后续分支读取的局部变量命名保持一致。
+
+
+===== 02-SGLang\03-SGLang-RadixAttention与前缀缓存.md =====
+## 7. 踩坑与反直觉
+
+1. **默认生产路径不是本篇精读的这份代码。** `registry.py::default_radix_cache_factory` 的兜底分支直接构造 `UnifiedRadixCache`（`python/sglang/srt/mem_cache/registry.py:143`），全文件搜索找不到任何地方直接把 `RadixCache(` 构造出来用于常规服务路径——`RadixCache` 目前的角色是 `HiRadixCache`（`python/sglang/srt/mem_cache/hiradix_cache.py:77`）和 `PureSWARadixCache`（`python/sglang/srt/mem_cache/pure_swa_radix_cache.py:24`）的父类，以及 `create_simulated`（`python/sglang/srt/mem_cache/radix_cache.py:334`）提供的纯 CPU 模拟/测试入口。本篇选它精读，是因为它是全库里唯一一份"匹配-分裂-驱逐"算法自包含在 800 多行、没有组件化间接层的实现——读懂它等于读懂了 `UnifiedRadixCache` 的算法内核，只是后者把同样的骨架摊开到 2,894 行去支持 SWA/Mamba/C128 多分量协同和 HiCache 分层。
+2. **`HiRadixCache` 本身没有在默认工厂链里被直接实例化，但也不是死代码。** 全仓库搜索 `HiRadixCache(` 只在它自己的类定义处出现一次；但它被 `hybrid_pool_assembler.py` 当作类型标注使用、被 `unified_radix_cache.py` 的注释引用为"行为对照对象"（第 2650 行附近："Mirrors `HiRadixCache` so the disagg decode restore state machine…"）、并有专门的单元测试 `test/registered/unit/mem_cache/test_hiradix_cache_unit.py` 覆盖。合理推断（本库推断，未继续深挖它真实的实例化入口）：分层缓存的实现正在从独立的 `HiRadixCache` 向 `UnifiedRadixCache.init_hicache`（`python/sglang/srt/mem_cache/registry.py:187`-`193`）收敛，`HiRadixCache` 处在"仍被测试、仍被引用，但不再是默认新增功能落脚点"的过渡状态。
+3. **`TreeNode.children` 声明成 `defaultdict(TreeNode)`，但这个自动创建行为从未被真正用到。** 全文件搜索 `.children[` 只出现 4 处（`python/sglang/srt/mem_cache/radix_cache.py:687`、`718`、`760`、`784`），其中两处读取（687、760）都在 `in node.children.keys()` 判断为真之后才发生，两处写入（718、784）是显式赋值。也就是说，如果未来有人在别处写一行 `node.children[some_key]` 且忘了先判断是否存在，会静默创建一个 `key=None`、`value=None` 的"幽灵节点"挂在树上——`defaultdict` 在这里更像一个未被清理的历史遗留，而非有意为之的设计。
+4. **`match_prefix` 不是纯读操作。** 前面 4.2 节已经指出：命中边界落在某个节点内部时，`match_prefix` 会调用 `_split_node` 改写树结构（`python/sglang/srt/mem_cache/radix_cache.py:690`-`693`），函数自己的 docstring 也承认了这一点（`python/sglang/srt/mem_cache/radix_cache.py:404`-`412`）。对只读过"radix tree 就是查前缀"这类概念性介绍的人来说，这是一个容易漏掉的实现细节。
+5. **`page_size > 1` 时，"任意长度前缀命中"这个卖点会打折扣。** `RadixKey.match` 把命中长度向下取整到 `page_size` 的整数倍（`python/sglang/srt/mem_cache/radix_cache.py:213`-`215`），意味着即使两个请求实际在第 `N+1` 个 token 才分叉，只要 `N` 不是 `page_size` 的整数倍，记录下来的分裂点也会退到 `N` 之前最近的 page 边界——最多损失 `page_size - 1` 个 token 的复用长度。第 6 节强调的"SGLang 能命中任意长度前缀"这个优势，**只在 `page_size == 1` 时完全成立**；`page_size > 1`（多数生产部署的常见配置，见 `python/sglang/srt/server_args.py:921`-`924`）下，SGLang 和 vLLM 的命中粒度差异，本质上收窄成"page 内如何组织"的差异，而不是"有没有粒度限制"的差异。
+6. **`extra_key`/`cache_salt` 隔离会主动放弃看起来可以复用的公共前缀，这是有意为之的正确性权衡，不是漏洞。** `RadixKey._check_compatible`（`python/sglang/srt/mem_cache/radix_cache.py:169`-`179`）在 `extra_key` 或 `cache_salt` 不一致时直接抛异常，`child_key`（`python/sglang/srt/mem_cache/radix_cache.py:217`-`229`）把 `extra_key`/`cache_salt` 编进哈希 key 本身（第 227-229 行），保证两个 token 完全相同、但一个带 LoRA 适配器 A、一个不带的请求，从树的第一层开始就落在不同的 `children` 条目里，永远不会共享任何节点——哪怕它们此后的 token 序列一模一样。这是用"多花内存/少复用"换"绝不会把两个语义不同的请求的 KV 混在一起"的正确性保证，第 9 节自测题第 1 条延续了这个点。
+7. **KV 事件不是调试日志，是给外部观测者用的信号通道。** `insert`（`python/sglang/srt/mem_cache/radix_cache.py:789`）在新建叶子节点时调用 `self.kv_events.record_store(new_node)`，`evict`（`python/sglang/srt/mem_cache/radix_cache.py:618`）在驱逐节点时调用 `self.kv_events.record_remove(x)`，`reset`（`python/sglang/srt/mem_cache/radix_cache.py:375`）在清空整棵树时调用 `self.kv_events.record_all_cleared()`——这套事件由 `KVCacheEventRecorder`（`python/sglang/srt/mem_cache/events.py`，通过 `python/sglang/srt/mem_cache/radix_cache.py:48` 导入）统一收集，默认关闭（`enable_kv_cache_events` 参数，构造 `RadixCache` 时传入，`python/sglang/srt/mem_cache/radix_cache.py:313`-`315`），开启后可以被外部消费者订阅——这是为 P/D 分离场景下 Prefill 和 Decode 两个进程各自维护一棵树、需要互相同步彼此树结构变化留的口子，具体怎么消费这些事件留给 [[11-SGLang-PD分离与HiCache分层]] 核对，本篇只确认了事件在源码里确实被触发。
+
+## 8. 可改进点
+
+1. **把 `TreeNode.children` 从 `defaultdict(TreeNode)` 改成普通 `dict`，配合 `.get()`。** 现有代码所有访问路径都已经手动做了存在性判断（第 7 节第 3 条），`defaultdict` 除了掩盖潜在 bug 外没有提供任何被使用到的行为，去掉它不改变任何现有语义，纯粹是移除一个风险点。
+2. **`_split_node` 里两次 `.clone()` 是否可以在高频分叉场景下摊薄。** 目前每次分裂都对 `value` 做两次张量拷贝（父节点一次、收缩后的子节点一次），在长上下文 + 高并发分叉（比如大量 agentic 树搜索请求同时命中同一批共享前缀）场景下，这可能成为 CPU 侧热点；能否用写时复制的 tensor view 替代实际拷贝，需要先有真实 profiling 数据支撑，本库没有 GPU 环境无法验证，只能提出方向。
+3. **`RadixCacheCpp`（C++ 版本）与 Python 版 `RadixCache` 的功能对等性缺一份文档化的对照表。** `SGLANG_EXPERIMENTAL_CPP_RADIX_TREE` 默认关闭（`python/sglang/srt/mem_cache/registry.py:104`-`109`），这条 opt-in 路径存在但收益/维护成本、与 `page_size`/`radix_eviction_policy` 等旋钮的兼容范围没有在本篇查证范围内确认，值得单独一篇做逐行核对。
+4. **`RadixCache` vs `UnifiedRadixCache` 的算法一致性目前只能靠人工读代码确认。** 二者独立维护同一套"匹配-分裂-驱逐"逻辑（`UnifiedRadixCache` 没有直接继承或复用 `radix_cache.py` 的 `TreeNode`/`_split_node`，只共享了 `RadixKey`），如果两边逻辑出现分歧（比如 `page_size` 对齐规则、`lock_ref` 传播规则），不会有任何编译期或类型系统信号提示——一份跨实现的等价性单元测试（相同插入序列在两个实现上产生相同的命中/驱逐结果）会是比人工读代码更可靠的保障，本库没有在 `_lab/` 里发现这样的测试脚手架。
+5. **`_lab/struct_map.py` 目前只统计类和方法名，不统计"哪个类实际在默认路径上被实例化"。** 本篇第 7 节第 1、2 条的发现（`RadixCache` 不是默认路径、`HiRadixCache` 没有直接构造点）完全靠人工用 `grep` 在 `registry.py` 里追工厂函数才확认出来；如果 `_lab/struct_map.py` 能追加一遍"从 `create_tree_cache` 开始的静态可达性分析"（哪些类可以通过默认参数组合被构造出来），后续每一篇涉及"哪个实现是默认值"的文章都能省掉这一步人工核对，也能在源码演进后自动发现"某个类不再可达"这类漂移。
+
+
+===== 02-SGLang\04-SGLang-内存池与KV布局.md =====
+## 7. 踩坑与反直觉
+
+1. **"page"这个词在 SGLang 里几乎只活在分配器内部，逻辑表从不知道页的存在**。`ReqToTokenPool.req_to_token` 永远是逐 token 稠密表，`PagedTokenToKVPoolAllocator.alloc` 返回的也是展开后的逐 token 下标（`python/sglang/srt/mem_cache/allocator/paged.py:165`-`168`）——如果照搬 vLLM 的直觉去读 SGLang 代码，会本能地去找"块表在哪"，但块/页在这里只是分配器内部一本记账粒度更粗的账，不是贯穿整个系统的核心抽象。
+2. **`page_size` 经常不是你在命令行里写的那个数**。`_mla_backend_page_constraints`（`python/sglang/srt/arg_groups/overrides.py:2129`）会按 attention 后端静默改写它并打一条 warning（`python/sglang/srt/arg_groups/overrides.py:2139`-`2142`）；DSA 池甚至在构造时 `assert` 死（`python/sglang/srt/mem_cache/memory_pool.py:4497`）。读日志时如果只看命令行参数不看这条 warning，会以为自己配的 page_size 生效了。
+3. **MLA 的 `get_value_buffer` 不是"读取"操作那么简单，它是一次 tensor 切片，返回的是原 `kv_buffer` 的视图**（`python/sglang/srt/mem_cache/memory_pool.py:4109`-`4117`）——对返回值做 in-place 写会直接改到 latent 缓存本身。这与 MHA 池里 `k_buffer`/`v_buffer` 是两个完全独立张量的直觉不同,混着读两种池的代码容易在"能不能对返回值做原地操作"这件事上出错。
+4. **SGLang 没有类似 vLLM `profile_run()` 的机制**——全仓 `grep` 找不到 `def profile_run` 这样的函数（本库核实结论，见 §6）。这意味着 `mem_fraction_static` 的默认值本质上是"经验系数",不是"实测值",在没见过的模型架构 / 极端长上下文配置下,默认值给出的安全边界可能不准,这也是为什么源码里专门保留了"显式设置 `mem_fraction_static` 会跳过启发式公式"这条路径（§5.5）。
+5. **`ReqToTokenPool` 的容量从来不是独立预算出来的,它是 `max_total_num_tokens` 算完之后的派生量**（`resolve_max_num_reqs`,`python/sglang/srt/mem_cache/kv_cache_configurator.py:1935`-`1948`）。这意味着"调大 `--max-running-requests`"这个直觉上应该只影响并发数的旋钮,实际上会受到 KV 池容量的硬约束——`min(requested_per_worker, token_capacity // 2)`（`python/sglang/srt/mem_cache/kv_cache_configurator.py:1945`),用户要的值拿不到时只是打一条日志警告降级,不是报错拒绝启动。
+
+## 8. 可改进点
+
+1. **`mem_fraction_static` 的默认值公式可以按源码自己留下的方向演进**——`python/sglang/srt/server_args.py:4880` 的注释明确写了"未来可以按模型类型/隐藏层大小更精细地估算,甚至跑一次 dummy run"。**本库推断**：一个成本较低的中间方案是"仅在首次为某个 `(模型架构, chunked_prefill_size, max_bs)` 组合启动时跑一次轻量 profile 并缓存结果",而不必对每次启动都付出真实前向的开销——这不是本库凭空设想,是直接沿着源码作者留下的方向做的最小化落地,具体实现成本本库未评估,标注为长期方向而非可以立刻提 PR 的改动。
+2. **`DSATokenToKVPool` 的 `page_size` 断言（`assert self.page_size == 64`,`python/sglang/srt/mem_cache/memory_pool.py:4497`）目前发生在池对象构造期,而不是参数解析期**——用户如果手动指定了一个和 DSA 不兼容的 `page_size` 又没有触发 `_mla_backend_page_constraints` 里已覆盖的那几个后端分支(比如未来新增了一种 DSA 专用后端但忘记同步更新 `_mla_backend_page_constraints`),会在模型加载走到很后面才因为这个 `assert` 崩溃,而不是在 CLI 参数校验阶段就报错。**本库推断**：把这条约束也搬进 `overrides.py` 的后处理链路(类似其它几个 MLA 后端的做法),能让这类配置错误更早暴露、报错信息也能给出更明确的"该用哪个 page_size"提示,而不是一条裸的 `AssertionError`。
+3. **`_profile_available_bytes` 的报错分支（`python/sglang/srt/mem_cache/kv_cache_configurator.py:1856`-`1871`）给出的 `suggested_mem_fraction_static` 是"恰好不报错"的临界值**,没有再往上留任何缓冲——**本库推断**：按这条建议值直接设置,大概率会在下一步的真实前向里因为激活显存不够而 OOM(因为这个建议值本身就是从"静态估算,不是实测"这条限制里算出来的,见 §5.5 与 §7 第 4 条),建议信息如果能同时提示"这是理论下限,实际请再留 5%-10% 余量",能减少用户按提示改完参数后又立刻撞见下一个 OOM 的排查成本。
+
+
+===== 02-SGLang\05-SGLang-注意力后端矩阵.md =====
+## 7. 踩坑与反直觉
+
+1. **两个 deprecated backend 别名用了两种完全不同的实现机制。** `"nsa"` 是 `"dsa"` 的别名，靠 `@register_attention_backend("nsa")` 注册一个独立的 `_create_nsa_compat` 包装函数，运行时打 `DeprecationWarning` 再转调 `create_dsa_backend`（`python/sglang/srt/layers/attention/attention_registry.py:140`-`148`）；`"compressed"` 是 `"dsv4"` 的别名，靠 `ServerArgs.__post_init__` 里一段循环遍历四个 attention-backend 相关字段、发现值等于 `"compressed"` 就地 `setattr` 改成 `"dsv4"`（`python/sglang/srt/server_args.py:4208`-`4219`）——前者是"注册一个新工厂函数走正常注册流程"，后者是"配置解析阶段的字符串替换，压根不经过 `ATTENTION_BACKENDS` 表"。两条路径殊途同归，但如果要新增第三个 deprecated 别名，选哪条模式没有文档说明，只能照抄其中一个。
+2. **`AttentionBackendRegistry` 的覆盖面比实际可用的 MLA backend 少。** `python/sglang/srt/models/deepseek_common/attention_backend_handler.py:233`-`246` 只注册了 13 个名字的 MHA/MLA 切换策略（`ascend`/`flashinfer`/`fa3`/`flashmla`/`cutlass_mla`/`fa4`/`trtllm_mla`/`tokenspeed_mla`/`aiter`/`dsa`/`nsa`/`triton`/`intel_xpu`），但 `cutedsl_mla`、`hpc_ops`、`wave`、`torch_native`、`flex_attention`、`intel_amx`、`dual_chunk_flash_attn` 都不在这张表里。如果给一个 DeepSeek 系模型选了 `cutedsl_mla` 这种未注册的 backend，`get_handler()` 会静默退回 `"triton"` 的判断策略——真正跑 kernel 的仍然是 `CuteDslMLABackend`（`## 4.3` 已确认字符串到类的映射不受这张表影响），受影响的只是"这一步该走 MHA 还是吸收态 MLA"的判断逻辑本身可能不是针对 `cutedsl_mla` 优化过的（比如 `MHA_ONE_SHOT_SUPPORTED_BACKENDS` 不含 `cutedsl_mla`，一次性 MHA 优化不会触发）。**本库推断**：由于 `cutedsl_mla` 本身是 decode-only backend（`## 5` 决策/`## 4.2` 第 4 步已确认），实际受影响的窗口可能很窄；但这是一处源码里真实存在的表覆盖不全，不是本库编造的假设性 bug，具体运行时后果需要在真实硬件上复现才能下最终结论（**未查证**）。
+3. **`hpc_ops` 这个第三方库名字容易和"高性能计算"泛称混淆。** 它特指 [Tencent/hpc-ops](https://github.com/Tencent/hpc-ops) 这一个具体项目（`python/sglang/srt/layers/attention/attention_registry.py:260` 的注释直接给出了链接），只在 Hopper（SM90）且 `page_size=64` 下可用（工厂函数 `create_hpc_ops_backend`，`260`-`274`），且显式拒绝投机解码（`268`-`271`，`raise ValueError`）——这是本篇 21 个具体实现类里唯一一个在工厂函数阶段就用异常拒绝投机解码组合的 backend，而不是等到运行时才报错。
+4. **`triton_attn`/`aiter_attn` 与 `triton`/`aiter` 是两套不同命名空间下的字符串，容易看混。** `## 4.6` 已经展开：ViT 侧 `QKV_BACKEND_IMPL` 用的是 `triton_attn`/`aiter_attn`/`amx_attn`/`xpu_attn` 这套带 `_attn` 后缀的命名，主干侧 `ATTENTION_BACKEND_CHOICES` 用的是不带后缀的 `triton`/`aiter`/`intel_amx`/`intel_xpu`。这两套字符串**不能互相传**——`--attention-backend triton_attn` 会在 `ATTENTION_BACKEND_CHOICES` 校验阶段直接报错（因为 `triton_attn` 不在这张表里），`--mm-attention-backend triton` 同理会在 `mm_attention_backend` 的 `choices` 校验阶段报错。
+5. **`sgl-kernel` 这个名字现在指的不是一个独立仓库/独立进程，而是同一个 monorepo 里的一个子目录。** 如果只看 PyPI 页面或者旧文档，容易以为 `sgl-kernel` 是和 `sglang` 主包分开维护、分开发版的独立项目；但在本篇取证的这一版仓库里，`kernels/aot/README.md` 自己承认包名已经改叫 `sglang-kernel`（`"sgl-kernel (prior sgl-kernel)"`，`1`），源码树就在 `python/sglang/kernels/aot/` 下，和 attention backend 的其余代码同仓库、同 sha、同一次 clone 就能拿到——不需要额外再 clone 一个仓库。
+6. **草稿模型的静默 fallback 有一条容易被忽略的触发路径：目标模型自己的 backend 字符串会被拿去当草稿候选值试。** `## 4.7` 已经展开：`_resolve_draft_attention_backend_fallback()`（`python/sglang/srt/speculative/draft_worker_common.py:35`）在用户没显式设置 `--speculative-draft-attention-backend` 时，第一候选不是硬编码默认值，而是 `server_args.get_attention_backends()` 的返回值——也就是**目标模型自己解析出的 backend**。如果目标模型选中了 `dsa`（DeepSeek 稀疏注意力，`## 2` 已确认它不在 `DRAFT_ATTENTION_BACKEND_CHOICES` 6 个值里），投机解码会先把 `"dsa"` 当候选值，白名单检查失败后才静默换成 `"triton"`/`"flashinfer"`——中间那一步"试了一下目标模型的 backend 但没通过"完全体现在日志的一行 warning 里，不细看容易以为草稿 backend 是凭空选出来的默认值。
+7. **算子目录名字保留了一段命名历史，容易和已经废弃的 CLI 别名对不上号。** `python/sglang/kernels/ops/attention/nsa_triton_decode/` 这个目录名字面上对应的是 `"nsa"`（Native Sparse Attention 的缩写），但 `## 0`/`## 7` 第 1 条已经确认 `"nsa"` 在 CLI 层面只是 `"dsa"` 的 deprecated 别名——目录名没有跟着改成 `dsa_triton_decode`。这不是本库找到的一个 bug，只是提醒：仓库里的目录名、文件名不总是和当前有效的 CLI 字符串保持同步重命名，读代码定位算子实现时，历史名字和当前名字要分开对待。
+8. **`attn_backend_wrapper()` 只包一次而不是包两次，是为了不重复初始化混合模型的线性/稀疏侧 backend。** `## 4.3` 提到构造 `HybridAttnBackend` 之后还要再包一层 `attn_backend_wrapper()`；源码注释在这一处专门解释了顺序为什么不能反过来（`python/sglang/srt/model_executor/model_runner_components/attention_backend_setup.py:198`-`203`）："Wrapping each child independently duplicates the linear/sparse side backend for hybrid models (for example, two GDN dispatchers for Qwen3.5 when prefill and decode use different MHA backends)"——如果对 `prefill_backend`/`decode_backend` 两个子 backend 分别调用 `attn_backend_wrapper()`，Qwen3.5 这类混合 GDN 模型会被初始化出**两份**独立的线性注意力 dispatcher（一份挂在 prefill 子 backend 上，一份挂在 decode 子 backend 上），而任意一次 forward 里只有其中一份真正会被用到——多出来的那一份纯粹是浪费的初始化开销和状态。这是本篇找到的又一处"组合器模式"里容易踩的顺序坑：先组合两个同类 backend，再统一包一层模型级 wrapper，不能反过来。
+
+## 8. 可改进点
+
+（以下均为本库基于源码走读的推断，标注证据依据；**未查证**是否已有官方 issue 在跟踪。）
+
+- **`AttentionBackendRegistry` 的覆盖面应该有一个启动期一致性检查。** 目前没有发现任何测试遍历 `ATTENTION_BACKENDS`（全部 22 个字符串）并断言"如果这个 backend 支持 MLA 模型，`AttentionBackendRegistry._handlers` 里也应该有对应条目"——`## 7` 第 2 条提到的 `cutedsl_mla` 缺口本可以在 CI 阶段就被一个简单的集合差集检查捕获，而不必等到有人真的用这个组合跑起来才发现。
+- **五张需要人工同步的白名单（`## 5` 决策 1 提到）可以收敛成一份。** `ATTENTION_BACKEND_CHOICES`/`DRAFT_ATTENTION_BACKEND_CHOICES`/`CHUNKED_PREFIX_CACHE_SUPPORTED_ATTENTION_BACKENDS`/`DETERMINISTIC_ATTENTION_BACKEND_CHOICES`/`AttentionBackendRegistry._handlers` 目前互相独立维护；如果给每个 backend 的工厂函数（或者一个新增的轻量装饰器参数）挂上"支持草稿解码/支持分块前缀/支持确定性推理"这几个布尔标记，这几张表可以从"人工列出的字符串列表"变成"从单一登记表按标记过滤出来的视图"，新增一个 backend 时不会再有遗漏某张表的风险。
+- **9 个补丁函数的静默改写缺少一个"这次启动到底改了什么"的汇总。** `## 5` 决策 5 提到的 7 处静默改写各自打了一条独立的 `logger.warning`，分散在启动日志的不同位置；一个专门的"配置解析摘要"（比如启动完成时打印一张"用户传入值 → 最终生效值"的差异表）可以让这些改写在一处集中可见，而不需要用户翻遍整个启动日志去拼凑"我的 page_size 到底被谁改了"。
+- **ViT 侧和主干侧的 backend 命名空间可以考虑加前缀而不是后缀区分。** `## 7` 第 4 条提到的 `triton_attn` vs `triton` 容易混淆，如果两套命名从设计时就用更醒目的前缀区分（比如 `mm:triton` vs `triton`），错传参数时的报错信息也能更早、更准确地提示"你可能传错了命名空间"，而不是一条通用的"不在 choices 列表里"。
+- **草稿模型 backend 解析目前分散在两个文件的两个函数里，值得合并成一个入口。** `resolve_draft_attention_backend()`（`python/sglang/srt/model_executor/model_runner.py:267`-`282`）和 `_resolve_draft_attention_backend_fallback()`（`python/sglang/srt/speculative/draft_worker_common.py:31`-`49`）都在做"草稿模型该用哪个 backend"这件事，前者决定 `ModelRunner.draft_attention_backend` 这个属性的初始值，后者在真正构建草稿 worker 时做白名单校验和兜底——本篇 `## 4.7` 需要跨两个文件才能拼出完整链路，说明这条决策目前没有单一入口可以一眼读完；合并成一个函数（或者至少让其中一个显式调用另一个而不是两条平行存在的路径）能降低下一个想理解"草稿 backend 到底怎么定下来的"的人的阅读成本。
+
+
+===== 02-SGLang\06-SGLang-约束解码与语法后端.md =====
+## 7. 踩坑与反直觉
+
+**反直觉一：跳跃式解码不是"性能优化默认关闭"，而是调度器里根本没有调用它的代码。**
+容易望文生义地以为 SGLang 的"约束解码快"部分归功于跳跃解码这个 2024 年博客里介绍的技术，但 `## 4.4` 的 grep 证据表明：`python/sglang/srt/managers/` 整个目录找不到 `try_jump_forward`/`jump_forward_str_state`/`jump_and_retokenize`/`find_jump_forward_string` 的任何调用；四个后端里 xgrammar 和 llguidance 的实现是"活的"（真实包装了底层库对应的 API），outlines 的实现是"双重死代码"——`jump_forward_map` 在构造时被硬编码成 `None`（`python/sglang/srt/constrained/outlines_backend.py:157`），即使调度器调用了 `try_jump_forward()` 也会立即因为这个短路返回 `None`。当前的约束解码性能收益来自 bitmask 机制本身（xgrammar 编译出高效自动机 + GPU 上并行应用 bitmask），而不是跳过前向计算。
+
+**反直觉二："语法编译不阻塞主循环"这句话只对了一半。**
+编译本身确实丢进了 `ThreadPoolExecutor`（`python/sglang/srt/constrained/base_grammar_backend.py:206`），不会同步卡住 Scheduler；但 `## 4.1` 展示的 `get_ready_grammar_requests()` 里那段 `while ... time.sleep(...)` 忙等循环（`python/sglang/srt/constrained/grammar_manager.py:206`-`225`），只要 `grammar_queue` 非空，每一轮调度前最多会原地等 `SGLANG_GRAMMAR_POLL_INTERVAL`（默认 5ms）。这段等待不影响吞吐上限（因为它有硬上限且命中即提前退出），但会给"正在等语法编译完成的请求所在的这个 Scheduler 进程"的每轮调度周期性地叠加最多 5ms 的固定延迟，直到编译完成或超时。
+
+**反直觉三：语法约束和 overlap 调度默认并不冲突，只有特定投机解码算法组合才会强制同步。**
+容易联想"语法约束需要精确的逐 token 状态，overlap 调度是异步重叠的，两者听起来天然矛盾"，但 `## 5` 决策三说明真实情况更精细：不开投机解码时两者可以自由共存（`grammar_needs_sync()` 的前提条件 `not spec_algorithm.is_none()` 不成立）；开了投机解码之后，只有 `NGRAM`（宿主端草稿，没有 GPU 阶段可以隐藏 FSM 推进的 CPU 开销）会触发强制同步，EAGLE/standalone/dflash 系恰恰因为有 GPU 草稿阶段可以"藏"住这部分 CPU 工作，被允许留在 overlap 路径里。
+
+**反直觉四：`ReasonerGrammarObject` 曾经复现过一次"哨兵字段没跟着包装层走"的 bug，这条防线目前是两层实现。**
+`## 4.5` 引用的 `python/sglang/srt/constrained/reasoner_grammar_backend.py:113`-`121` 注释直接写明历史：最初只有内层语法对象（比如 `XGrammarGrammar`）在 `accept_token()` 里更新自己的 `current_token`，包装它的 `ReasonerGrammarObject`（用于"思考模式下语法暂不生效"的场景）没有同步更新自己的 `current_token`，导致这个字段在包装对象上永远是 `None`——PD 分离/retract 场景下的哨兵判断 `if req.grammar.current_token is None` 因此永远为真，重复调用 `accept_token()`，报出 "Tokens not accepted" 后中止请求。修复方式是让 `ReasonerGrammarObject.accept_token()`（`python/sglang/srt/constrained/reasoner_grammar_backend.py:113`-`124`）自己也写一遍 `self.current_token = token`（`python/sglang/srt/constrained/reasoner_grammar_backend.py:121`），这是一个"包装类必须显式转发被包装对象状态"的具体教训——`BaseGrammarObject` 的多数方法（`fill_vocab_mask`、`allocate_vocab_mask` 等）在 `ReasonerGrammarObject` 里都能看到类似的显式转发模式（`python/sglang/srt/constrained/reasoner_grammar_backend.py:170`-`191`），说明这类包装类每加一个字段/方法都要记得同步一次，容易漏。
+
+**反直觉五：llguidance 后端对新版 `structural_tag` 格式的处理是"直接失败"，不是"优雅降级到旧版格式"。**
+`python/sglang/srt/constrained/llguidance_backend.py:283`-`310` 的 `dispatch_structural_tag()` 里，`assert is_legacy_structural_tag(structural_tag)`（`python/sglang/srt/constrained/llguidance_backend.py:286`）意味着如果用户传入的是新版 `format` 写法的 structural_tag（xgrammar 支持这两种写法，`## 3.4`），llguidance 后端会在这一行直接抛 `AssertionError`，被外层 `except Exception`（`python/sglang/srt/constrained/llguidance_backend.py:308`）捕获后转成 `InvalidGrammarObject`（走 `## 4.1`/决策六描述的显式 abort 路径，不是静默降级）——但用 `assert` 而不是显式 `raise ValueError(...)` 来做这层校验，意味着**理论上**如果运行环境用 `python -O` 启动会跳过所有 `assert` 语句，届时这行校验会被整体跳过，后续代码会尝试按 legacy 格式的字段名（`structure["begin"]`/`structure["schema"]`/`structure["end"]`）去解析一个实际是新版格式的字典，大概率抛 `KeyError` 而不是给出清晰的"格式不匹配"错误信息——这条链路本篇标注为**未查证**：没有找到 SGLang 是否在生产部署脚本里显式禁止 `-O` 模式的证据，但代码依赖 `assert` 做输入校验这件事本身在任何 Python 项目里都是一个值得注意的模式。
+
+## 8. 可改进点
+
+以下判断标注为「本库推断」，未在上游 issue/PR 中核实，仅基于代码读到的行为提出、供讨论：
+
+1. **要么删掉跳跃解码的死接口，要么把调用点接回去，两者都好过现在的中间状态。**
+   `## 4.4`/反直觉一描述的现状——四个后端里三个实现了完整接口、一个双重死代码、调度器完全不调用——对后续维护者是一个陷阱：新来的贡献者读到 `try_jump_forward()` 的完整正确性处理逻辑（尤其是 xgrammar 那段 `jump_and_retokenize()` 的回滚重放），很容易误以为这是一个正在生效的优化路径，进而在它之上继续叠加功能或者当作参考实现复制到别处。风险：如果要接回调度器，需要先解决 `## 5` 决策四提到的变长 token/CUDA Graph/`future_map` 定长假设冲突，工作量不小；如果选择删除，至少要先确认没有下游（比如 SGLang 的某个 fork 或者外部项目）依赖这几个公开方法。
+
+2. **xgrammar 后端的 bitmask 填充可以参考 vLLM 的阈值化并行方案。**
+   `## 6` 已经指出 vLLM 用 `fill_bitmask_parallel_threshold=128` 决定是否把填充工作分给一个专用线程池，SGLang 的 `python/sglang/srt/constrained/base_grammar_backend.py:88`-`94` 目前是无条件的单线程 for 循环。给 xgrammar 后端补一条类似的阈值判断，在"批内语法约束请求数很多"的场景下可能有实际收益。代价：需要引入额外的线程池管理和阈值调参，小批量场景下线程调度本身的开销可能反而不划算——这正是 vLLM 设置阈值而不是无条件并行的原因，照搬时不能省掉这层判断。
+
+3. **语法编译缓存的 key 没有做任何归一化，语义等价的 schema 会被重复编译。**
+   `## 3.3` 提到 `BaseGrammarBackend.cache` 的 key 就是原始字符串 `(key_type, key_string)`，两个字段顺序不同但语义完全等价的 JSON Schema（比如 `{"a": ..., "b": ...}` 和 `{"b": ..., "a": ...}`）会被当成两个不同的缓存条目，各自触发一次完整编译。在 key 生成前对 JSON 类型的 schema 做一次 `json.dumps(..., sort_keys=True)` 归一化，可以提高缓存命中率。代价：归一化本身有 CPU 开销（虽然远小于编译），而且需要确认这个开销不会抵消掉缓存命中带来的收益——大 schema 场景下应该是净赚。
+
+4. **`GrammarStats` 里的字段目前找不到导出到 Prometheus/HTTP 响应的路径。**
+   `## 3.2` 已经说明 `compilation_time`/`is_cache_hit`/`tree_traversal_time` 等字段被赋值但本篇没有找到消费点。如果这些指标已经有其它导出路径，本条不成立（**未查证**部分）；如果确实没有，接入现有的可观测性体系（SGLang 本身有 Prometheus 指标导出，这里未展开）能让"语法编译耗时是不是当前部署的瓶颈"这类问题从"读源码猜测"变成"看 dashboard"。
+
+5. **llguidance 后端可以把 `assert is_legacy_structural_tag(...)`（`python/sglang/srt/constrained/llguidance_backend.py:286`）换成显式的 `raise ValueError`。**
+   `## 7` 反直觉五已经说明用 `assert` 做输入校验在 `-O` 模式下存在理论上被跳过的风险，即使这个风险在当前部署方式下从未真正触发，把校验换成不受解释器优化开关影响的显式异常也是零成本的加固——同时把错误信息从默认的 `AssertionError`（不带任何上下文）换成"llguidance 后端不支持新版 structural_tag format 写法，请改用 xgrammar 或转换成 legacy 格式"这类可操作的提示，能省下用户一次去读 SGLang 源码才能定位问题的时间。
+
+
+===== 02-SGLang\07-SGLang-前端DSL与编程模型.md =====
+## 7. 踩坑与反直觉
+
+1. **`join(mode="concate_and_append")` 依赖的服务端接口，在当前 `srt` 上找不到**。`RuntimeEndpoint.concatenate_and_append()`（`python/sglang/lang/backend/runtime_endpoint.py:317`-`324`）请求路径是 `/concate_and_append_request`；把 `srt` 的 HTTP 入口 `python/sglang/srt/entrypoints/http_server.py`（2827 行）里所有 `@app.get`/`@app.post`/`@app.api_route` 装饰的路由整段列出来核对（从 `/health`（`python/sglang/srt/entrypoints/http_server.py:654`）到 `/v1/chat/completions`（`python/sglang/srt/entrypoints/http_server.py:1722`），一共几十条），没有任何一条路径叫这个名字或近似名字。换句话说，§3.7 讲的那条"显式拼接子分支 KV cache"的路径，在这份取证基准对应的服务端代码上调用即报错——这不是"功能小众没人测"，是**前后端接口已经对不上**。作为旁证：`srt` 现在有 `/open_session`（`python/sglang/srt/entrypoints/http_server.py:1573`）/`/close_session`（`python/sglang/srt/entrypoints/http_server.py:1587`）这一套显式 session 机制，`RuntimeEndpoint.generate()`/`async_generate()` 也确实带了 `session_id` 参数（`python/sglang/lang/backend/runtime_endpoint.py:464`-`483`、`python/sglang/lang/backend/runtime_endpoint.py:505`-`523`）——这套 session 机制是否是 `concate_and_append` 的替代品，**未查证**，没有找到直接说明两者关系的提交记录，只是两者同时存在于同一份快照里的事实，不作为因果结论。
+2. **`compiler.py` 曾经存在，本篇取材的这一版仓库里已经没有了**。`_PLAN.md` 给出的线索清单里点名要看 `compiler.py`，但在 `15a43983` 这个快照里 `find python/sglang/lang -iname "*compil*"` 零结果——本地 `_src/sglang` 是 `--depth 1` 浅克隆没有历史，验不了"以前有没有"，所以改用 GitHub 提交历史 API 独立核实（`commits?path=python/sglang/lang/compiler.py`）：`compiler.py` 在提交 `e019f233`（2025-11-16，标题 "Remove unused code / testcases in `lang`"）里被整体删除（231 行，0 新增），同一提交还删掉了 `test/lang/test_anthropic_backend.py`（24 行）、`test/lang/test_tracing.py`（129 行）、`test/lang/test_vertexai_backend.py`（53 行），改了 `test/lang/run_suite.py`（把这些测试从发现列表里摘掉）。三天后的提交 `196b940a`（2025-11-19，"[3/N] CI refactor: move some manually triggered tests"）把剩下的 `test/lang/` 整体搬到 `test/manual/lang_frontend/`——这两步合起来是"DSL 的自测代码从 CI 自动发现区被移出"的完整过程，时间点在本篇取证基准之前约 9 个月。
+3. **`SglFork`/`SglGetForkItem` 是"活在 IR 定义里、死在执行器外"的类**。它们在 `ir.py` 里定义齐全（`python/sglang/lang/ir.py:552`、`python/sglang/lang/ir.py:565`），`SglExpr.print_graph_dfs`（`python/sglang/lang/ir.py:383`）甚至专门为它们写了打印格式，但 `interpreter.py` 的 `_execute` 分发表（`python/sglang/lang/interpreter.py:461`）压根没有对应分支——真正跑 `@sgl.function` 程序时永远不会实例化它们。它们唯一的用武之地是 `python/sglang/lang/tracer.py:114`、`python/sglang/lang/tracer.py:123` 那套只服务于抽前缀的影子解释器。第一次读代码容易望文生义，以为 `fork()` 的运行时实现一定是走这两个 IR 节点。
+4. **`BaseBackend.fork_program()` 是从未被调用过的钩子**。全仓 `grep "fork_program" python/sglang/` 只在 `python/sglang/lang/backend/base_backend.py:38`-`44` 的定义处命中一次，没有任何调用点，也没有任何后端子类覆写它。它看起来像是为"分叉这件事应该通知后端"预留的扩展点，但实际的 fork 完全在 `StreamExecutor` 内部用纯 Python 拷贝完成，从未触达这个钩子——真正"通知后端"的是 `SglCommitLazy`（经 `commit_lazy_operations`），但那是 `fork()` 内部主动多发的一次独立请求，不经过这个钩子。
+5. **`select()` 里的 token-healing 修正比想象中隐蔽**。`RuntimeEndpoint.select()` 先用 `logprob_start_len = max(prompt_len - 2, 0)`（`python/sglang/lang/backend/runtime_endpoint.py:261`）多要两个 token 的 logprob，是为了让服务端的 token healing（把 prompt 末尾可能被过早截断的 token 重新展开）在打分时也能被看见；紧接着一段逻辑专门检测"如果 healing 实际没发生"就要把多算的那个 token 从归一化平均里减掉、并把它从 `input_token_logprobs` 里剔除（`python/sglang/lang/backend/runtime_endpoint.py:284`-`292`）——这段代码不读注释根本看不出它在干什么，是"两次不同来源的边界效应互相打架，用一段专门的算术把其中一次撤销"的典型例子。
+6. **32 份几乎相同的 DSL 用户代码，全都不是在写"结构化生成程序"**。`test/registered/` 里能匹配到 `sgl.function` 的 32 个文件（`grep -rl "sgl\.function" test/registered/ | wc -l` 实测），无一例外是各硬件/各模型的精度评测脚本（`test_*_eval_*.py`），每个文件里都各自复制了一份几乎逐字相同的 `few_shot_gsm8k` 函数——一次 `sgl.gen`，没有分支、没有 `fork`、没有 `select`——用 `.run_batch(..., num_threads=parallel, progress_bar=True)` 纯粹当"自带线程池和进度条的并发 HTTP 客户端"用。这批用户从未触达 `fork`/`select`/chat 角色构造等本篇讲的大部分机制——`test/registered/` 里 `.fork(` 和 `sgl.select(` 的命中数都是 0。这提示一个容易被忽略的落差：仓库文档和 `examples/` 里演示的"结构化编程"能力，和这套 DSL 在仓库自己 CI 里实际被使用的方式，是两回事。
+7. **"API 投机执行"这条机制，示例齐全但测试为零**。`examples/frontend_language/usage/openai_chat_speculative.py`、`examples/frontend_language/usage/openai_speculative.py` 把用法讲得很细（包括"必须把 `gen` 都塞进同一个 `assistant` 块"这条容易踩的坑），但 `grep -rl "num_api_spec_tokens" test/` 在整个 `test/` 目录（含 `registered/` 和 `manual/`）零命中——这条机制没有任何自动化测试兜底，连"非 CI 但至少手动能跑"的覆盖都没有，比 §7.6 提到的 `fork`/`select` 处境更边缘。
+8. **纯"续写"风格的代码打到 `Anthropic` 后端会被悄悄改写成一轮 chat**。`Anthropic.generate()`（`python/sglang/lang/backend/anthropic.py:26`-`49`）不管 `s.messages_` 是不是空的都要凑出一个 `messages` 列表：如果程序里从来没写过 `sgl.user()`/`sgl.assistant()`（纯 `s += "..." + sgl.gen(...)` 的老式续写写法），会把整段 `s.text_` 包成 `[{"role": "user", "content": s.text_}]`（`python/sglang/lang/backend/anthropic.py:31`-`34`）当一轮用户消息发出去，而不是像 `RuntimeEndpoint`/`OpenAI`（非 chat 模式）那样把 `s.text_` 当成一段要续写的裸文本。同一段"续写风格"的 DSL 代码，换到 `Anthropic` 后端后，模型看到的输入结构其实变了，只是这层转换完全在 `lang/` 内部悄悄完成，用户很难从 DSL 代码本身看出来。
+
+**附：本篇几处规模/活跃度数字的复现命令**（`_src/sglang` 是浅克隆，前两组本地就能跑；第三组要打 GitHub API，网络请求需脱离沙箱执行）：
+
+```bash
+# lang/ 与 srt/ 的文件数、行数（§2、§0.5）
+find python/sglang/lang -name '*.py' | xargs wc -l | tail -1     # 4644 total
+find python/sglang/srt  -name '*.py' | wc -l                     # 1646
+find python/sglang/srt  -name '*.py' | xargs wc -l | tail -1     # 89798 total
+
+# test/registered/ 里 DSL 用户代码的分布（§7.6）
+grep -rl "sgl\.function" test/registered/ | wc -l                # 32
+grep -rl "\.fork(\|sgl\.select(" test/registered/ | wc -l        # 0
+
+# 90 天窗口内触达 lang/ 与 srt/ 的提交数（§0.5，today = 2026-08-22）
+curl -sI "https://api.github.com/repos/sgl-project/sglang/commits?path=python/sglang/lang&since=2026-05-24T00:00:00Z&per_page=1" | grep -i '^link'
+curl -sI "https://api.github.com/repos/sgl-project/sglang/commits?path=python/sglang/srt&since=2026-05-24T00:00:00Z&per_page=1"  | grep -i '^link'
+# Link 响应头里 rel="last" 的 page 号就是命中的提交数：lang/ 是 6，srt/ 是 2339
+```
+
+## 8. 可改进点
+
+1. **`concate_and_append` 这条路径要么修好要么删掉**。§7.1 已经证实 `RuntimeEndpoint.concatenate_and_append()` 请求的 `/concate_and_append_request` 在当前 `srt` 的 HTTP 路由表里不存在——现状是"用户完全没法预先知道这条路径已经打不通，只有实际调用 `join(mode="concate_and_append")` 才会报错"。要么在 `srt` 里补上对应路由（如果这个能力还有需求），要么把 `SglConcateAndAppend`/`_execute_concatenate_and_append_kv_cache`/`concatenate_and_append` 这条链路整体标记废弃或删除，避免看代码的人以为它是一条能用的路。
+2. **给 `lang/` 补一条哪怕最小的 CI 覆盖**。当前 `test/manual/lang_frontend/` 下 6 个测试文件（`test_bind_cache.py`/`test_choices.py`/`test_jump_forward.py`/`test_openai_backend.py`/`test_separate_reasoning.py`/`test_separate_reasoning_execution.py`）都标注为"非 CI、仅手动触发"（`test/README.md:15`）——这意味着任何一次 `interpreter.py`/`ir.py`/后端文件的改动，理论上可以在不破坏 CI 的情况下悄悄改坏 `select()` 的打分逻辑或 `fork()` 的状态拷贝，而没有任何自动信号。哪怕只把 `test_choices.py` 这类不依赖起真实 server、能用 mock 跑的测试挂回 `test/registered/`，也能补上这个盲区。
+3. **多后端 `select()` 语义差异需要一处集中的文档说明**。`RuntimeEndpoint` 用长度归一化 logprob，`OpenAI` 用 `logit_bias` 贪心逐 token 匹配且忽略 `choices_method`（这句话目前只写在 `python/sglang/lang/backend/openai.py:319` 一行 docstring 里），`Anthropic`/`LiteLLM`/`VertexAI` 直接不支持——用户从 `api.py`/`choices.py` 的公开接口完全看不出这个落差，只有翻到每个后端实现内部才知道。给 `choices_method` 参数的文档（或者 `gen(choices=...)` 本身的 docstring）加一句"不同后端行为不同"的提示，成本很低。
+4. **`fork_program` 这个从未被调用的钩子该删或该补**。要么承认"通知后端有分叉发生"这件事目前没有任何后端需要（因为分叉纯靠文本前缀隐式复用，不需要显式 session），把这个方法从 `BaseBackend` 里删掉，减少读者对"这个钩子应该干什么"的困惑；要么如果未来想让某个后端（比如支持显式 session 的自定义部署）在 fork 时做点什么，把它真正接进 `StreamExecutor.fork()` 的调用路径里。当前"定义了但没人用也没人删"是最差选项。
+5. **几处"换后端就不一样"的硬限制应该被集中列出来，而不是散落在各自实现里**。`RuntimeEndpoint` 一次请求最多带一张图（`python/sglang/lang/backend/runtime_endpoint.py:339`，§3.10）、`OpenAI` 后端的 `dtype` 约束和 `select()` 都不支持 chat 模型（`python/sglang/lang/backend/openai.py:183`-`185`、`python/sglang/lang/backend/openai.py:320`-`324`，§3.11/§0.3）、chat 模型不开投机执行时一个 `assistant` 块只能有一个 `gen()`（`python/sglang/lang/backend/openai.py:149`-`154`，§3.11）——这些限制目前只能通过运行时抛出的 `AssertionError`/`RuntimeError`/`NotImplementedError` 发现，没有一处文档把它们汇总成一张"后端能力矩阵"。哪怕只是在 `BaseBackend` 的类文档字符串里加一张这样的表，也能省下不少"跑到一半才发现这条路走不通"的调试时间。
+6. **`tracer.py` 这条并行解释器线的价值应该被重新评估**。`compiler.py` 已经因为"unused"被删过一次，`tracer.py` 目前唯二的调用方（`cache_program`/`SglFunction.trace`）里，前者服务的 `enable_precache_with_tracing` 默认开着但触发条件很窄（只在 `run_batch` 且 `len(batch_arguments) > 1` 时触发，`python/sglang/lang/interpreter.py:106`-`107`），后者（`.trace()`）在 `examples/`、`test/` 里没有搜到任何调用。如果 `.trace()` 已经名存实亡，应该考虑把 `extract_prefix_by_tracing` 这一半单独抽出来（它是 `cache_program` 唯一真正依赖的部分），把 `TracerProgramState` 里为通用追踪保留的那些方法一起清掉，避免"两套解释器都要维护"的成本继续背下去。
+
+
+===== 02-SGLang\08-SGLang-HTTP-API表面全解.md =====
+## 7. 踩坑与反直觉
+
+1. **83 条不是真实数字，至少是 87**——`## 2.2` 已展开：Ollama 兼容的 4 条路由用 `os.environ.get("SGLANG_OLLAMA_CHAT_ROUTE", "/api/chat")` 这种非字面量路径注册（`python/sglang/srt/entrypoints/http_server.py:1973,1979,1987,1993`），AST 静态扫描（`_lab/api_surface.py`）解析不出字符串常量就不会记进 `unique_paths`。**这正是 `_lab/out/compare.json` 的 `notes.caveat`（"路由集合来自装饰器静态抽取；条件注册（if 分支里 add_api_route）可能漏"）预警的情况被我在这篇取证里实打实撞上了**——空口白牙的"可能漏"变成了有行号的"确实漏了这 4 条"。
+2. **`grpc_server.py` 在 `route_files` 列表里，但对 83 条贡献是 0**——不是文件没被扫，是这个文件里的三个端点（`/metrics` `/start_profile` `/stop_profile`）用的是 `aiohttp` 的 `app.router.add_get/add_post`（`python/sglang/srt/entrypoints/grpc_server.py:64,152-153`），AST 抽取器只认 `@app.get/@app.post` 这种 FastAPI 装饰器语法，两种注册方式长得完全不同，抽取器**不是漏看了这个文件，是压根不认识这种写法**。更进一步，真正的 gRPC servicer 实现根本不在这个仓库里——`python/sglang/srt/entrypoints/grpc_server.py:2` 的文档字符串直接写"Thin gRPC server wrapper — delegates to smg-grpc-servicer package"，这意味着**"SGLang 的 gRPC 入口"这个说法本身需要打折扣**：SGLang 仓库只提供一个启动脚手架 + HTTP 调试旁路，实际的 gRPC 协议实现是一个外部依赖包，装不装、装哪个版本都会改变 gRPC 路径的行为，这部分**在 `_src/sglang` 里查不到，标注「未查证」**。
+3. **同一个函数被注册成两个路径，读代码容易以为是两个独立实现**：`/health` 和 `/health_generate` 都指向 `health_generate`（`python/sglang/srt/entrypoints/http_server.py:656`），`/get_weight_version` 和 `/weight_version` 都指向 `weight_version`（`python/sglang/srt/entrypoints/http_server.py:778`），`/get_server_info`/`server_info`、`/v1/tokenize`/`/tokenize`、`/v1/detokenize`/`/detokenize` 都是这个模式——这是"新路径 + 保留旧路径做向后兼容别名"的常见做法，但如果只搜索 `def xxx` 定位实现，会漏看到它其实还服务另一条路径。
+4. **管理端点默认"无 key 即无认证"**：`AuthLevel.ADMIN_OPTIONAL` 的语义是"如果没配置任何 key，直接放行"（`python/sglang/srt/utils/auth.py:82-84` 文档），也就是说一个**没传 `--api-key`/`--admin-api-key` 的 SGLang server**，任何能连到端口的人都可以调 `/release_memory_occupation`（让服务瞬间失去 GPU 显存）、`/update_weights_from_disk`（换掉正在提供服务的模型权重）——这不是 bug，是"信任内网部署"的默认假设（RL 训练集群通常在隔离网络里），但如果不小心把这样配置的 server 暴露到公网，后果是实打实的拒绝服务/数据污染，**没有代码层面的强制提醒**，仅在文档层面存在。
+5. **原生 `/generate` 的流式响应和 OpenAI `/v1/chat/completions` 的流式响应是两套完全不同的 JSON 结构**：前者是 `dumps_json(out)` 直接序列化 `TokenizerManager` 内部字典（字段名 `text`、`meta_info`），后者走 `sse_utils.py` 的 `StreamChunk`（字段名 `choices[].delta.content`，OpenAI 标准形状）。如果调用方以为"反正都是 SSE，格式应该差不多"直接复用同一套解析代码，会在切换端点时直接解析失败——两条路径除了共享 `TokenizerManager` 这个数据源之外，响应序列化是完全独立维护的两套代码。
+6. **gRPC 上的"OpenAI 兼容"是名不副实的**：`.proto` 契约（`## 2.4`）把 `ChatComplete`/`Complete`/`OpenAIEmbed`/`OpenAIClassify`/`Score`/`Rerank` 标成"OpenAI-compatible RPCs"，听起来像是和 HTTP `/v1/chat/completions` 平级的强类型协议，但它们的请求体 `OpenAIRequest` 只有一个字段 `bytes json_body`（`proto/sglang/runtime/v1/sglang.proto:295`）——**gRPC 在这六个 RPC 上完全没有兑现"强类型契约"这个 gRPC 本该提供的核心价值**，客户端还是要自己拼一份和 HTTP 请求体一模一样的 JSON 再塞进 bytes 字段，唯一区别是传输帧从 HTTP/1.1 换成了 HTTP/2。第一次看到 `.proto` 里这几个 RPC 名字，很容易误以为 gRPC 路径对 `ChatCompletionRequest` 也做了字段级类型校验，实际上校验（如果有的话）还是要等到 `bytes` 被反序列化成 JSON 之后，在 `smg-grpc-servicer` 内部某处发生——这部分具体怎么做的，本仓库看不到，标注「未查证」。
+7. **`tool_server.py` 在 `route_files` 里，但和 `grpc_server.py` 一样对 83 条路由贡献是 0**——原因不同于 grpc_server.py（那是注册方式 AST 认不出），`tool_server.py`（191 行）里压根**没有任何 HTTP 路由注册代码**，`ToolServer`/`MCPToolServer`/`DemoToolServer`/`NativeToolServer` 这些类是给 `/v1/responses` 端点内建工具调用（built-in tool calling，MCP 协议客户端）用的业务逻辑模块，不是一个独立的 HTTP 入口——`_lab/api_surface.py` 把它收进 `route_files` 是因为文件路径匹配了 glob 模式（`entrypoints/openai/*.py`），但扫描器扫完发现零路由，这是**扫描范围包含了本不该被当作"路由候选文件"的文件**，和 `grpc_server.py` 那种"该抽的没抽到"是两种不同性质的空结果，混在一起统计容易掩盖问题的真实原因。
+
+---
+
+## 8. 可改进点
+
+以下均按 `本库推断` 标注，基于本篇读到的代码结构，不涉及编造 PR/issue 号（遵守 `_PLAN.md` §1.6）：
+
+- **`_lab/api_surface.py` 的路由抽取器应该对 `os.environ.get("XXX", "default")` 这种模式做特判**：只要第二个参数是字符串字面量，就可以提取出默认路径记入统计，并额外标注"动态路径，可被环境变量覆盖"——这样能同时修好 `## 7` 第 1 条踩坑，且不需要真正执行代码（AST 层面就能识别这个固定模式，`ast.Call` 里 `func.attr == "get"` 且 `args[1]` 是 `ast.Constant`）。
+- **`_lab/api_surface.py` 应该识别 `aiohttp` 的 `add_get`/`add_post`/`add_route` 调用**，即使只是额外统计一个"非 FastAPI 路由"计数，也能避免 `route_files` 列表里出现"扫了但贡献 0 条"这种误导性的空结果（`_PLAN.md` §7 明确警告过"空结果要当 bug 查，不许当事实写"，`grpc_server.py` 目前是介于"真空"和"漏抽"之间的灰色地带，值得单独归类而不是沉默地记 0）。
+- **`n_protocol_classes` 的统计口径应该扩展到 `entrypoints/anthropic/protocol.py` 和 Ollama 相关协议文件**，否则"86 个协议类"这个数字会让读者误以为 Anthropic/Ollama 兼容层没有自己的协议定义（实际上有，只是没被这次 glob 命中）。
+- **`AuthLevel.ADMIN_OPTIONAL` 的"无 key 即放行"默认行为，值得在 `ServerArgs` 启动日志里显式打印一行警告**（类比 vLLM 的 `VLLM_SERVER_DEV_MODE` 打印"SECURITY WARNING"那样），目前只在源码注释里说明，运行时没有任何提示——这对第一次部署的用户是一个容易踩的信任假设落差。
+- **`.proto` 里"OpenAI-compatible RPCs"这组注释分类容易造成误导**（`## 7` 第 6 条），建议要么把这六个 RPC 的分组注释改成更准确的措辞（比如"JSON pass-through RPCs, no field-level typing"），要么真的给它们定义结构化 message（哪怕只覆盖最常用的 `model`/`messages`/`stream` 几个字段，其余走一个 `extra: bytes` 兜底字段）——现状是协议文件的分组名字暗示了一种契约强度，实际代码没有兑现。
+- **`route_files` 的统计口径应该把"贡献 0 条路由"的文件单独列一类，并标注零路由的原因**（`grpc_server.py` 是"注册方式不认识"，`tool_server.py` 是"压根没有路由，只是业务逻辑模块"）——目前两种情况在 `api_surface.json` 里长得一模一样（都只是在 `route_files` 数组里挂个名，`routes` 数组里查不到任何一条来自这个文件），下游读者没法只看 JSON 区分这是"漏抽 bug"还是"文件本来就不该被扫进来"，容易造成不必要的怀疑或者相反的盲目信任。
+
+---
+
+
+===== 02-SGLang\09-SGLang-ServerArgs旋钮全景.md =====
+## 7. 踩坑与反直觉
+
+1. **`_lab/out/api_surface.json` 的字段 `type` 字符串被截断到 160 字符，会让基于它做的命名空间统计系统性失真。** 本篇写作过程中先用这份 JSON 做了一次正则统计，得到"196 个字段没有 `NS` 标记"的结论；核对发现 160 字符的截断恰好落在很多字段冗长的 `help=` 文本中间，而 `NS(...)` 总是被追加在 `Annotated[...]` 的**最后一位**（`## 5` 决策 2 已解释这是有意为之的迁移设计），于是长 help 文本的字段全部被误判成"无命名空间"。用 `ast.get_source_segment` 对源码逐字段取完整注解重新统计后，476 个字段全部带 `NS`，与仓库自己的覆盖率测试（`test/registered/unit/test_server_args_namespaces.py:44`-`50`）吻合。**教训**：`_lab` 的 AST 抽取工具为了控制 JSON 体积做了截断，这类"抽取工具本身有损"的情况在长文本字段（尤其是 help 文本很长的配置项）上会系统性地影响任何基于该字段做统计的下游结论，直接引用前要留意字符串是否可能被截断。
+2. **不是所有标着"废弃"的字段都会在运行时警告用户。** `elastic_ep_rejoin`（`python/sglang/srt/server_args.py:2557`-`2559`）的 help 文本写着 `"[Deprecated] Alias for --elastic-ep-join-mode recover."`，但它仍然是走通用反射循环的普通 `A[bool, ...]` 字段，没有像另外 25 个废弃标志那样接上 `DeprecatedAction` 家族——也就是说用户传 `--elastic-ep-rejoin` 不会收到任何运行时警告，废弃信息只存在于 `--help` 输出里，容易被忽略。这与类文档字符串（`python/sglang/srt/server_args.py:501`-`509`）"废弃标志必须手动注册到 `add_cli_args`"的规则不完全一致，是一处规则和实践之间的漂移（源码为证：截至取证 sha，`elastic_ep_rejoin` 是唯一一个 help 文本含 `[Deprecated]` 但未接 `DeprecatedAction` 的字段，`## 2` 已给出统计口径的对照，未查证是否已有 issue 跟踪清理）。
+3. **`chunked_prefill_size`/`cuda_graph_config.decode.max_bs` 的自动推断只在字段为 `None` 时介入，不是"总会按显存重算"。** `_handle_gpu_memory_settings`（`python/sglang/srt/server_args.py:4891`-`4892` 等多处）全部包在 `if self.chunked_prefill_size is None:` 里——用户一旦显式传了 `--chunked-prefill-size`，无论传的值是否适合当前硬件，这段自动分档逻辑完全不生效。这一条和 `## 0`/`## 5` 提到的"设了也白设"（`cuda_graph_config.prefill.backend`）恰好相反：前者是"用户的显式设置永远优先，自动推断只补空白"，后者是"自动检测到冲突就无条件覆盖，不管用户设没设"。同一个文件里两种相反的覆盖策略并存，读代码时不能一概而论，要具体到每个字段查它走的是哪一条路径。
+4. **`schedule_policy` 默认值是 `"fcfs"`（`python/sglang/srt/server_args.py:858`-`873`），不是很多资料里暗示的 `"lpm"`（最长前缀匹配）。** RadixAttention/前缀缓存是 SGLang 的招牌特性，容易让人推断"调度策略默认也是前缀感知的"，但源码字面默认值就是 FCFS——`lpm` 是可选项，需要用户显式传 `--schedule-policy lpm` 才会启用。这条本篇特意核实过源码字面量，不是凭印象写。
+
+## 8. 可改进点
+
+（以下均为本库基于源码走读的推断，标注证据依据；未核实是否已有官方 issue 在跟踪。）
+
+- **`_disable_tc_piecewise_cudagraph_if_incompatible` 的 18 条规则（`python/sglang/srt/server_args.py:4654`-`4719`）全部是"运行时探测 + 静默覆盖"，缺一层"为什么被关掉"的用户可见汇总。** 每条规则触发时只是把 `cuda_graph_config.prefill.backend` 设成 `DISABLED`，没有 `logger.warning` 说明是哪一条规则命中的（对比 `_handle_attention_backend_compatibility` 在类似场景会打印警告，见 `python/sglang/srt/server_args.py:6011`-`6013`）。用户看到"CUDA Graph 没生效"时，除非去读这 18 条规则的源码，没有办法从日志反推是哪个特性导致的。补一条 `logger.info(f"tc_piecewise CUDA Graph disabled: {_name}")` 成本很低，收益是显著减少"为什么我的配置没生效"这类排障时间（本库推断，依据是同文件内其他覆盖路径普遍带日志，这一处是例外）。
+- **`elastic_ep_rejoin` 这类"文档已废弃但未接废弃 action"的字段应该有一条自动化检查。** `## 7` 第 2 条已说明现状；给 `Arg` 加一条 CI 断言（"help 文本以 `[Deprecated]` 开头的字段，`action` 字段不能是 `None`"）就能防止未来再出现这种"废弃标记只写在文档里、运行时不生效"的漂移，成本是一条几行的测试，收益是保证类文档字符串里的规则真被贯彻。
+- **命名空间 lint（`test/registered/unit/test_server_args_namespaces.py:44`-`50`）目前的下界断言是 `len(nsmap) >= 440`，而实际已经是 476/476 全覆盖。** 这个宽松下界大概率是历史遗留（当年还没完全覆盖时定的门槛，覆盖完之后没有跟着收紧成 `== len(fields)`），把它改成精确断言能防止未来新增字段"忘记补 `NS`"却因为总数仍然大于 440 而蒙混过关（本库推断，依据是当前源码已经全覆盖，`>= 440` 这个阈值不再是一个有效的守门条件）。
+
+
+===== 02-SGLang\10-SGLang-投机解码EAGLE.md =====
+## 7. 踩坑与反直觉
+
+1. **反直觉：高并发下投机解码常是负收益,SGLang 确实内置了自动关闭机制,但默认关闭且要满足一串前提。** 完整证据链：`--speculative-adaptive` 默认 `False`（`python/sglang/srt/server_args.py:2293`-`2297`）→ 打开后按批大小分档调整候选步数（`DEFAULT_ADAPTIVE_CONFIG`，`python/sglang/srt/speculative/adaptive_spec_params.py:22`-`47`）：
+
+   | 批大小档位 | `candidate_steps` | 能否降到 0（完全跳过草稿） |
+   |---|---|---|
+   | `"1"` | `[1, 3, 7]` | 否，最低也保留 1 步 |
+   | `"8"` | `[0, 1, 3]` | 是 |
+   | `"32"` | `[0, 1]` | 是 |
+   | `"64"` | `[0]` | 是，且**唯一候选值就是 0** |
+
+   批大小达到 64 这一档时,EMA 调节器能选的步数只有 0,没有任何机会回到正步数,除非批大小掉回更低的档位 → `num_steps=0` 时 `forward_batch_generation` 走 `_build_trivial_verify_input`（`python/sglang/srt/speculative/eagle_worker_v2.py:1206`-`1209`）→ 这个函数的文档字符串直接写"Used when `speculative_num_steps == 0` to skip drafting... functionally a plain decode"（`python/sglang/srt/speculative/eagle_worker_v2.py:1244`-`1250`）。但 `adaptive_unsupported_reason`（`python/sglang/srt/speculative/adaptive_spec_params.py:50`-`87`）同时要求：只支持 EAGLE/EAGLE3、`speculative_eagle_topk` 必须是 1、不能开 DP attention、不能开 multi-layer eagle、不能开 two-batch-overlap、不能开 pdmux——也就是说这套"高并发自动降级"机制,覆盖的其实是相对简单的部署形态,复杂部署形态下即使显式打开 `--speculative-adaptive` 也会在启动时被拒绝。
+2. **`_v2` 文件名后缀是历史包袱,别读成"v1 兼容层还在"。** `spec_registry.py` 的类文档明确写"the spec V1 worker path has been removed, so such algorithms run on the V2 scheduler schema"（`python/sglang/srt/speculative/spec_registry.py:37`-`40`）,`create_worker` 分派表（`python/sglang/srt/speculative/spec_info.py:254`-`306`）返回的类清一色带 `V2` 后缀（`EAGLEWorkerV2`、`MultiLayerEagleWorkerV2`、`DFlashWorkerV2`、`FrozenKVMTPWorkerV2`、`StandaloneWorkerV2`）,但目录里已经找不到任何非 `_v2` 版本可供对比——`_v2` 现在纯粹是命名遗留,不影响任何运行时行为判断。
+3. **KV 回收不是"逐轮 free",这一点最容易在读代码时想当然。** 直觉上"树里被拒绝的分支应该立刻把 KV 还回内存池",但实测证据链是：`_compact_accept_to_front` 的文档字符串自己承认"trailing unaccepted slots stay and are freed as overshoot"（`python/sglang/srt/speculative/eagle_worker_common.py:449`-`450`）——这里的"freed"指的是逻辑上不再被引用,不是立刻调用分配器的 free；真正调用 `allocator.free_segment` 归还物理槽位的 `_release_overallocated_kv_indices`（`python/sglang/srt/mem_cache/common.py:244`-`268`）只在请求结束的 `release_kv_cache`（`python/sglang/srt/mem_cache/common.py:198`-`241`）里触发。一个请求如果长期存活、每轮都有部分草稿被拒绝,这些"未提交但已分配"的物理页会一直挂在它的 `req_to_token` 行里,直到请求彻底结束才归还——不是内存泄漏（下一轮会覆盖写,数据不会累积增长）,但确实是"账面上看起来分配了但没用满"的常驻占用,如果拿 `nvidia-smi` 或显存统计工具去对"这个请求应该占多少 KV"做算术,不知道这条机制会算错。
+4. **`topk=1` 时 `speculative_num_draft_tokens` 会被强制覆盖,命令行传的值不一定生效。** `python/sglang/srt/arg_groups/speculative_hook.py:675`-`683` 在 `speculative_eagle_topk == 1` 且用户传的 `speculative_num_draft_tokens != speculative_num_steps + 1` 时,直接打日志警告并覆盖成 `speculative_num_steps + 1`——这条和 [[09-SGLang-ServerArgs旋钮全景]] 第 0 节第 4 条讲的"有一类旋钮设了也白设"是同一类现象在投机解码子系统里的具体案例。
+5. **DFLASH 虽然和 EAGLE 共享同一套 `speculative/` 目录、同一套 server_args 命名空间,但它的"验证"根本不是树。** `DFlashVerifyInput.topk` 字段的注释直接写"DFLASH verify is linear (non-tree)... always 1"（`python/sglang/srt/speculative/dflash_info.py:24`-`33`）——如果只看 `SpeculativeAlgorithm.is_eagle()` 之类的判定方法就以为"能过 `create_worker` 分派表这些算法都在做同一件事,只是模型架构不同",会漏掉这个根本性的结构差异（第 1 节和第 5 节第 4 条已经从"为什么独立成文件"的角度讲过这一点）。
+6. **`is_eagle()` 判定方法覆盖的范围比"用 EAGLE 那个 worker"更宽,读代码时容易误判。** `SpeculativeAlgorithm.is_eagle()` 对 `EAGLE`/`EAGLE3`/`FROZEN_KV_MTP` 三个成员都返回 `True`（`python/sglang/srt/speculative/spec_info.py:98`-`105`,注释里甚至留了一条 `FIXME` 说这是历史遗留，等调度器给 `FROZEN_KV_MTP` 建完独立支持就该去掉），但 `create_worker` 的实际分派顺序（1.1 节表格）会先检查 `is_frozen_kv_mtp()`（`python/sglang/srt/speculative/spec_info.py:275`），命中就返回 `FrozenKVMTPWorkerV2`，根本不会走到 `is_eagle()` 这个分支——也就是说 `is_eagle()` 这个方法名描述的是"这个算法在功能族群上算不算 EAGLE 家族"（供调度器/attention 后端做粗粒度特性开关），不是"这个算法用不用 `EAGLEWorkerV2`"，两者在 `FROZEN_KV_MTP` 这一个成员上会给出不一致的答案，读代码判断"这个 if 分支会不会命中 FROZEN_KV_MTP"时不能只看方法名。
+7. **本篇 4.1-4.3 节手工推演用的 `topk=2, num_steps=3, num_draft_tokens=6` 是为了画图方便手选的参数，不是任何架构的真实默认值。** 第 2 节已经给出真实默认值表：`LlamaForCausalLM`/`Grok1` 是 `(5,4,8)`，其余大多数架构是 `(3,1,4)`——按真实默认值 `(3,1,4)` 推演，`topk=1` 会直接退化成第 5 节第 1 条讲的纯链形态（`num_draft_tokens` 被强制等于 `num_steps+1=4`），不会出现候选池剪枝这种现象；只有显式配了 `topk>1`（比如 Llama 的默认档位，或手动传 `--speculative-eagle-topk`）才会触发本篇 4.1 节演示的动态剪枝行为——读者对照自己实际跑的模型架构时，先查 第 2 节的表确认自己是不是在 `topk=1` 档位，再决定要不要套用 4.1 节的推演逻辑。
+
+## 8. 可改进点
+
+1. **自适应机制目前只调"要不要展开、展开几步",没有联动 `topk`。** `adaptive_unsupported_reason` 强制要求 `speculative_eagle_topk in (None, 1)`（`python/sglang/srt/speculative/adaptive_spec_params.py:59`-`66`）,即自适应功能开启后树宽被锁死为 1（纯链）——EMA 只能在"链多长"这一个维度上调节,不能在"批大小上升时先收窄 topk 再收窄步数"这样更细粒度的代价曲线上调节。要支持 `topk` 联动,需要 `SpecRuntimeState` 预建的候选集从"一维步数列表"扩展成"`(steps, topk)` 二维网格",预建开销会显著增加,这也是为什么现状选择了只调一个维度——但这确实是一个没有被源码验证覆盖的假设,值得先用真实 profiling 数据验证"降 topk 比降 steps 更划算"是否成立,再决定要不要做。
+2. **`DEFAULT_ADAPTIVE_CONFIG` 的四档边界（1/8/32/64）是硬编码常量,不随目标模型或实测接受率自动插值。** `python/sglang/srt/speculative/adaptive_spec_params.py:22`-`47` 这张表对所有模型、所有硬件都是同一组默认阈值;不同模型的"接受长度随批大小衰减曲线"形状不一样（大模型通常比小模型在同样并发下衰减更慢,因为目标模型前向本身更贵、投机解码的相对收益窗口更宽）,用同一组硬编码阈值大概率不是所有场景下都恰好合适。`speculative_adaptive_config` 已经支持传自定义 JSON 覆盖（`python/sglang/srt/server_args.py:2298`-`2302`）,缺的是一条从"实测接受率曲线"到"生成这份 JSON"的工具链,目前只能手工调。
+3. **"预留窗口"里长期挂着的未提交 KV 页没有主动收缩机制。** 第 7 节第 3 条指出这些页只在请求结束时才归还;对于生成长度很长、且投机解码接受率长期偏低（比如输出进入了模型不擅长的领域,持续小步长命中）的请求,这个"应分配未提交"的常驻窗口会一直占着显存,直到整条生成结束。可以考虑在请求生命周期内定期（比如每 N 轮）主动做一次收缩判断——如果连续多轮 `num_correct_drafts` 都远低于 `speculative_num_steps`,主动把预留窗口收窄而不是保持满額预留。
+4. **CPU/NPU/HIP/XPU 后端目前一律走贪心验证核,非贪心采样在这些后端上退化成什么行为需要专门核实。** 第 5 节第 3 条已经指出 `eagle_sample` 的分支条件里这四种硬件后端被并进了 `is_all_greedy` 分支（`python/sglang/srt/speculative/eagle_utils.py:730`）——这是功能缺口还是有意为之（比如这些后端上非贪心投机解码本来就不被支持,上层已经拦掉）,本篇没有找到明确的上游文档说明,值得单独查证并把结论文档化,否则容易被误读成"这些后端上温度采样被静默改成了贪心"。
+5. **`_lab/struct_map.py` 目前不区分 `speculative/` 目录里"独立实现"和"继承 `EAGLEWorkerV2` 复用大半份代码"这两类文件。** 1.1 节的判断（`StandaloneWorkerV2`/`FrozenKVMTPWorkerV2` 是子类，`MultiLayerEagleWorkerV2`/`DFlashWorkerV2`/`DSparkWorkerV2`/`NGRAMWorker` 是独立实现）完全靠人工对每个文件 `grep "^class.*Worker"` 核对继承关系得出；如果 `_lab/struct_map.py` 能追加一遍"继承链深度"统计（一个 worker 类到 `BaseSpecWorker` 之间隔了几层、覆盖了基类的哪些方法），后续任何一篇涉及"这几个算法到底共享了多少代码"的判断都能省掉这一步人工核对，也能在新算法接入时自动标出"这是真复用还是又一次另起炉灶"。
+6. **本篇没有找到任何跨算法的等价性测试（比如同一个草稿分布，`topk=1` 走链式代码路径和 `topk=1` 走通用树代码路径退化后，两者的接受结果是否逐 bit 一致）。** 4.1 节末尾指出 `topk=1` 时 `organize_draft_results` 那套"全局候选池剪枝"逻辑其实是不需要的（链上没有分支可剪），但 `python/sglang/srt/arg_groups/speculative_hook.py:675`-`683` 的做法是强制改写 `num_draft_tokens`、仍然走同一套通用代码路径，而不是切到 `eagle_worker_v2.py` 里topk=1 专用的快速路径（`draft_forward` 里 `topk1_chain_fits` 分支，`python/sglang/srt/speculative/eagle_worker_v2.py:596`-`609`）——通用路径和快速路径理论上应该给出完全相同的建树结果，但本库没有在 `_lab/` 里发现覆盖这条等价性的测试脚手架，值得补一个"两条路径跑同一批随机种子、断言 `draft_token`/`custom_mask` 逐 bit 相同"的单测。
+
+
+===== 02-SGLang\11-SGLang-PD分离与HiCache分层.md =====
+## 7. 踩坑与反直觉
+
+1. **两个不同的 `mori`**：PD 分离传输后端里的 `mori`（`python/sglang/srt/disaggregation/mori/conn.py:302` 的 `MoriKVManager`）是 AMD 的 `mori.io` RDMA 引擎；HiCache L3 存储后端注册表里也有一个叫 `"mori"` 的选项，但它实际指向 `storage/umbp/umbp_store.py` 的 `UMBPStore`（`python/sglang/srt/mem_cache/storage/backend_factory.py:241`-`245`）——**两个完全不同的库，只是同名**，读代码或读日志时如果不看具体导入路径，很容易把二者当成同一个东西。
+2. **`get_transfer_engine_info`/`register_transfer_engine_info`/`init_weights_send_group_for_remote_instance` 这三个端点不是 PD-KV 传输的控制面**——它们属于“远程实例权重加载”功能（弹性扩缩容/热更权重场景），定义在 `python/sglang/srt/entrypoints/engine_info_bootstrap_server.py:51`-`52`/`:74`-`75` 和 `python/sglang/srt/entrypoints/http_server.py:1264`，传的是**模型权重**不是 KV cache（虽然它们也能选 `transfer_engine`/`nixl` 做搬运介质，`remote_instance_weight_loader_backend`，`python/sglang/srt/server_args.py:3338`）。真正 PD 握手用的端点是 bootstrap server 的 `/route`（`python/sglang/srt/disaggregation/common/conn.py:1660`），不经过 `entrypoints/http_server.py`。
+3. **`mooncake_tcp` 不是一个独立的后端类**——`python/sglang/srt/arg_groups/pd_disaggregation_hook.py:21`-`24` 在参数归一化阶段把它改写：设置环境变量 `MC_FORCE_TCP=1`，把 `disaggregation_transfer_backend` 直接改成 `"mooncake"`，并清空 `disaggregation_ib_device`。`TransferBackend` 枚举（`python/sglang/srt/disaggregation/utils.py:580`-`585`）里从始至终只有 `MOONCAKE` 一个成员对应这两个 CLI 选项。
+4. **`encoder/` 子目录不是 PD 的“第三种角色”，是另一条独立的轴**——`python/sglang/srt/server_args.py:3227`-`3268` 明确把它归在“Encode prefill disaggregation”（EPD，多模态编码器拆分）命名空间下，自成一套 bootstrap（`encoder_bootstrap_port` 默认 `8997`，`python/sglang/srt/server_args.py:3254`，和 PD 的 `disaggregation_bootstrap_port` 默认 `8998` 是两个不同端口），不复用 `PrefillBootstrapQueue`/`DecodePreallocQueue` 这套机制。
+5. **`hisparse` 与 `hicache` 是同名不同物**——`enable_hisparse` 控制的是“hierarchical **sparse attention**”（DeepSeek DSA/MiniMax 一类稀疏索引结构的层级），走独立的 `mem_cache/allocator/hisparse.py`/`hisparse_memory_pool.py` 和专用 kernel，与本篇讲的 `HiCacheStorage`/`HostKVCache` 完全不共用代码路径——两个“hierarchical”指的是不同维度的“层级”。
+6. **写入阈值目前是写死的常数**——`write_through_threshold` 只有 `1` 和 `2`两个可能值（`python/sglang/srt/mem_cache/hiradix_cache.py:207`），源码自己留了 `# todo: dynamically adjust the threshold`（`python/sglang/srt/mem_cache/hiradix_cache.py:206`）的注释，说明这不是一个经过充分调优的自适应机制，是一个先跑起来的粗糙代理。
+7. **`_evict_write_back` 这条驱逐路径源码自己标注了将被弃用**（`python/sglang/srt/mem_cache/hiradix_cache.py:1233`）——读代码时如果看到这条路径的实现细节和 `_evict_write_through` 明显不对称（前者会现场触发写入，后者不会），不要当成两条对称设计的分支来理解，它们目前处于一个过渡态。
+8. **不要只在 `python/sglang/srt/disaggregation/` 里找“路由/负载均衡”，那里没有**——Python 侧确实没有 `mini_lb`/`router` 之类的文件，真正做“给这个请求选哪一对 prefill/decode worker”的是独立的 Rust crate `sgl-model-gateway`（§1、§5.6）。如果只读 Python 代码库就下结论“SGLang 的 PD 分离没有中心路由，靠客户端自己选”，是不准确的——路由确实存在，只是不在你以为的那个目录、那个语言里。
+
+## 8. 可改进点
+
+1. **`write_through_threshold` 可以按 §5.5 的公式结构做成自适应**——源码自己承认目前是写死的 `1`/`2`（`python/sglang/srt/mem_cache/hiradix_cache.py:206`）。**本库推断**：一个成本可控的中间方案是把命中次数阈值和“这段前缀的 token 数”联合起来判断（短前缀即使命中一次也不值得写，因为重算比 PCIe 往返还快），而不是对所有长度的前缀用同一个命中次数门槛——这正是 §5.5 解析计算想说明的：admission 判据目前完全没有用到 `cell_size`/带宽这类已经在代码别处存在的量。
+2. **`hicache_storage_prefetch_policy=best_effort` 缺一个反馈机制**——当前 `can_terminate_prefetch` 在 `best_effort` 下永远立即放行（`python/sglang/srt/mem_cache/hiradix_cache.py:1587`-`1588`），如果某次预取因为放行太早而“白预取”（数据还没到就已经决定不等了），这次浪费不会反馈回策略选择，下一次同样场景还是立即放行。**本库推断**：可以在 `PrefetchOperation` 里记一个“放行时实际完成比例”的滑动统计，供后续动态在 `best_effort`/`timeout` 之间切换，但这需要改动 `cache_controller.py` 的核心统计结构，具体实现成本本篇未评估。
+3. **GPU 驱逐与 Host 驱逐的独立触发（§5.4）在 host 长期紧张时会退化成“反复分配失败→反复 `evict_host`”的抖动**——`write_backup` 分配失败时现场 `evict_host` 再重试（`python/sglang/srt/mem_cache/hiradix_cache.py:855`-`858`）这条路径没有对“最近是否刚驱逐过”做任何节流。**本库推断**：加一个简单的冷却窗口（比如“刚触发过 `evict_host` 的若干毫秒内，同一层级的新写入请求直接走 `write_through` 的降级路径而不是立刻再触发一次驱逐”）可以减少这种抖动，但会引入新的旋钮和新的边界情况，属于长期方向而非可以立刻提 PR 的改动。
+4. **PD 传输后端处理“prefill/decode TP size 不一致”这件事目前每个后端各写一遍**（§6 与 vLLM `canonical_mapping.py` 的对照）——`NixlKVManager` 的 `_init_equal_tp_prep_handle`/`_init_hetero_tp_prep_handle`/`_init_mixed_equal_tp_prep_handles`（`python/sglang/srt/disaggregation/nixl/conn.py:725`/`760`/`917`）这套逻辑，Mooncake/ascend/mori 各自的 conn.py 里也要重新面对一次。**本库推断**：把“给定 prefill TP size 和 decode TP size，一段 KV 的物理槽位该怎么切分给对应的 decode rank”这个纯几何计算抽成一个后端无关的公共函数（放进 `common/conn.py` 或 `common/utils.py`），能减少这类 TP 映射 bug 在多个后端里各自出现一次的风险，但需要先确认几个后端目前的实现细节是否真的等价（本篇未逐行核对这一点，具体是否能直接抽取需要专门核对）。
+
+
+===== 03-其他引擎\01-TensorRT-LLM.md =====
+## 7. 踩坑与反直觉
+
+1. **`attn_backend` 默认值就叫 `"TRTLLM"`,但它不是被移除的那个 TensorRT engine 后端。**`tensorrt_llm/llmapi/llm_args.py:5314`-`5321` 的 `attn_backend: str = Field(default='TRTLLM', ...)`,对应 `tensorrt_llm/_torch/attention_backend/trtllm.py:1396` 的 `class TrtllmAttention(AttentionBackend[...])`,内部通过 `torch.ops.trtllm.*`(比如 `tensorrt_llm/_torch/attention_backend/trtllm.py:2202` 的 `torch.ops.trtllm.mla_rope_append_paged_kv_assign_q`)调用 TRT-LLM 自家 CUDA/cutlass kernel 库(`libtensorrt_llm.so`)。这是一个**纯粹的命名巧合陷阱**:"TRTLLM"在这里是一个 PyTorch 自定义算子后端的名字,和已经被删除的"TensorRT engine 编译后端"没有任何关系,读代码/读配置时很容易被这个字符串带回旧印象。
+2. **在 `_check_arguments` 里能看到"两个时代"的代码并存,但只有一半可达。**`tensorrt_llm/llmapi/llm.py:1571`-`1636` 这整个方法前半段(pytorch/`_autodeploy` 分支,`1575`-`1584`)和后半段(读 `build_config` 的旧逻辑,`1586`-`1630`)物理上写在同一个方法体里,后半段引用的 `self.args.build_config` 在 `TorchLlmArgs`/`AutoDeployLlmArgs` 上根本不存在——这是"死代码不等于代码被删除"的一个具体样本,`_verify.py` 式的静态检查工具不会告诉你这一点,只有跟着分支逻辑走一遍才知道。
+3. **CLI 里 `--backend` 选项本身被标了 `status="deprecated"`**(`tensorrt_llm/commands/serve.py:952`),而不是只有 `_autodeploy` 这个取值被弃用——说明项目的长期方向是连"选择 backend"这个动作本身都可能被收掉(将来只剩 pytorch 一条路,不需要选)。
+4. **CUDA Graph 捕获默认开着,但每个捕获的 batch size 桶要占用到 200MB 显存。**`tensorrt_llm/llmapi/llm_args.py:5180`-`5188` 的字段说明原文:"Note that each CUDA graph can use up to 200 MB of extra memory"——这不是免费的默认行为,`cuda_graph_config.batch_sizes` 配置的桶越多,静态占用的显存越多,这个代价在配置项的 docstring 里就写明了,不用等到 OOM 才发现。
+5. **"60 条路由"这个数字如果不看源码,很容易被误解成"这个服务有 60 个能力"。**实际上任何一个 `trtllm-serve` 进程按角色最多暴露其中一组(`## 2.1`),标准聚合服务只有 20 条。`_lab/api_surface.json` 的静态扫描口径(AST 扫全仓库 `add_api_route` 调用)对"这个仓库支持多少种 HTTP 行为"是准确的,但对"某一个具体部署暴露多少接口"是一个上界,不是实际值——这条经验对本库其它篇目统计"路由数"时同样适用,拿到一个数字先确认它是静态扫描口径还是运行时口径。
+6. **`docs/source/legacy/` 目录本身就是一份"removal 有多彻底"的证据**——这个目录下有 29 个 `.md` 文件(`find docs/source/legacy -name "*.md" | wc -l` 数出来的),其中至少 6 个文件直接含有"legacy TensorRT backend has been removed"或 caution 警告文本(grep 口径,数值会随措辞变化略有出入,但量级说明这不是一两个孤立页面的事)。这些文档没有被物理删除,而是整体搬进了一个明确标注"仅供交叉引用"的子目录——是本篇反复强调的"移除≠物理删干净,但入口分支已经不可达"这条原则在文档层面的对应物。
+7. **`_to_pybind()` 这个方法名是另一处命名遗留**(`## 3.5`)——TRT-LLM 的 C++ 绑定技术已经从 pybind11 迁移到了 nanobind(`cpp/tensorrt_llm/nanobind/` 目录,`## 2` 已引用其中两个文件;仓库里已经找不到 `cpp/tensorrt_llm/pybind/` 目录),但配置类里转换到 C++ 枚举的方法还叫 `_to_pybind`,不是 `_to_nanobind`。这是纯粹的历史命名惯性,不影响功能,但和 `## 7` 踩坑 1 的 `attn_backend='TRTLLM'` 是同一类陷阱——字符串/方法名没有跟着底层实现的变迁而更新,读代码时不能望文生义。
+
+## 8. 可改进点
+
+1. **清理 `_check_arguments` 里已不可达的 `build_config` 分支**(`tensorrt_llm/llmapi/llm.py:1586`-`1630`)。既然 `backend` 已经在方法入口处收窄成只有两个可达取值,这段代码除了增加阅读负担和误导("`self.args.build_config` 看起来像是一个存在的属性")之外没有实际作用,可以直接删除或改成一个明确的 `assert False, "unreachable: legacy engine path removed"`。
+2. **`LlmBuildStats` 里的 `engine_dir`/`cache_hitted` 字段命名具有误导性**(`tensorrt_llm/llmapi/llm_utils.py:466`、`474`)——字段名和注释都在说"engine",但当前唯一可达路径下这两个字段永远是默认值,不会被赋值。如果保留是为了向后兼容序列化格式,至少可以在字段旁补一行注释说明"pytorch/`_autodeploy` 路径下恒为默认值,仅为兼容历史序列化格式保留"。
+3. **文档层面,`attn_backend='TRTLLM'` 这个默认值容易和已移除的 TensorRT engine 后端混淆**(见 `## 7` 踩坑 1)——`tensorrt_llm/llmapi/llm_args.py:5314`-`5321` 的字段 description 目前只写"Attention backend to use.",可以补一句明确区分"这是一个 PyTorch 自定义算子内核族的名字,与已移除的 TensorRT engine 编译后端无关"。
+4. **`api_surface.json` 这类静态扫描工具的输出,建议加一个"互斥分组"标注**(对应 `## 7` 踩坑 5)——`_lab/api_surface.py` 目前把 `add_api_route` 调用当成扁平列表抽取,如果能顺带记录"这条路由是在哪个 `register_*` 方法里、这个方法是否受 `if/elif` 互斥分支保护",下游做跨引擎对比时就不会拿一个上界数字当实际运行时数字用——这个改进不需要改 TRT-LLM 上游代码,只需要改本库 `_lab/api_surface.py` 的抽取逻辑,属于本库自己能落地的部分。
+5. **`_to_pybind()` 方法名可以在下一次涉及绑定层的重构里顺手改成中性名字**(比如 `_to_cpp_enum()`),消除`## 7` 踩坑 6 里描述的命名惯性——这是一个典型的"低风险、高可读性收益"的小改动,不涉及行为变化,适合和其它清理工作捆绑提交(`AGENTS.md` 明确写了"No low-value busywork PRs"的类似原则,单独为改名开 PR 大概率不划算,但可以搭车)。
+6. **`KvCacheConfig.sink_token_length`(`## 3.8`)这类"deprecated and ignored"字段,建议和 `## 5` 决策 2 的 `build_config` 清理一起批量盘点**——两者是同一类技术债(功能移除后字段留存),分别在配置系统的两个不同角落独立出现,说明这不是孤立的一次疏漏,而是这个代码库在快速移除功能时的一贯做法。与其逐个发现逐个修,不如写一个一次性的静态检查脚本,扫描所有 `description` 里含 "deprecated"/"removed"/"ignored" 字样但字段类型本身没有标 `status="deprecated"` 的情况,统一补上 status 标注——这比人工一个个找更不容易漏。
+
+
+===== 03-其他引擎\02-LMDeploy与TurboMind.md =====
+## 7. 踩坑与反直觉
+
+1. **传了 `TurbomindEngineConfig` 不代表一定用 TurboMind。** `autoget_backend_config()`(`lmdeploy/archs.py:72`-`91`)只在检测到 `PytorchEngineConfig` 时硬锁,`TurbomindEngineConfig` 仍要过一遍架构白名单核验,不支持就静默换成 pytorch,字段值搬过去,只留一行 warning。第一次读代码容易以为"传对象类型 = 选定后端",实际上只有一个方向(锁定 pytorch)成立。
+
+2. **`TURBO_QUANT` 这个名字最容易让人以为它是 TurboMind 专属。** 恰恰相反,`src/turbomind/` 全目录搜不到 `TURBO_QUANT`/`TurboQuant`/`QJL4` 任何字样,它只在 `lmdeploy/pytorch/kernels/cuda/fill_kv_cache.py` 里有实现。配置层的 `QuantPolicy` 枚举定义(`lmdeploy/messages.py:20`-`27`)对两个后端一视同仁,但真正的算子实现完全不对称。
+
+3. **PD 分离(`/distserve/*`)的路由注册和后端能力可能对不上。** `lmdeploy/serve/openai/endpoints/distserve.py:16`-`31` 的 `engine_info()` 读取 `engine_config.dp_rank`/`engine_config.block_size`/`engine_config.num_cpu_blocks`/`engine_config.num_gpu_blocks`——这四个字段全部只存在于 `PytorchEngineConfig`,`TurbomindEngineConfig` 的 42 个字段里没有一个同名项(TurboMind 用的是 `cache_block_seq_len`/`cache_chunk_size`,没有显式的 `num_cpu_blocks`/`num_gpu_blocks`,也没有 `dp_rank`)。这组端点在通用 `api_server` 里对所有后端一视同仁地注册,**但源码读出的字段只对 pytorch 后端存在**——`lmdeploy/serve/core/async_engine.py:232` 里 `dp_rank = self.backend_config.dp_rank if self.backend == 'pytorch' else 0` 这一行本身就是对这层不对称的显式补丁。**本库推断**:若用 TurboMind 后端起服务并调用 `/distserve/engine_info`,大概率会在读取 `dp_rank` 等属性时抛 `AttributeError`,但**未实测验证**(本机无 GPU,无法真正跑一次这个组合)。
+
+4. **推测解码明确"turbomind 不支持",但配置层不拦截。** `lmdeploy/serve/core/async_engine.py:145`-`146` 的判断是 `if speculative_config is not None and backend == 'turbomind': logger.warning('speculative decoding is not supported by turbomind ')`——只警告,不报错,也不强制切换后端。用户传了 `speculative_config` 又用 TurboMind,大概率是"配置被静默忽略",而不是"程序拒绝执行"。
+
+5. **KV cache 量化"零校准"不等于"没有精度代价"。** `warp_stats()`(`src/turbomind/kernels/attention/quantization.h:341`-`366`)在一个 warp 范围内(几十个 token 量级)现算 min/max——统计窗口天然比全量校准集小得多,离群值更容易把 scale 拉宽、压缩有效量化区间。本篇没有做也不会做精度实测(本机无 GPU),只从源码结构指出:**"零校准"是"部署简单"和"统计窗口小"之间的权衡,不是免费的**。
+
+6. **`--quant-policy` 的 CLI 帮助文本列出了全部 6 个选项，但选了其中 3 个在默认后端下会直接报错，而不是被忽略。** `lmdeploy/cli/utils.py:276`-`278` 的帮助文本写着 "none/int4/int8/fp8/fp8_e5m2/turbo_quant"，这个参数同时挂在 `pt_group` 和 `tb_group` 下（`lmdeploy/cli/serve.py:133`/`:159`），字面上像是"六选一,哪个后端都能用"。实际上默认后端是 `turbomind`（`## 4` ①），如果用户选了 `fp8`/`fp8_e5m2`，`TurbomindEngineConfig.__post_init__`（`lmdeploy/messages.py:355`-`358`）会直接 `raise AssertionError`——这是本篇少数几个"配置层就能报错"的例子，反而比 `TURBO_QUANT` 那种"配置层放行、执行层可能才出问题"的情况更安全，但对第一次读帮助文本的用户来说，仍然是"文本说能用，实际不能用"的落差。
+
+7. **`_lab/out/struct_map.json` 的 kv_cache/quantization 子系统统计口径完全看不见 C++ 代码。** `struct_map.py` 基于 Python AST 解析,`kv_cache` 子系统统计到的 5,180 行、`quantization` 子系统统计到的 8,419 行,全部落在 `lmdeploy/pytorch/` 下——`src/turbomind/kernels/attention/quantization.h` 这类 C++ 头文件不进这个统计。读这两个数字时容易误以为"LMDeploy 的量化代码主要在 pytorch 里",实际只是统计工具的语言盲区,C++ 侧同样有一整套独立的量化实现,只是没被这个特定脚本数进去。
+
+## 8. 可改进点
+
+(以下均为本库基于源码走读的推断,标注证据依据;**未核实**是否已有官方 issue 在跟踪。)
+
+这五个改进点有一条共同的主线:它们几乎都指向同一个根因——**双引擎带来的分裂,目前主要靠"人读源码/读日志"去弥合,而不是靠工具/接口本身显式暴露**。选型降级靠一行日志、量化能力靠源码走读才能确认边界、PD 分离端点的后端假设完全隐式、两套量化 kernel 靠人工保证数学等价。这不是说这些设计决策本身错了(`## 5` 已经逐条讲过每个决策的合理性),而是说"把分裂留在配置对象和执行层、不让它渗到用户直接打交道的表面"这个策略(`## 1` 已经点出这个策略),需要配一套"当分裂真的影响到用户时,让用户能显式看见它"的机制——目前这套机制基本不存在。
+
+**改进点 1:引擎选型缺一个"strict"模式**
+- 现状:`autoget_backend_config()`(`lmdeploy/archs.py:54`-`91`)遇到不支持的架构总是静默降级,唯一线索是一行 `logger.warning`。
+- 影响:性能敏感场景下,用户可能一直以为自己用的是 TurboMind,直到某天检查启动日志才发现请求全程跑在 pytorch backend 上——这类"性能预期落空"的问题排查成本很高,因为服务本身运行正常,不会报错、不会崩溃。
+- 建议方向:加一个 `strict_backend: bool` 之类的开关,设为真时,`TurbomindEngineConfig` 遇到不支持的架构应该直接抛异常而不是降级——把"要不要接受降级"的决定权交还给调用方。
+
+**改进点 2:`quant_policy` 的配置层校验和执行层能力没有对齐**
+- 现状:`TurbomindEngineConfig.__post_init__`(`lmdeploy/messages.py:352`-`358`)只拦截了 `FP8`/`FP8_E5M2`,没有拦截 `TURBO_QUANT`(42)——而 `src/turbomind/` 全目录没有任何 `TURBO_QUANT` 相关实现。
+- 影响:用户在 TurboMind 后端设置 `--quant-policy turbo_quant` 能通过配置构造阶段的校验,失败会发生在更晚、更难定位的地方(`## 5` 决策 4 已展开,**未查证**具体报错形式)。
+- 建议方向:`TurbomindEngineConfig.__post_init__` 的黑名单应该和 C++ 侧实际支持的 `quant_policy` 取值同步维护,理想情况下由一个共享的"每个后端支持哪些 QuantPolicy"的映射表驱动,而不是在 Python 配置类里手写排除项。
+
+**改进点 3:`/distserve/*` 端点的后端假设没有在路由注册层显式声明**
+- 现状:`lmdeploy/serve/openai/endpoints/distserve.py` 的端点无条件注册进通用 `api_server`,内部却直接访问只有 `PytorchEngineConfig` 才有的字段(`## 7` 踩坑 3)。
+- 影响:TurboMind 后端的用户理论上能在 API 文档/OpenAPI schema 里看到这些端点,调用后才发现不可用——这是一种"文档可见但实际不可用"的接口设计,容易造成困惑。
+- 建议方向:在路由注册阶段按 `backend` 条件性挂载这组端点(FastAPI 支持基于条件动态 `include_router`),或者至少在 `engine_info()` 里对非 pytorch 后端提前用一个明确的 4xx 错误替代 `AttributeError`。
+
+**改进点 4:两套 KV 量化 kernel(CUDA C++ / Triton)没有共享的正确性对拍**
+- 现状:`src/turbomind/kernels/attention/quantization.h` 的 `warp_stats`/`quantize` 和 `lmdeploy/pytorch/kernels/cuda/fill_kv_cache.py` 的 `_quant_int8`/`_quant_int4` 各自独立实现同一套"非对称 min/max 量化"数学,分属两种 kernel 语言。
+- 影响:数学逻辑的任何一次修正(比如量化舍入方式、饱和边界处理)都需要在两处分别改、分别测——本篇没有找到任何脚本或测试用例交叉比对两个后端在相同输入下的量化输出是否一致(**未查证**是否存在,只是没在 `tests/` 目录下看到明显对应的对拍测试)。
+- 建议方向:哪怕不合并实现,至少加一组"同一 KV 张量输入,分别过两个后端的量化路径,比对反量化误差是否落在同一量级"的测试,把"两边应该数学等价"这条隐性假设显式测出来。
+
+**改进点 5:`autoget_backend()` 的探测结果没有被缓存或暴露成可查询的诊断信息**
+- 现状:`autoget_backend()`(`lmdeploy/archs.py:10`-`51`)每次调用都要重新读一遍模型的 HuggingFace config、重新判断架构是否在白名单里,结果只体现为一次性的返回值和一行 `logger.warning`,调用方(`pipeline()`/CLI)拿到结果之后就不再保留这次判断的过程性信息(比如"因为 `quant_method=smooth_quant` 被拒绝"还是"因为架构名根本不在白名单里"这两种不同的拒绝原因,在 `is_supported()` 内部是分开判断的,`lmdeploy/turbomind/supported_models.py:66`-`68` 与 `:70`-`71`,但外部只看到一个布尔值)。
+- 影响:排查"为什么我的模型没有走 TurboMind"时,用户只能靠翻启动日志里的一行 warning,拿不到更细的原因分类;如果日志被截断或没保留,连"降级发生过"这个事实本身都可能丢失。
+- 建议方向:可以考虑让 `is_supported()` 返回一个带原因的结构(而不是纯布尔值),`/health` 或类似的诊断端点里暴露"当前实例实际选用的后端 + 选择原因",而不是只能通过读日志或者对着 `engine_config` 的字段猜。
+
+
+===== 03-其他引擎\03-TGI.md =====
+## 7. 踩坑与反直觉
+
+**"5 个月没提交"是 `git log` 的事实，"进入维护模式"是上游自己的公开声明**——两者不是一回事，本篇分开摆：
+
+- 快照 `b4adbf2f` 停在 2026-03-21，本库抓取日 2026-08-22，中间 5 个月没有新提交，这是可以用 `git log` 复现的客观事实；
+- 与此同时，`README.md` 顶部用 GitHub 的 `[!CAUTION]` 告示框写着（**文档所述**，`README.md:2`）：「text-generation-inference is now in maintenance mode. Going forward, we will accept pull requests for minor bug fixes, documentation improvements and lightweight maintenance tasks.」，紧接着一句（`README.md:4`）点名现在推荐用 vLLM、SGLang，以及 llama.cpp/MLX；
+- 这两句话是项目方自己写的，不是本库的推断——本篇不据此再往前多说一句"已经过时"，只是把这两处原文和它们的行号钉在这里，留给读者自己判断这句声明和实际的 issue/PR 活跃度是否吻合；
+- **未查证**：本库没有网络权限去核对 GitHub 上 2026-03-21 之后是否仍有 issue 回复或 PR 合并，只核实了本地快照里 README 文案本身。
+
+**统计工具在 TGI 身上系统性失灵，而不是碰巧算少了**——`_lab/struct_map.py` 的子系统关键词表是给 12 个引擎共用的同一把尺子，对大多数引擎（Python 为主、文件名多带 `scheduler`/`sched`）是好用的，但 TGI 恰好在两个地方撞上了这把尺子的盲区：
+
+- ① `entrypoint` 桶收 `"server"` 这个关键词，TGI 恰好把自己的顶层目录取名叫 `server/`，导致几乎全部 98,255 行 Python 产品码都落进这一个桶（`## 2` 已用 `_classify()` 直接复核）；
+- ② `scheduler`/`kv_cache` 桶要靠 `scheduler`/`radix_cache`/`block_manager` 这类关键词命中，TGI 把对应文件分别取名 `queue.rs`/`radix.rs`/`block_allocator.rs`，一个都不命中，于是这两个桶报出的数字和 TGI 真实的调度/前缀缓存代码量几乎没有关系；
+- **这条踩坑值得记住的不是"TGI 代码少"，是"跨引擎统计工具的关键词表本身携带了对某一类引擎命名习惯的隐性假设"。**
+
+**测试比例 0.108 只覆盖了半个语言**——`_lab/repo_stats.py` 判定一行 Python 是不是测试代码，靠的是路径里有没有 `test`（`_lab/repo_stats.py` 第 94 行），这条规则完全没有考虑 Rust 的 `#[cfg(test)]` 惯例：
+
+- 直接 grep 出 `router/`、`backends/`、`launcher/` 三个目录下共 9 个文件带 `#[cfg(test)] mod tests` 块（`router/src/chat.rs`、`router/src/config.rs`、`router/src/infer/chat_template.rs`、`router/src/lib.rs`、`router/src/validation.rs`、`router/src/vertex.rs`、`backends/v2/src/queue.rs`、`backends/v3/src/queue.rs`、`backends/v3/src/radix.rs`），共 71 个 `#[test]`/`#[tokio::test]` 函数；
+- 最集中的例子就是本篇反复引用的 `backends/v3/src/queue.rs`：文件总长 836 行，`mod tests` 从第 560 行开始一直到文件结尾，**近 33% 的篇幅是测试**，包括直接针对 `## 4` 走读过的预算记账逻辑写的 `test_next_batch_token_budget`/`test_queue_next_batch_token_budget`；
+- 这些行一行都没有计入 0.108——所以这个数字准确的说法是"Python 产品码里测试占比 10.8%"，不是"TGI 测试覆盖薄弱"，两者不能划等号。
+
+**第二大"语言"其实是测试快照，不是代码**——`_lab/out/repo_stats.json` 里 JSON 是 TGI 全库按行数排第二大的"语言"，44,355 行、206 个文件，仅次于 Python：
+
+- 直接数一下这些 JSON 文件都在哪：`integration-tests/` 目录下就有 203 个（占全库 JSON 文件数的 98.5%），加起来 37,890 行，占全部 JSON 行数的 **85.4%**；
+- 这些不是配置文件，是 pytest 快照测试的黄金输出（每个模型跑一次生成，把结果存成 JSON，后续跑测试时逐字段比对）——`repo_stats.py` 的语言统计只按扩展名分桶，不区分"这份 JSON 是配置还是测试夹具"；
+- 所以这部分体量可观的测试基础设施，既没有算进 `## 0` 提到的 0.108 测试比（那个比只数 `.py`），也不会被误当成"产品配置"去解读；
+- 这是本篇反复强调的同一条教训的第三个例子：**任何一个跨引擎统计口径，一旦拿某个引擎的具体文件命名/组织习惯去检验，都可能暴露出新的盲区。**
+
+**`compat_generate` 是活着的历史化石**：
+
+- `router/src/server.rs:126` 这个函数存在的唯一理由是兼容一个更早的、非 OpenAI 形状的 HuggingFace Inference API 响应格式（返回值要包一层 `Vec`）；
+- 今天它仍然挂在最显眼的根路径 `POST /` 上（`router/src/server.rs:2204`），排在路由表的第一条，比 `/v1/chat/completions`（`router/src/server.rs:2207`）还靠前；
+- 这是一处直接能在代码里读出来的"协议演化痕迹"：先有专用 API，后补 OpenAI 兼容层，两层至今并存，谁都没有被移除。
+
+---
+
+## 8. 可改进点
+
+1. **`launcher` 默认只知道怎么拉起 v3 后端**：`launcher/src/main.rs:1975` 硬编码 `Command::new("text-generation-router")`，而只有 `backends/v3/Cargo.toml:12-13` 的 bin target 恰好取了这个名字；`backends/llamacpp/Cargo.toml` 的 crate 名是 `text-generation-router-llamacpp`（产出的二进制名字不同），`backends/trtllm/Cargo.toml` 的 crate 名是 `text-generation-backends-trtllm`（本身是 lib，自己另有 `main.rs` 构建独立二进制）。这意味着统一的 `launcher` 目前实际只能真正驱动 v3 一种后端，其余后端要跑起来需要绕开 `launcher` 自己拼命令行。如果这是有意为之（v3 是唯一"一键路径"，其余是需要手动接线的 opt-in），值得在 `launcher --help` 或顶层 README 里显式写明——现在这条边界只能靠读源码才能确认。
+2. **本库自己的 `_lab/struct_map.py` 关键词表该扩一版**（这是本库工具的问题，不是 TGI 上游的问题，但因为本篇高度依赖它才发现，顺手记在这里）：`SUBSYSTEMS` 字典（`_lab/struct_map.py` 第 34-45 行）应该加入 `queue`/`radix`/`block_alloc` 这几个关键词，否则任何一个像 TGI 这样把调度器文件直接命名成 `queue.rs`（而不是随大流叫 `scheduler.py`）的引擎，都会被这把尺子系统性漏统计。以后接入新引擎时，应该先用 `## 2` 里演示的方式跑一遍 `_classify()` 对着该引擎的几个关键文件名做一次自测，而不是直接相信 `out/struct_map.json` 的数字。
+3. **v2/v3 的能力差异只能靠读源码确认**：`backends/v2/src/queue.rs` 和 `backends/v3/src/queue.rs` 都实现同一个 `Backend` trait、都能被 `launcher` 拉起，但前者没有 chunked prefill、没有前缀缓存（`## 1`/`## 5` 决策 4 已用 grep 验证），这个能力差是运维和评估人员选型时的关键信息，目前没有出现在任何一处面向用户的文档表格里——一个从 v2 切到 v3（或者反过来，出于稳定性考虑退回 v2）的用户，只能靠翻两份 Rust 源码逐行比对才能知道自己会失去什么。
+4. **README 的维护模式声明留了一个没说清的问题**：`README.md:2` 用词是"lightweight maintenance tasks"，没有明确这是否包含安全补丁——对一个自称"Used in production at Hugging Face"（`README.md:21`）的项目，这行文案没有回答"现在还能不能提安全漏洞修复的 PR、大概多久会被合并"这个实际问题。本库不代替上游回答，只指出这处文案本身存在歧义，值得上游用一句更明确的话补上。
+
+---
+
+
+===== 03-其他引擎\04-LightLLM.md =====
+## 7. 踩坑与反直觉
+
+- **"360 个文件缺失"不是网络问题，是这套自动调优机制的命名方式本身在 Windows 上不可行。** 缺失清单（`.clone_skipped.txt`）全部落在 `all_kernel_configs/<kernel_name>/` 或 `autotune_kernel_configs/<triton_version>/<device>/<kernel_name>/` 目录下，其中不少 `kernel_name` 自带版本号且用冒号分隔（如 `"moe_sum_reduce:v1"`，`lightllm/common/basemodel/triton_kernel/fused_moe/moe_sum_reduce.py:64`），`os.path.join` 把它直接拼进目录名（`lightllm/common/triton_utils/autotuner.py:213`-`217`）——这在 Linux/macOS 上完全合法，在 Windows NTFS 上冒号是驱动器盘符的保留字符，目录创建/checkout 直接失败。`setup.py:3` 的 `package_data` 还把这两套目录声明为要打进发布包的数据文件，说明这不是临时产物，是这个项目预期会被分发、被用户在自己机器上直接落盘的东西——如果哪天有用户在 Windows 上尝试从源码安装 LightLLM，会撞上和本库 clone 时一样的问题。
+- **"0 个 CUDA 文件"不等于"完全不用 CUDA 能力"。** `CudaGraph` 类（`lightllm/common/basemodel/cuda_graph.py:21`）用的是 `torch.cuda.CUDAGraph()`（`:89`、`:125`）——这是 PyTorch 官方 Python API，不是手写的 `.cu`/`.cuh` 源文件，所以不计入"CUDA 文件"这个统计口径，但 CUDA Graph 捕获/回放这个 GPU 特性本身完全在用（对应 CLI 开关 `--disable_cudagraph`、`--graph_max_batch_size` 等，`lightllm/server/api_cli.py:579`-`620`）。"全 Triton"准确的说法是"不写手工 CUDA/C++ 源码"，不是"不接触任何 CUDA 特性"。
+- **`_lab/out/struct_map.json` 里 `scheduler` 和 `speculative` 两个子系统显示 0 行，不代表 LightLLM 没有调度器和投机解码。** 调度逻辑真实存在于 `router/manager.py`（`_step`、`loop_for_fwd` 等）和 `router/req_queue/*.py` 里，投机解码对应 `--mtp_mode`/`--mtp_draft_model_dir`/`--mtp_step` 三个 CLI 开关（`lightllm/server/api_cli.py:733`-`756`）——这套关键词+AST 的子系统识别脚本按文件名/类名模式匹配，LightLLM 恰好没有叫 `scheduler.py`、`speculative*.py` 这类"标准命名"的文件，于是被计成了 0。读这类自动化统计产物时，**先确认识别口径再下"不存在"的结论**，这条本身也适用于本库其他篇目的类似数字。
+- **"轻量"说的是实现方式，不是接口面积。** README 用"lightweight"形容自己（`README.md:18`），但 `_lab/out/api_surface.json` 的 `summary` 显示 29 条路由（22 个去重路径）、142 个 CLI 开关——CLI 开关数量甚至超过一些"重"引擎的量级。"轻量"准确指向的是"纯 Python + Triton、没有 C++ 扩展编译步骤"这件事本身，不是功能范围小。
+- **`StartArgs` dataclass 的默认值从未真正参与运行时取值。** `lightllm/server/api_server.py:36` 先用 `argparse` 的 `parser.parse_args()` 解析命令行（默认值来自 `api_cli.py` 里各个 `field(default=...)`/`add_argument(default=...)`），再用 `StartArgs(**vars(args))`（`lightllm/server/api_server.py:38`）把解析结果**逐字段**灌进 dataclass 构造函数——也就是说只要 `argparse` 那边成功解析出了一个值（哪怕是它自己的 `default`），`StartArgs` 字段声明里写的 `default=...` 就完全不会被用到，它的实际作用只是给类型标注和 IDE 补全提供信息。如果两处默认值出现不一致，不会有任何运行时报错，只会让读代码的人（以为默认值是 dataclass 里写的那个）和实际跑起来的行为（以 `argparse` 侧为准）产生认知偏差。
+
+## 8. 可改进点
+
+以下几条标注为**本库推断**，未提交 issue/PR 核实维护者是否已在计划中：
+
+1. **自动调优缓存目录名不要用冒号做版本分隔符。** `"moe_sum_reduce:v1"` 这类 `kernel_name` 一旦拼进目录路径（`lightllm/common/triton_utils/autotuner.py:213`-`217`），就在 Windows 上不可用。换成 `moe_sum_reduce__v1` 或者把版本号单独作为路径的一层（`.../moe_sum_reduce/v1/...`）而不是拼进字符串，能在不改变功能的前提下解决跨平台 checkout 问题——这条本篇是亲身撞到的，不是理论推测。
+2. **`StartArgs` dataclass 与 `api_cli.py` 的 `argparse` 定义应该有单一真源。** 目前两处各自维护 142 个开关的名字、默认值、`choices`，`## 7` 已指出不一致时不会报错、只会造成认知偏差——可以考虑从 `argparse` 的 `ArgumentParser` 对象反射生成 dataclass 字段，或者反过来从 dataclass 的 `field(metadata=...)` 生成 `add_argument` 调用，二选一，但不要两份手工同步的独立声明。
+3. **两套自动调优缓存机制（`KernelConfigs` vs `Autotuner`）建议给出显式的迁移路线图或至少一份转换脚本。** 目前从代码里能看到"新 kernel 用新机制、旧 kernel 留在老机制"的既成事实，但没有找到书面的迁移判据或截止时间表（**本库推断**，未查证是否存在未公开的内部计划）。
+4. **rpyc 连接的 `allow_pickle=True` 配置（`lightllm/server/router/model_infer/model_rpc.py:187`、`:236`）建议在文档里明确写清楚信任边界。** 目前从代码看这条 Unix socket 默认只在本机可达（`_generate_unix_socket_path` 落在 `/tmp` 下），风险面有限，但如果未来支持跨主机的路由-worker 拆分，这条配置需要被重新评估——本篇不下安全结论，只指出这是一个应该被显式记录的设计决策点，而不是隐含在代码里等人读到。
+5. **`_lab/struct_map.py` 的子系统识别口径对 LightLLM 这类命名习惯不同的项目会产出误导性的 0 值**（`scheduler`/`speculative` 两个子系统），这是本库自己的分析工具需要补的口径，不是 LightLLM 代码的问题，但会影响后续读者对"LightLLM 到底有没有调度器"这类问题的第一印象，值得在 `_lab/struct_map.py` 里为 LightLLM 补充命名模式或者干脆换成基于导入关系的识别方式。
+
+
+===== 03-其他引擎\05-llama.cpp-server.md =====
+## 7. 踩坑与反直觉
+
+- **`_lab/out/api_surface.json` 里的 36 条路由,方法全标成 `POST`——这是抽取脚本的盲区,不是 llama.cpp 只支持 POST。** 正则只匹配了 `ctx_http.post(...)` 这一种调用形态(`_lab/out/api_surface.json` 的 `"method": "regex"` 字段就是明确的自曝),`server.cpp` 里同样数量级的 `ctx_http.get(...)`(`GET /health`、`GET /props`、`GET /models`、`GET /lora-adapters`、`GET /slots`、`GET /v1/stream`、`GET /tools` 等)和 `ctx_http.del(...)`(`DELETE /models`、`DELETE /v1/stream`)一条都没被统计进去。读这份 JSON 时如果直接拿"36"当作"llama.cpp 一共暴露 36 个能力点",会明显低估。
+- **`server-mcp.cpp` 这个文件名本身是个陷阱。** 第一反应容易读成"llama.cpp 实现了一个 MCP server",但代码显示它做的是反方向:llama-server 是 MCP **客户端**,去连接、调用外部 MCP server 提供的工具(`## 0` `## 5` 已给证据)。这个命名习惯(用被集成的协议名字命名"集成这个协议的模块")在很多项目里都存在,读源码时不能只看文件名猜方向,要看谁发起连接、谁实现协议的哪一端。
+- **`--cache-ram` 默认是 8192(MiB),不是 0。** 容易假设"额外的缓存机制默认关闭,要显式开启才有",但 `common/common.h:616` 显示提示词缓存**默认就占用 8 GiB 主机内存**——在内存本就紧张的端侧设备上,这是一笔容易被忽略的隐性开销,需要显式传 `--cache-ram 0` 才能关掉。
+- **`Q4_K_M` 这种命名格式暗示"4 bit,一种类型",实际是一张混合表。** `src/llama-quant.cpp:608`-`613` 显示同一个 `Q4_K_M` 预设下,不同层、不同角色的张量可能被分配 `Q4_K`、`Q5_K`、甚至 `Q6_K` 三种不同类型——量化后的模型文件大小和精度,是这张混合表和模型结构共同决定的结果,不能只凭预设名字里的"4"字推算出统一的比特占用。
+- **`n_parallel` 的"自动"档不是"按硬件自动探测出一个合理值",只是硬编码成 4。** `tools/server/server.cpp:152`-`156` 的自动逻辑就是一个固定常数加上强制打开 `kv_unified`,不涉及探测显存、探测 CPU 核数之类的运行时判断——这和"auto"这个词通常暗示的"智能适配"有落差,读代码前不应该预设它做了更复杂的事。
+- **测试/产品比 0.187 是全仓库口径,不能直接读成"这个仓库测试写得少"。** 和 vLLM 篇([[01-vLLM-全景与代码地图]])提到的同一类陷阱一样,`tests/` 目录里有相当比例是跨后端数值对拍脚本(验证 CPU 和 CUDA 算出同一个数),这类测试的性质和"业务逻辑单测"不同,直接套用比例数字下结论容易失真。
+- **`--ctx-size` 设置超过训练长度不会报错,只会被静默下调并打一行警告。** `n_ctx_slot > n_ctx_train` 时,代码直接执行 `n_ctx_slot = n_ctx_train`(`tools/server/server-context.cpp:1213`-`1216`),日志里打一句 `SRV_WRN`。如果只看 `--ctx-size` 传参、不盯着启动日志,容易误以为服务真的按自己指定的长度在跑,实际吃到的上下文比预期短——这类"警告而非报错"的降级路径,和 `## 0` 提到的"CUDA Graph 掉回 eager 是完全静默的"（vLLM 篇的说法）是同一类问题:**降级本身没错,错的是它默认不够显眼**。
+- **`ggml-hip/`、`ggml-musa/` 这两个目录名容易让人误判成和 `ggml-cuda/` 平级的独立实现。** `## 1.1` 的表格把它们单独列了行,但代码层面(`ggml/src/ggml-hip/CMakeLists.txt:92`、`ggml/src/ggml-musa/CMakeLists.txt:74`)两者都只是把各自厂商的转译工具接进构建系统、再定义 `GGML_USE_CUDA` 宏——**真正的算子实现只有一份,写在 `ggml-cuda/` 里**。目录并列的观感和"独立维护两套 AMD/摩尔线程专属核函数"这个印象容易对不上号,读目录列表时要多留意 `CMakeLists.txt` 里到底 `target_compile_definitions` 了哪个宏,不能只数目录个数。
+
+## 8. 可改进点
+
+以下几条标注为**本库推断**,未提交 issue 或 PR 核实维护者是否已有计划:
+
+1. **`_lab/api_surface.py` 对 llama.cpp 的抽取应该补上 `.get(`/`.del(` 两种调用形态。** 现状只认 `.post(`,导致这份统计给出的路由数字系统性偏小、且方法字段全错——这是本库工具自身的已知局限(`## 0` `## 7` 已经指出),修起来只需要把正则扩展到 `ctx_http\.(get|post|del)\s*\(`,不需要真的上 AST。
+2. **`GET /slots?fail_on_no_slot` 这个"满载信号"是 opt-in 的,默认路径下客户端拿不到任何背压提示。** 请求满载时唯一的默认行为是无限期排队(`## 6` 已指出),客户端如果不主动轮询 `/slots` 就无法区分"排队中"和"卡住了"。给 `/v1/chat/completions` 这类端点在队列长度超过某个阈值时主动返回一个 429 加 `Retry-After`(而不是要求客户端另外发一个 `fail_on_no_slot` 查询),会让默认体验更接近其他推理服务的习惯用法。
+3. **`slot_prompt_similarity` 的 LCP 扫描目前是纯线性的,场景一旦扩大到几十上百个 slot(比如未来某个大内存服务器场景把 `-np` 开得很大),`O(n_slots)` 的每请求扫描成本会线性增长。** 一个轻量级的改进是给每个 slot 的前缀维护一个短哈希摘要,先用哈希做粗筛,只对通过粗筛的候选做完整的 `get_common_prefix` 比对——不需要引入完整的基数树,量级上比现在更适合"slot 数量变大"这个假设性场景。
+4. **MCP 只做了客户端方向,server-mcp.cpp 里没有 MCP 服务端实现。** 如果 llama-server 反过来暴露一个标准 MCP 服务端接口(把 `/completion`、`/embedding` 这些能力包装成 MCP resource/tool),会让它更容易被现有的 MCP 生态(Claude Desktop、各类 Agent 框架)直接当作后端接入,而不需要额外写一层适配代码——这是 `## 5` 决策三里提到的明确缺口。
+5. **`--ctx-size` 超过训练长度时的降级路径应该更显眼。** `## 7` 已指出这条路径目前只打一句 `SRV_WRN`(`tools/server/server-context.cpp:1215`),日志级别和普通信息性日志混在一起。既然 `GET /props` 这类端点本来就会把当前生效的上下文长度上报给客户端,一个低成本的改进是在这种降级发生时,把"实际生效值和用户请求值不一致"这件事也放进 `GET /props` 的响应体里显式标注,而不是只依赖启动日志——这样即使运维没盯着启动输出,也能在运行时通过 API 发现配置被悄悄改写了。
+6. **`ggml/src/ggml-hip/`、`ggml/src/ggml-musa/` 的目录命名和它们的实际角色(转译壳而非独立实现)不匹配,容易误导第一次读这部分代码的贡献者。** `## 7` 已指出这个落差。一个低成本的文档改进是在这两个目录各自的 `CMakeLists.txt` 顶部加一句注释级别的说明("this target transpiles CUDA sources via hipify/musify, see ggml-cuda/ for the actual kernels"),或者在项目的后端说明文档(`docs/backend/`)里显式画出"16 个目录、14 份独立实现"这条区分线,减少"数目录数等于数后端实现数"这种容易犯的误读。
+
+
+===== 03-其他引擎\06-MLC-LLM.md =====
+## 7. 踩坑与反直觉
+
+1. **"Triton 文件 0"是抽取脚本的假阴性,仓库里确实有手写 Triton kernel。**`_lab/repo_stats.py:44` 的判定标记 `TRITON_MARK = "@triton.jit"` 只匹配装饰器写法,而 `python/mlc_llm/op/triton.py:335`/`453` 里的用法是把普通函数包一层 `triton.jit(triton_kernel)` 再传给 TVM 的 `T.call_kernel(...)`(`op/triton.py:271` 起的 `get_tir_w8a8_block_fp8_matmul`)——语义上仍然是"写了一个 Triton kernel",只是没有用装饰器语法。这条踩坑提醒了一件更通用的事:**"仓库里搜不到某个模式"和"这个仓库没有对应功能"是两回事**,尤其是像本库这种靠正则/AST 关键字匹配做规模统计的场景,匹配规则本身就是需要被审计的对象。
+2. **"CLI 开关 0"同样是扫描范围问题,不是"配置不走 argparse"。**`_lab/api_surface.py:101` 给 mlc-llm 登记的 "config" 扫描文件只有 `serve/config.py`(纯 dataclass,没有 `add_argument`)和 `interface/serve.py`(内部函数,也没有);真正的 argparse 逻辑分散在 `python/mlc_llm/cli/*.py` 十几个文件里,`cli/serve.py` 一家就有 36 处 `add_argument(`,`cli/compile.py` 有 11 处,`cli/gen_config.py` 有 13 处——粗略加总远超"0"。而且这些 CLI 全部通过 `mlc_llm.support.argparse.ArgumentParser`(`support/argparse.py:7`,继承标准库 `argparse.ArgumentParser` 并覆写 `error()` 方法)构造,不是什么自定义配置系统绕开了 argparse。
+3. **"0 手写 kernel"配上"默认打开 FlashInfer",两句话放在一起读才完整。**只读 `_lab/repo_stats.json` 会得出"这个引擎的所有 GPU 代码都是编译生成的"这个印象,但 `interface/compiler_flags.py:212`(`O2`/`O3` 默认 `flashinfer=True`)+ `op/extern.py:40`-`53`(按 target 决定是否真正启用)说明:默认编译产物在满足条件的 CUDA 硬件上,attention 部分调用的是 MLC-LLM 仓库之外、FlashInfer 项目手写的 CUDA kernel。这不是自相矛盾,而是"仓库自身 0 手写 kernel"(可验证,`_lab` 数字为证)和"默认编译产物的运行时行为"(需要读 `compiler_flags.py`+`extern.py` 才知道)是两个不同粒度的问题,不能互相替代。
+4. **前缀缓存默认是打开的,而且是一棵基数树,不是"编译器工具懒得做服务层功能"。**`serve/config.py:157` 的 `prefix_cache_mode` 默认值是 `'radix'`,C++ 侧 `cpp/serve/config.h:287` 同步默认 `PrefixCacheMode::kRadix`,底层是 `cpp/serve/radix_tree.cc`(845 行)。"编译器路线的引擎在服务层通常比较简陋"是一种常见的先入为主,MLC-LLM 的 `cpp/serve/` 目录本身有 17,101 行(`_lab/out/repo_stats.json` → `top_dirs`),连续批处理+前缀缓存+投机解码+PD 分离一样不少,只是它们都写在 C++ 里,不像 vLLM/SGLang 那样能直接在 Python 里读到。
+5. **`--device` 的字符串重写规则容易在读代码时被忽略。**`support/auto_target.py:84`-`85` 里 `if hint in ["iphone", "macabi", "android", "webgpu", "mali", "opencl"]: hint += ":generic"`——用户传 `--device iphone`,内部立刻改写成 `iphone:generic` 去查 `PRESET` 字典;但 `opencl` 同时出现在这条重写列表和 `AUTO_DETECT_DEVICES` 里,意味着 `--device opencl` 和 `--device android`(重写前不含 `opencl`,但 `android:generic`/`android:adreno` 都在用 opencl 作为底层 `Target.kind`)最终走的是同一种 target kind、不同的 `PRESET` 条目——不跟着这条重写逻辑走一遍,容易把"opencl 桌面设备自动探测"和"android 走 opencl 后端"这两条完全不同的路径搞混。
+
+## 8. 可改进点
+
+1. **修正 `_lab/repo_stats.py` 的 Triton 判定标记**(对应 `## 7` 踩坑 1)——把 `TRITON_MARK = "@triton.jit"` 放宽成同时匹配 `@triton.jit` 装饰器和 `triton.jit(` 函数调用两种形式(比如改成对 `triton\.jit\b` 做正则搜索而不是精确子串匹配),这样 `mlc-llm` 的 `triton_jit_files` 才能反映仓库里真实存在的手写 Triton kernel。这是本库自己工具链能落地的改进,不涉及改 mlc-llm 上游代码。
+2. **扩大 `_lab/api_surface.py:101` 里 mlc-llm 的 `"config"` 扫描范围**(对应 `## 7` 踩坑 2)——把 `python/mlc_llm/cli/*.py` 加进扫描 glob,这样 `cli_flags`/`n_cli_flags` 才能反映这个引擎真实的旋钮数量,而不是恒为 0。当前的登记(`api_surface.py:97`-`103`)只覆盖了 serve 相关的两个文件,对一个"CLI 驱动的编译工具"这个定位而言,遗漏了最大的一块 CLI 表面。
+3. **`interface/compiler_flags.py` 里 `--flashinfer` 的默认行为建议在 `mlc_llm compile --help` 的输出里更显式地提示"这会引入仓库外的手写 CUDA kernel"**(对应 `## 7` 踩坑 3,本库推断)——当前 `O2`/`O3` 默认打开这个开关(`compiler_flags.py:212`/`220`),但用户如果只关心"我要一份纯编译生成的产物"(比如为了审计供应链、确认代码来源),需要读到 `op/extern.py` 才能意识到默认路径不是纯编译生成的。加一行 `--opt` 帮助文本说明 `O2`/`O3` 默认外挂 FlashInfer,能降低这个认知落差。
+4. **`support/auto_target.py:84`-`85` 的 `hint += ":generic"` 重写逻辑,建议加一条日志说明改写后的最终 hint**(对应 `## 7` 踩坑 5,本库推断)——当前 `_detect_target_gpu` 对显式命中 `PRESET` 的分支有 `FOUND`/`NOT_FOUND` 日志(`auto_target.py:95`-`101` 附近的 `logger.info`),但字符串重写这一步本身没有留痕,用户传 `--device iphone` 看不到日志里出现过 `iphone:generic` 这个中间态,排查"为什么用了这份 target 配置"时不够直观。
+
+
+===== 03-其他引擎\07-KTransformers.md =====
+## 7. 踩坑与反直觉
+
+**"32 条路由，`/v1/*` 命中数是 0"看起来像"这个引擎不兼容 OpenAI"，实际是前缀拼接方式骗过了 AST 扫描器。** `archive/ktransformers/server/api/openai/__init__.py:7` 把 `/v1` 写在 `APIRouter(prefix='/v1')` 的构造参数里，各端点自己的 `@router.post(...)` 装饰器（比如 `archive/ktransformers/server/api/openai/endpoints/chat.py` 里的 `/chat/completions`）只写相对路径。`_lab/api_surface.py` 的抽取逻辑如果只看单个路由函数上的字面路径字符串，永远拼不出完整 URL——这不是这个引擎的问题，是**静态分析工具本身有盲区**，越是"prefix 层层嵌套"的 FastAPI 项目越容易在这类脚本上产生假阴性。同理，`archive/ktransformers/server/api/ollama/completions.py:18` 的 `prefix='/api'` 说明它的 Ollama 兼容端点实际路径是 `/api/generate`、`/api/chat`、`/api/tags`、`/api/show`，同时兼容 OpenAI 与 Ollama 两套协议，正对应它面向的是本地单机用户（Ollama 生态的典型使用场景）而不是需要标准化 API 网关的集群场景。
+
+**`archive/` 目录不是"历史存档"意义上的死代码，是"上一代仍完整可读、但不再被任何新代码 import"的活体化石。** 它占了这个仓库 60% 的行数，`grep -rn "import ktransformers" kt-kernel doc --include="*.py"` 在 `kt-kernel/` 下确实**零命中**（唯一命中在 `doc/en/SFT/KTransformers-Fine-Tuning_Quick-Start.md` 这个文档示例里，不是产品代码）——说明这次拆分是真的做了断链，不是挂了个新皮肤、内部还偷偷 import 老包。但与此同时，`README.md:159` 说明它"for reference"被保留，且 `doc/en/*.md` 的多篇模型接入教程仍然写着"from ktransformers root"这种指向老框架用法的措辞（`doc/en/Kimi-K2.5.md:38` 等），**新旧两条文档路径目前混在一起，读者很容易读到一半从新架构的教程点进老架构的教程**。
+
+**`third_party/llamafile` 不在 `.gitmodules` 里，是被直接 vendor 进仓库的普通目录（529KB，`sgemm.cpp`/`tinyblas_cpu_*.cpp` 等文件），这是"universal CPU backend"的来源。** 它是 Mozilla `llamafile` 项目里那批混合精度 GEMM kernel（`tinyblas`），不依赖 AMX/AVX512 这类新指令集，靠它撑住"没有 Sapphire Rapids 也能跑"这条兜底路径——`kt-kernel/README.md:32` 把它列为"Universal CPU (llamafile backend): Supported (using GGUF-format weights)"。这条线索容易被忽略：CPU 侧加速不是单一技术栈，是 **AMX（最快，需要新 CPU）> AVX512（次快，覆盖面更广）> llamafile/AVX2（最慢，几乎任何 x86 都能跑）** 这样一个按硬件门槛分层的后端矩阵，`kt-kernel/README.md:110`-`116` 那张"CPU Variants Included"表把六档运行时自动探测的变体列全了。
+
+**SFT（微调）能力经历了一次十倍量级的瘦身，而不是简单的"复制粘贴"。** `archive/kt-sft`（342 文件、105,925 行）是老的独立微调框架，本质上是 `archive/ktransformers` 那套注入机制的另一份分叉；新架构下 SFT 的落地是 `kt-kernel/python/sft/`（`__init__.py`/`amx.py`/`base.py`/`layer.py`/`lora.py` 等 18 个文件，合计约 11,675 行），只有老实现的十分之一体量。`ktransformers.py:27` 的 `has_sft_support()` 通过 `import kt_kernel.sft` 探测这个新模块是否可用——**它不是"archive 版的精简移植"，而是围绕 `KTMoEWrapper` 同一套工厂类重新搭的**（`kt-kernel/python/experts.py` 里 `mode="sft"` 分支就是复用点）。这个数字对比本身是一条有用的信号：如果十万行能被十分之一的代码量替代还保住核心能力，说明老实现里有相当一部分复杂度不是"问题本身需要"，是"框架自身的历史包袱"。
+
+**浅克隆下 `third_party/` 子模块大多是空目录，容易被误读成"这些依赖不存在"。** `.gitmodules` 声明了 `third_party/llama.cpp`、`third_party/pybind11`、`third_party/custom_flashinfer`、`third_party/sglang` 四个子模块，但这份快照是 `--depth 1` 浅克隆、没有 `--recurse-submodules`，实测这四个目录大小均为 0（只有非子模块的 `third_party/llamafile` 有真实内容）。**这是取证方法论上的一个坑，不是仓库本身的问题**——脚本核对代码规模、判断"某功能是否存在"时，如果不知道这条约束，容易把"没拉取"误判成"没有依赖"。
+
+## 8. 可改进点
+
+1. **文档层面的新旧混淆没有清理干净。** `doc/en/` 下多篇模型接入教程（如 `doc/en/DeepSeek-V4-Flash.md:114`、`doc/en/Kimi-K2.5.md:38`）仍写着"Option A: One-click install (from ktransformers root)"，读者按着走大概率会先碰到已经归档、行为可能与当前默认路径不一致的老安装脚本。给这批教程统一加一条"新架构下请改用 `install.sh` + `kt-cli run`"的顶部提示，成本很低。
+2. **`archive/` 与 `kt-kernel/` 之间没有任何自动化的一致性校验。** 两边各自维护了一份指令集探测逻辑（老代码在 `archive/ktransformers/operators/experts.py` 里手写 `elif self.backend == "AMXBF16"` 分支，新代码在 `kt-kernel/python/utils/amx.py` 里重新实现了一遍），如果未来老代码某个 bugfix 想同步到新代码（或者反过来），完全靠人工比对——考虑到 `archive/` 已经声明只做参考不做维护，这个风险会随时间衰减，但短期内新旧实现分叉导致的行为不一致仍是潜在的用户困惑源。
+3. **`max_deferred_experts_per_token` 这个延迟隐藏参数缺一份量化过准确度影响的文档。** `kt-kernel/python/experts_base.py:248` 的 docstring 只说"Number of experts per token to defer",没有给出"推迟一层计算"对生成质量的影响范围（哪怕是一个粗略的困惑度对比区间）。用户想调这个参数换吞吐时，缺一份"这样做要付多少准确度代价"的参考数据。
+4. **对 `sglang-kt` fork 与官方 SGLang 的版本追赶策略没有公开说明。** `kt-kernel/README.md:280` 只警告用户"别装错包",没有说明这份 fork 落后官方多少个版本、是否有定期 rebase 的计划——这对准备长期依赖它的生产用户是一个不透明的风险点。
+5. **浅克隆场景下的依赖可见性没有兜底提示。** `install.sh:107`-`110` 在 `third_party/sglang` 缺失（子模块没拉）时会给出明确的 `log_error`，这一点做得对；但项目文档里没有一处提醒"如果你是从 zip 包或非 `--recursive` 方式拿到源码，`third_party/` 下四个目录会是空的"——对刚接触这个仓库、习惯直接下载 zip 的用户，这条约束容易在实际踩坑之前完全没有预警。
+
+
+===== 03-其他引擎\08-Mooncake传输引擎.md =====
+## 7. 踩坑与反直觉
+
+**"disagg 子系统 268,180 行、压倒性最大"这个数字是个假信号，本篇特意验证过。** `_lab/struct_map.py` 用关键词子串匹配给文件打子系统标签，`disagg` 类别的关键词表里包含 `"mooncake"` 这个词（`_lab/struct_map.py` 里 `SUBSYSTEMS["disagg"]` 一项，本是为了在*其他*引擎的代码里识别"这段代码在接 Mooncake"）。但对 Mooncake 自己这个仓库做分析时，它的两个包根目录名字就是 `mooncake-transfer-engine` 和 `mooncake-store`（`_lab/struct_map.py` 的 `PKG_ROOTS` 表），扫描出的每一个相对路径天然都以 `mooncake-` 开头，天然包含子串 `"mooncake"`。核对 `_lab/out/struct_map.json` 里 `engines.mooncake.subsystems`：`disagg` 的 `n_files` 是 650，`files_scanned` 也是 650——**100% 命中**，而 `attention`/`quantization`/`structured_output` 全是 0，`kv_cache` 只有 1 个文件。这不是"Mooncake 的代码几乎全在做 PD 分离"，而是分类关键词和目录命名撞了车，一个纯粹的工具假阳性。这条坑和 `00-总览与阅读地图.md` §4 里记录的 `compare.py` 41→4 那次自我证伪是同一类教训：**跨项目对比的自动化脚本，最容易骗到的是写脚本的人自己。** 这份 268,180 的数字不建议在其他地方引用。
+
+**"测试比产品代码还多"这句话要分层说，不能笼统套用 1.093 这个数。** `_lab/repo_stats.py` 里 `test_to_src_ratio` 字段的定义是**纯 Python 口径**：`python_test_lines`（33,413 行，路径含 `test`）除以 `python_src_lines`（30,573 行）＝ 1.093。但 Mooncake 的 Python 总共只有 63,986 行，是绑定与测试脚本的规模，不是这个项目的主体。主体是 548,895 行里的 C++（301,147）与头文件（119,480），而这部分**没有**一个对应的"测试/产品比"数字进到 `_lab` 的 JSON 里——`_lab/repo_stats.py` 根本没统计 C++ 的测试占比。能直接观察到的、且已经在 `_lab/out/repo_stats.json` `top_dirs` 里有记录的是：`mooncake-store/tests` 目录本身有 82,187 行，`mooncake-store/src` 是 78,393 行，两者体量相当；`mooncake-transfer-engine/tests` 另有 20,792 行。这只是"目录行数放在一起看差不多大"的观察，不是一个被工具算出来的比例，本篇不把它包装成一个数字。测试文件的命名本身透出一点信号：`mooncake-store/tests/` 下能看到 `master_service_evict_scenario_test.cpp`、`master_service_tenant_quota_test.cpp`、`master_service_processing_key_double_erase_test.cpp`、`dynamic_replication_test.cpp`、`health_check_test.cpp` 这类以"场景/故障注入"命名的测试，`mooncake-transfer-engine/tests/` 下则是几乎每个 Transport 后端各有一个 `*_transport_test.cpp`（`rdma_transport_test.cpp`、`cxl_transport_test.cpp`、`nvlink_transport_test.cpp` 等）——分布式系统的正确性很难靠人读代码判断，这种"每种故障场景/每种硬件后端各配一个专门测试文件"的组织方式是可以直接在目录列表里看到的事实，但测试内部具体验证了什么逻辑、覆盖是否到位，本篇未逐个打开核对，不做进一步断言。
+
+**Transfer Engine 内部其实并存两套实现，一套还是隐藏功能。** `mooncake-transfer-engine/tent/` 是全仓库单个目录里代码量最大的一个（85,136 行，超过 `mooncake-store/src` 的 78,393），`mooncake-transfer-engine/include/transfer_engine.h:35-37` 里能看到 `namespace tent { class TransferEngine; }` 与外层 `mooncake::TransferEngine` 并存，外层类里有一个 `use_tent_` 布尔开关（`mooncake-transfer-engine/include/transfer_engine.h:117` `isUsingTent()`）。`mooncake-transfer-engine/src/transfer_engine.cpp:394` 显示这个开关由环境变量 `MC_USE_TENT` 或 `MC_USE_TEV1` 控制。也就是说全仓库最大的一个子目录，装的是一套默认不启用、需要显式设环境变量才会走的"备用/下一代"实现——`tent` 具体全称与它和经典实现的功能差异，本篇未查证，只确认了"两套并存、由环境变量切换"这个可验证的事实。
+
+**"0 条 HTTP 路由"不等于"完全没有 HTTP 端口"，两者容易被混为一谈。** `mooncake-store/src/master.cpp:124` 确实有一个 `metrics_port`（默认 9003），master 进程会在这个端口上起一个小 HTTP server 供 Prometheus 抓取指标；此外 `mooncake-store/include/http_metadata_server.h` 也存在一个基于 HTTP 的简易元数据交换服务（用于不方便跑 etcd 之类外部依赖的部署场景）。这些和 `_lab/api_surface.py` 想找的"OpenAI 兼容式推理服务路由"（`/v1/chat/completions` 那一类）完全不是一回事——本篇 §0/§1 说的"0 条 HTTP 路由"特指后者，指标端口和元数据交换端口这两个小型内部 HTTP 服务本篇未逐行核对其路由细节，只确认它们存在、且不在 `_lab/api_surface.py` 的抽取目标范围内。
+
+## 8. 可改进点
+
+1. **`initialize()` 的第二个形参名与实际用法不符。** `mooncake-integration/transfer_engine/transfer_engine_py.h:59` 的签名是 `initialize(local_hostname, metadata_server, protocol, device_name)`，但 vLLM（`vllm:vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py:915`）和 SGLang（`sglang:python/sglang/srt/distributed/device_communicators/mooncake_transfer_engine.py:205`）两家**都**传字面量字符串 `"P2PHANDSHAKE"`，说明这个参数实际承担的是"连接建立模式"而不是字面意义上的"元数据服务器地址"。两个独立调用方用同样的方式"误用"同一个参数，是接口命名该被重新审视的信号——要么拆成两个参数（连接模式 + 可选的服务器地址），要么把文档/类型注释写清楚这个字段的真实取值空间。
+2. **`## 7` 提到的 `disagg` 假阳性说明 `_lab/struct_map.py` 里 `SUBSYSTEMS` 的关键词表需要更小心处理"自指"情况。** 一个可落地的小改进：`_classify` 在处理某个引擎自身仓库时，应该把该引擎自己的包名从其他类别的关键词命中里排除（或者至少在 `struct_map.json` 里对"某类别命中了 100% 文件"这种情况打一个警示标记），这样下次写别的引擎的文档时不会重复踩同一个坑。
+3. **`MC_FORCE_TCP`、`MC_USE_TENT`、`MC_CXL_DEV_PATH`、`MC_PATH_ROUNDROBIN` 这类环境变量散落在 `transfer_engine_impl.cpp`/`transfer_engine.cpp`/`topology.cpp` 各处（本篇 §2、§5、§7 引用到的就有 4 个），未见一个集中的清单文件。** 对比 vLLM `vllm/envs.py` 把所有 `VLLM_*` 环境变量集中声明成一张表（本库其他篇已经引用过这个模式），Mooncake 目前要靠 `grep getenv` 才能拼出完整的开关列表，对新接入方不友好。
+4. **"这个包该装哪个"（§5 决策六）目前完全靠用户自己读 README 顶部的徽章分辨。** 如果 `pip install mooncake-transfer-engine` 之后第一次 `import` 时能检测当前机器的硬件（有没有 CUDA、CUDA 版本、有没有 NPU）并在明显不匹配时打印一条提示（而不是让符号加载失败之类的底层错误直接冒出来），能省掉不少新用户在这一步卡住去翻 issue 的时间。
+
+
+===== 03-其他引擎\09-NVIDIA-Dynamo.md =====
+## 7. 踩坑与反直觉
+
+- **全仓库最大的目录不是任何一个子系统，是license合规扫描。** `container/compliance`（652,930 行，`_lab/out/repo_stats.json` `top_dirs` 第一位）比排第二的 `lib/llm`（359,818 行）还多出近 30 万行，真身是 CycloneDX SBOM 快照（比如 `container/compliance/base_sboms/release@16a103b8-amd64.cdx.json` 单文件 118,021 行）和许可证扫描脚本，和推理编排毫无关系。如果只用 `cloc` 粗看这个仓库，会把 JSON 行数第一读成"配置很复杂"，实际是"合规快照很大"。
+- **两个 CUDA 文件只搬内存，不算数学。** `copy_blocks_kernel`（`lib/llm/src/kernels/block_copy.cu:41`-`42`）和 `kvbm_kernels_block_to_universal_kernel`/`kvbm_kernels_universal_to_block_kernel`（`lib/kvbm-kernels/cuda/tensor_kernels.cu:151`-`152`、`:192`-`193`）从函数名就能确认：这是 KV Block Manager 用来在"分页块"和"连续张量"两种内存布局之间搬运数据的 kernel，不含 attention/GEMM 这类计算——本篇标题"它不是又一个推理引擎"在源码层面的最直接证据就是这两个文件。
+- **"统一 worker 契约"目前是文档愿景，不是生产现实。** `common/backend/README.md` 里画的架构图只列出两个 `LLMEngine` 子类：`TokenspeedLLMEngine`（`components/src/dynamo/tokenspeed/llm_engine.py:33`）和 `SampleLLMEngine`，都是示例/压测用途；vLLM/SGLang/TRT-LLM 三个真正扛生产流量的集成，至今用的是各自的 `BaseWorkerHandler`/`HandlerBase` 体系（`components/src/dynamo/vllm/handlers.py:1095`，`components/src/dynamo/trtllm/request_handlers/handler_base.py:260`）。反倒是体量已经堪比老 handler（3,921 行 vs 4,220 行）的 Rust `dynamo-vllm-sidecar`（`lib/sidecar/vllm/src/main.rs:7`-`8`）在真正实现镜像的 Rust `LLMEngine` trait（`lib/backend-common/src/engine.rs:174`）——统一契约正在发生，但发生的位置和文档展示的示例不是同一个。
+- **`_lab/out/api_surface.json` 对 Dynamo 的协议类统计是假的 0，不是真的 0。** `n_protocol_classes` 字段显示 dynamo 为 **0**（对照 vLLM/SGLang 都是两位数），但这不是 Dynamo 没有协议类型——`lib/llm/src/protocols/common/preprocessor.rs` 一个文件里就有 `BootstrapInfo`、`PrefillResult`、`MmRoutingInfo` 等多个 `#[derive(Serialize, Deserialize)]` 结构体。真相是 `_lab/api_surface.py` 的协议类提取器只认 Python 的 `pydantic.BaseModel`，对 Rust 的 `serde` 结构体完全没有对应的探测逻辑。同一根源还导致这份 JSON 里 dynamo 的全部 20 条路由 `method` 字段都是 `"?"`（正则抓到了 `.route(&path, ...)` 但没解析出里面的 `post`/`get`）——**读跨引擎协议对比数字时，这类字段为 0 或未知，先怀疑抽取工具看不懂对应语言，别直接当作"这个引擎没有"。**
+- **默认路由路径不是硬编码，读代码时容易看漏。** `lib/llm/src/http/service/openai.rs:3896` 那行 `path.unwrap_or("/v1/chat/completions".to_string())` 表面上像是把路径写死了，实际上只是"没传参数时的默认值"；`service_v2.rs:1030`、`:1034`、`:1036` 里的 `DYN_HTTP_SVC_HEALTH_PATH`/`DYN_HTTP_SVC_CHAT_PATH`/`DYN_HTTP_SVC_CMP_PATH` 三个环境变量能在构建路由树时整体覆盖它们。生产环境如果设置了这些变量，`## 2` 的路径表就会和实际部署不符——这是本篇引用"默认路径"时反复强调"这是默认值不是硬编码值"的原因。
+
+## 8. 可改进点
+
+以下几条标注为**本库推断**，未提交 issue 或 PR 核实维护者是否已在计划中：
+
+1. **两份 `LLMEngine` 契约缺一条"新集成该走哪条"的书面判据。** `common/backend/README.md` 的 Quick Start 只演示 `tokenspeed`/`sample` 这类玩具级实现，vLLM/SGLang/TRT-LLM 三个真正的生产集成仍各写各的 handler（`## 7` 已给证据）。一条类似"新引擎集成必须实现 `LLMEngine`，只有历史遗留可以留在 `BaseWorkerHandler`"的显式规则，会比现在"两条路径都在、看资历选"的隐性状态更容易维护，这和本库另一篇观察到的 vLLM 模型新旧布局缺迁移判据是同一类问题。
+2. **`_lab/api_surface.py` 对 Rust `serde` 协议类型是盲区。** 给提取器加一条"在 `.rs` 文件里找 `#[derive(..., Serialize, Deserialize, ...)]` 附近的 `struct`/`enum` 定义"的规则，就能补上 `n_protocol_classes` 恒为 0 这个盲区，避免后续跨引擎对比篇目（比如 [[04-工程规模与代码结构对比]]）把 Dynamo 的协议表面错误地统计成"不存在"。
+3. **20 条路由的 HTTP method 全部是 `?`。** 这个信息其实唾手可得——`.route(&path, post(handler))` 里的 `post`/`get` 就是函数名本身，正则只是没把它提出来。修起来成本不高，但目前任何依赖这份 JSON 做"这条路由是不是幂等"之类判断的下游分析都拿不到这个字段。
+4. **弹性伸缩链路的决策延迟不透明。** Planner 改 `DynamoGraphDeploymentScalingAdapter.spec.replicas` 到 operator 真正调整副本数之间隔着一层 CR watch，本篇没有在 `components/src/dynamo/planner/` 下找到明确的轮询周期常量（未继续深挖，标注未查证）。如果这层延迟没有直接暴露成一个可观测指标，运维排查"扩容为什么慢了"时会缺一个直接入口。
+
+
+===== 03-其他引擎\10-Tokasaurus.md =====
+## 7. 踩坑与反直觉
+
+1. **`response_format` 是个死字段。** `ChatCompletionRequest.response_format`（`tokasaurus/server/types.py:82`）声明了 `json_schema`/`json_object` 两种结构化输出模式，但全仓库搜索这个字段名，除了 `server/types.py` 里的定义之外**没有第二处代码读取它**——协议层"看起来支持"结构化输出，实际上传了也不会生效，也不会报错提醒你它被忽略了。这是"协议兼容"和"功能实现"脱节的典型样本，和 `00-总览与阅读地图.md` §4 里 vLLM/SGLang 的 `ChatCompletionRequest` 三分之二字段是"各家私货"是同一类问题的另一种表现——这里更进一步，字段声明了但**连自家都不用**。
+2. **"OpenAI 兼容"这四个字要打个问号。** `validate_args()`（`tokasaurus/server/utils.py:503`-`531`）会主动拒绝 `stream=True`、非默认 `top_p`/`frequency_penalty`/`presence_penalty`/`logit_bias`——这些都是 OpenAI 官方字段，客户端传了非默认值会直接收到 400，而不是静默忽略。`## 5` 决策 5 已经论证这是合理的范围收窄，但如果只看 `## 2` 的路由表以为它是"又一个 OpenAI 兼容服务"，实际接入时会在这几个参数上踩坑。
+3. **`block_on_queues()` 依赖 `mp.Queue` 的私有属性 `_reader`。**（`tokasaurus/utils.py:488`）标准库 `multiprocessing.Queue` 并没有公开暴露"给我这个队列底层的可等待 fd/连接对象"这个接口，Tokasaurus 直接读了 CPython 实现细节里的 `_reader` 属性来配合 `multiprocessing.connection.wait()` 做多队列多路复用。能工作，但是脆弱的私有 API 依赖——`## 8` 会给出具体建议。
+4. **调度算法的正式性声明很诚实。** `tokasaurus/manager/scheduler.py:588` 那句注释——"Bro trust me, it's a good scheduler. I sketched it out on my iPad bro. Graphs and everything. This scheduler slaps."——不是本篇瞎编，是原作者自己写在源码里的。这句玩笑话背后的信息是准确的：这套调度算法没有附带正式的最优性证明，是一套经验上有效的启发式模拟（`calc_block_usage_over_time`/`try_onboarding_seqs`），读代码时不要误以为它有理论保证。
+5. **Hydragen 和 CUDA Graph 不能同时开到任意批大小。** `tokasaurus/common_types.py:171`-`174` 的 `finalize()` 里有一条断言：`cudagraph_max_size` 必须小于 `hydragen_min_group_size`，否则直接在启动期报错退出。这是两个特性各自实现时没有考虑对方边界情况的产物——工程上选择用一个启动期断言挡住不兼容组合，而不是让两条路径在实现层面真正兼容，是小团队研究引擎里典型的"用契约代替泛化"取舍。
+
+## 8. 可改进点
+
+1. **清理或补全 `response_format` 字段**（`tokasaurus/server/types.py:56`-`66`、`:82`）。既然协议层已经声明了 `json_schema`/`json_object` 两种结构化输出模式，要么接入 flashinfer 或其他库的约束解码实现让它真正生效，要么在字段旁加一行说明"当前版本忽略此字段"、或者在 `validate_args()` 里像拒绝 `logit_bias` 一样显式拒绝非 `None` 的 `response_format`——现状是"传了不报错也不生效"，对使用者是最容易踩的坑。
+2. **补一个只读的 HTTP metrics 端点。** 当前的可观测性完全依赖 `statsd`（`tokasaurus/manager/monitoring.py:86`-`100` 的 `_statsd_client()`/`log_to_statsd()`），10 条路由（`## 2`）里没有一条是 Prometheus 风格的 `/metrics`。`StatsTracker`（`tokasaurus/manager/monitoring.py:121`）已经把吞吐/Hydragen 命中率/KV 利用率这些数据都算出来了，只是没有暴露一个不依赖外部 statsd 基础设施就能看到的读接口——对没有搭 statsd 收集链路的用户，运行时几乎是黑盒。
+3. **给 `block_on_queues()` 的私有 API 依赖加一层显式检查或替代实现。**（`tokasaurus/utils.py:488`）依赖 `mp.Queue._reader` 这种 CPython 实现细节，一旦某个 Python 版本改了 `multiprocessing` 内部实现就可能静默失效（不报错，只是不再正确等待）。可以在启动期做一次自检（确认 `_reader` 属性存在且行为符合预期），或者迁移到标准库公开支持的多路复用方式（比如给每个队列配一对 `os.pipe` 做唤醒信号）。
