@@ -185,8 +185,13 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 4. **量化改变账本时**：权重量化到 int4 会把访存项砍到 1/4，屋脊点右移，**翻转点提前**（更容易 compute-bound）；KV cache 量化则相反地缓解长上下文的访存压力。见 [[23-与其它优化的相互作用-量化与KVcache与PD分离]]。
 5. **MoE 模型 —— 有一个真实反例，必须写明。** 有效激活参数远小于总参数，访存与算力的比值整个变了：路由使得"每 token 的算力"按激活参数算，而"权重读取"在大 batch 下趋近全量，两者的比值远比稠密模型友好。本库调研（`_research/RS-2-社区讲解盘点与评点.md`）记录到 Red Hat 于 2026-04 报告，在 **gpt-oss-120b（MoE + MXFP4 量化）+ EAGLE3** 上并发到 **200 仍有约 +20% 吞吐** —— 这与本篇稠密模型的曲线方向相反。
 
-   所以本篇 §4 的渐近线结论**有明确的适用范围**：它推的是"消耗 $\gamma+1$ 份算力换 $E[\tau]$ 个 token"这笔账，在稠密模型上成立；MoE 把"一份算力"的定义改了，账要重列。**本模型未覆盖 MoE，本篇不对 MoE 下的交叉点给出任何数值结论。** 该 Red Hat 数据的完整口径见 [[19-负收益全解-什么时候投机反而更慢]] 与 [[26-社区精彩解释精选-好在哪与错在哪]]。
-6. **PD 分离架构下**：decode 实例的 batch 组织方式与本模型不同，且 prefill 与 decode 分开调度会改变 decode 侧的实际 batch 分布。
+   所以本篇 §4 的渐近线结论**有明确的适用范围**：它推的是"消耗 $\gamma+1$ 份算力换 $E[\tau]$ 个 token"这笔账，在稠密模型上成立；MoE 把"一份算力"的定义改了，账要重列。
+
+   **2026-08-22 补**：本库已把 MoE 单独建模（`_lab/moe.py`），结论是**两头都和本篇相反**：
+   MoE 上 batch=1 时投机反而**亏**（0.804×，因为 5 个 token 激活了 18.8 个专家而基线只激活 4 个，多读 3.6 倍权重），
+   而在本篇稠密 70B 早已跌到 0.566× 的 batch=1024 上，MoE 仍有 **2.16×**。
+   完整推导与四张表见 [[23-与其它优化的相互作用-量化与KVcache与PD分离]] §4.7，
+   测试见 `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense` 与 `::test_moe_outlasts_dense_by_an_order_of_magnitude`。
 
 ---
 
@@ -201,8 +206,8 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 3. 如果把接受长度顶到理论上限 $E[\tau]=\gamma+1$（全部接受），compute 极限下加速比是多少？
    <details><summary>答案要点</summary>$E[\tau]/(\gamma+1)=1$，再乘 $(1-s)$，得到略小于 1 —— 只能**打平偏亏**，亏掉的正是草稿的开销。本库实测该情形加速比落在 0.9–1.0 之间（`_lab/test_speedup.py::test_higher_accept_length_raises_but_cannot_save_asymptote`）。含义：compute 区里投机采样**在吞吐意义上最好也就是不亏**。</details>
 
-4. 表里 batch=256 时加速比 1.038，几乎打平。如果你是这套服务的负责人，会怎么设置策略？
-   <details><summary>答案要点</summary>关键在于此处曲线很陡（256→384 就掉到 0.827），且真实系统比模型更差（§8 第 3、5 条）。合理做法是**按当前 batch 动态开关投机**，阈值设在明显低于模型给出的翻转点处（因为模型是乐观上界），并且监控的应当是实测吞吐与 P99 TPOT 两条线，而不是理论加速比。相关实践见 [[19-负收益全解-什么时候投机反而更慢]] 与 [[20-主流引擎实现-vLLM与SGLang与TensorRTLLM]]。</details>
+4. 表里 batch=256 时加速比 1.020，几乎打平。如果你是这套服务的负责人，会怎么设置策略？〔2026-08-22 对抗审稿修正：本题原写 1.038 与 0.827，是 attention FLOPs 漏乘层数那个 bug 修复**之前**的旧值，与 §5 表格（1.020 / 0.813）及文末勘误记录不一致。〕
+   <details><summary>答案要点</summary>关键在于此处曲线很陡（256→384 就掉到 0.813），且真实系统比模型更差（§8 第 3、5 条）。合理做法是**按当前 batch 动态开关投机**，阈值设在明显低于模型给出的翻转点处（因为模型是乐观上界），并且监控的应当是实测吞吐与 P99 TPOT 两条线，而不是理论加速比。相关实践见 [[19-负收益全解-什么时候投机反而更慢]] 与 [[20-主流引擎实现-vLLM与SGLang与TensorRTLLM]]。</details>
 
 5. 为什么长上下文那张表里"草稿占迭代"从 6% 升到 23%？这说明了什么？
    <details><summary>答案要点</summary>草稿模型也要读自己的 KV cache，KV 流量 $\propto$ batch·seqlen，长上下文下草稿的访存开销按比例放大，而它的权重很小、原本主要成本就是访存。含义：**"草稿很便宜"这个前提在长上下文下会松动**，选草稿时要看的不只是参数量，还有它的 KV 结构（层数 × KV 头数）。</details>
@@ -232,6 +237,7 @@ def spec_throughput(target, draft, hw, batch, seqlen, gamma, accept_len):
 - `_lab/test_speedup.py::test_long_context_keeps_speedup_at_large_batch` —— 长上下文下不翻转。
 - `_lab/test_speedup.py::test_long_context_large_batch_may_not_fit` —— 但受显存约束。
 - `_lab/test_speedup.py::test_verify_stops_being_free_in_compute_bound_region` —— compute 区里验证时间随 query token 数线性涨（机制）。
+- `_lab/test_moe.py::test_moe_sweet_spot_is_mid_batch_unlike_dense`、`::test_moe_outlasts_dense_by_an_order_of_magnitude` —— **本篇结论的适用边界**：MoE 上最优区间不在小 batch，且能一直赚到稠密早已翻转的 batch。
 - 可复跑：`python _lab/speedup.py --batch` —— §5 的两张实测表
 
 ### 本篇勘误记录

@@ -20,6 +20,17 @@ verify.py —— 全库自检：把五条铁律变成可执行的检查，而不
   1) 把 `test_x.py` 去掉 .py 当成函数名去查 -> 一片假失败。本文件用 `::` 严格切分。
   2) 正则不覆盖表格单元里的写法（如 `| **2.3x** |`）-> 漏检。本文件按行扫描并剥掉表格分隔符。
   3) 只在一个样本上判统计命题 -> 结论随机。本文件所有"比例"类判断都给出分母。
+  4) **假阳性要留档、豁免要写理由**：见下面 (a)–(e) 五条豁免的注释，每条都注明
+     它豁免的是哪一类句子、以及为什么那类句子不适用该铁律。反例测试见
+     `_lab/test_verify_rules.py`（正例必须仍被抓，对照组必须被豁免）。
+
+已知的**假阴性**（2026-08-22 发现，尚未修，改动面太大需单独一轮）：
+  SPEEDUP_PAT 里的 `[×xX]\b` 对 `×` 这个符号要求右邻是词字符，
+  于是 `加速 3.2×，` `1.9×（最差）` `2.4× vs` 这类**× 后面跟标点或空格**的写法
+  一律漏检 —— 而这正是本库表格里最常见的写法。把 `\b` 去掉（改成 `(?:×|[xX]\b|倍…)`）
+  实测会新增 63 处 WARN（多数是表格行，口径写在几行之外的表注里，属于窗口太窄而非真裸奔）。
+  **要动这一条，必须连同"batch 口径的上下文窗口按小节而不是按 ±6 行取"一起改，
+  并逐条复核那 63 处**，不能只把正则放宽了事。
 """
 from __future__ import annotations
 
@@ -38,11 +49,80 @@ LOSSLESS_PAT = re.compile(r"无损")
 # 允许的例外：在讲"口径"本身、在标题里、在引用别人说法并当场纠正的句子里
 CALIBER_EXEMPT = re.compile(r"口径|误解|错法|纠正|社区|所谓|铁律|本库|三种|标注")
 
+# 铁律一的两类**已确认假阳性**（逐条人工复核过，留档见 _meta/建库审计.md）。
+# 豁免的原则只有一条：**那句话根本不是在下"它是无损的"这个断言**。
+#
+# (d) 指路句：句子在指**别的篇目**（"本篇不重复无损性证明（在 [[04-…]]）"、
+#     "'无损'措辞冲突的完整辨析：[[07-…]]"）。它指代的是篇目内容，不是断言，
+#     "这里的无损是 L1 还是 L3"对它不适用。判据要求**同时**满足两条：
+#     ① 原始行里有双链；② 有指路动词。少一条就照常检查 —— 例如第 16 篇
+#     "于是 [[04-…]] 的对齐前提被破坏，无损性悄悄失效"有双链但无指路动词，
+#     它是断言，必须被抓（反例测试确认仍然抓得到）。
+POINTER_VERB = re.compile(r"不重复|详见|参见|另见|完整辨析|指路|见本库")
+# (e) 引号里的**词本身**：把"无损"讲成…、"无损"措辞冲突、"无损"到底保证了什么。
+#     use–mention 里的 mention：在谈这个词被怎么用，不是在用它下断言。
+#     两个条件缺一不可：引号内**只有"无损(性)"二字**、且句中有讨论用词 ——
+#     这样 `我们的实现是"无损"的` 这种加了引号的真断言不会被放过。
+MENTION_PAT = re.compile(r"[\"“”「『]无损性?[\"“”」』]")
+MENTION_VERB = re.compile(r"讲成|说成|措辞|到底|这个词|叫做|称为|写成|读成")
+
 # --- 铁律二：加速比 ----------------------------------------------------------
 SPEEDUP_PAT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s*(?:[×xX]\b|倍(?!数|率))")
-BATCH_TOKENS = ("batch", "bs=", "BS=", "批大小", "并发", "bs ", "Batch")
-# 不算加速比的场合：纯倍数比较（如"参数量大 10 倍"）很难自动区分，
-# 因此这一项报 WARN 不报 ERROR，由人复核。
+# QPS 与"并发"是同一件事的两种写法：给了 QPS 的来源（如 vLLM 官方博客）
+# 就是给了负载口径，不算裸奔。
+BATCH_TOKENS = ("batch", "bs=", "BS=", "批大小", "并发", "bs ", "Batch", "QPS", "qps")
+
+# 铁律二的三类**已确认假阳性**（同样逐条复核并留档）。豁免的原则只有一条：
+# **那个倍数的主语根本不是"速度"**，所以"报加速比必须给 batch"对它不适用。
+#
+# (a) `N×M` 里的 × 是**乘号**不是"倍"：4×A100（卡数）、Mixtral 8×7B（专家数×规模）、
+#     41×8 命中矩阵（矩阵尺寸）。判据：× 右边紧跟数字或型号（大写字母开头）。
+#     真加速比的 × 右边是标点或中文（"1.5×，"、"2.8x 的"），不会被误伤。
+MULT_NOT_TIMES = re.compile(r"[×xX]\s*(?:\d|[A-Z])")
+# (b) 材料代称：按标题里的数字给一份材料起名，如"NVIDIA 3.6x 博客"。
+#     这是在**指代一份材料**，不是本库在报一个加速比（该文的口径评点另有专节）。
+MATERIAL_ALIAS = re.compile(r"[×xX]\s*(?:那篇|这篇)?\s*(?:博客|文章|一文|长文|帖|blog|Blog)")
+# (c) 倍数的主语是**非速度量**：β/α 的波动、参数量、数据量、学习率、显存、
+#     成本预算、分子分母。铁律二管的是"多快"，不管"多大/多贵/多分散"。
+#     判据要求这些词紧贴倍数，**并且**同一行不出现任何速度类词 —— 只要出现就
+#     一律不豁免，宁可多报。所以 "理想加速比…差 4.6 倍"（同行有"加速比"）仍会被抓。
+#     左右两侧用的词表不同，这是必须的：中文里主语在倍数**左边**（"参数量…10 倍"、
+#     "差 2.5 倍"），只有名词能跟在倍数**右边**（"8 倍数据量"）。
+#     若右侧也认"差"，"…那条线 4.6 倍的差距"就会被误豁免（反例测试钉住了这一条）。
+NON_SPEED_LEFT = ("差", "相差", "波动", "乘了", "vs", "参数量", "数据量", "显存",
+                  "预算", "成本", "lr", "学习率", "分母", "分子", "字节")
+NON_SPEED_RIGHT = ("参数量", "数据量", "显存", "预算", "学习率", "字节")
+SPEED_WORDS = ("加速", "提速", "吞吐", "throughput", "tok/s", "tokens/s", "token/s",
+               "TPOT", "TTFT", "延迟", "latency", "speedup", "speed",
+               "接受长度", "接受 token", "acceptance", "快", "慢",
+               "wall-clock", "walltime", "ms/t")
+
+
+def caliber_exempt_line(raw: str, line: str) -> bool:
+    """铁律一：这一行的"无损"是不是**不在下断言**（(d) 指路句 / (e) 引号提及）。"""
+    if "[[" in raw and POINTER_VERB.search(line):
+        return True
+    if MENTION_PAT.search(line) and MENTION_VERB.search(line):
+        return True
+    return False
+
+
+def speedup_matches(line: str) -> list:
+    """铁律二：返回本行里**真正算加速比**的倍数（剔除 (a)(b)(c) 三类假阳性）。"""
+    out = []
+    for m in SPEEDUP_PAT.finditer(line):
+        rest = line[m.end() - 1:]              # 从 ×/倍 这个字符本身起算
+        if MULT_NOT_TIMES.match(rest):         # (a) 乘号
+            continue
+        if MATERIAL_ALIAS.match(rest):         # (b) 材料代称
+            continue
+        left, right = line[max(0, m.start() - 20):m.start()], line[m.end():m.end() + 12]
+        if ((any(c in left for c in NON_SPEED_LEFT)      # (c) 非速度主语
+             or any(c in right for c in NON_SPEED_RIGHT))
+                and not any(w in line for w in SPEED_WORDS)):
+            continue
+        out.append(m)
+    return out
 
 # --- 铁律三/结构 -------------------------------------------------------------
 REQUIRED_SECTIONS = ("本篇验证", "本篇来源")
@@ -209,12 +289,14 @@ def check_rules(verbose=True):
             in_meta = (i - 1) >= meta_from
             line = strip_for_rules(raw)
             # 铁律一
-            if (not in_meta) and LOSSLESS_PAT.search(line) and not CALIBER_EXEMPT.search(line):
+            if (not in_meta) and LOSSLESS_PAT.search(line) \
+                    and not CALIBER_EXEMPT.search(line) \
+                    and not caliber_exempt_line(raw, line):
                 ctx = " ".join(strip_for_rules(x) for x in lines[max(0, i - 4):i + 3])
                 if not any(t in ctx for t in CALIBER_TOKENS):
                     warn_lossless.append((p.name, i, raw.strip()[:70]))
             # 铁律二
-            if SPEEDUP_PAT.search(line):
+            if speedup_matches(line):
                 ctx = " ".join(strip_for_rules(x) for x in lines[max(0, i - 6):i + 6])
                 if not any(t in ctx for t in BATCH_TOKENS):
                     warn_speedup.append((p.name, i, raw.strip()[:70]))

@@ -171,6 +171,16 @@
 > ⚠️ **重要的口径冲突**：该项目**网站**的摘要里出现过"树验证 k=21（分支因子 4）在 bs64 跌破 1× 加速"的说法，但我对**论文正文**做定向抽取时，抽取结果称论文未包含该树验证敏感性分析、且明确说所有变体都优于基线。两次抽取互相矛盾。
 > **处理**：以论文正文陈述为准；"k=21 跌破 1×"标记为 **【待核验】**，正文不得引用。
 
+> ※ **2026-08-22 复核：此处记载有误 —— 根本不是矛盾，是我只读了 v1。【待核验】解除，"正文不得引用"的禁令撤销。**
+> 上面这段对 **v1 是对的**：v1（2025-12-31 提交，PDF 148 684 字符）里 `Tree-Style` 0 次、`k=21` 0 次、`SGLang` 0 次，`tree` 仅 3 次且全在引言列举与参考文献里 —— **v1 确实不含树敏感性分析**。
+> 但 **arXiv:2601.11580 有 v2（2026-03-18 修订）**，本库当时四处引用的都是写死的 `…/html/2601.11580v1`，**从未打开过 v2**。v2 新增了一整节 **"Tree-Style Verification" + Figure 2**，网站摘要说的就是它。**网站是对的；错的是我把 v1 当成了"论文正文"的全部。**
+> **v2 逐字原句**：*"By batch size 64, the k=21 tree falls below 1× speedup on all workloads for both models, whereas the chain remains above 1× throughout."*
+> **和 "every SD variant outperforms the no-SD baseline" 不矛盾**：那句在**引言**里（v1、v2 都有），说的是 **vLLM 上 chain（k=3）五种变体**的主实验；树实验是**另一套、在 SGLang 上跑的**，两者作用域不同。我当时把一句引言当成了全文范围的断言。
+> **v2 树实验的完整口径（铁律二七项）**：引擎 **SGLang v0.5.9（不是 vLLM）**——原文自陈原因是 *"the draft-tree path in the vLLM version we evaluated is not yet sufficiently optimized for a fair comparison"*；模型 Qwen3-8B、Llama3-70B；负载 4 个非推理数据集（GSM8K / CNN-DailyMail / ShareGPT / InstructCoder）；**树深固定 3**；chain 基线 k=3，树 k=6（分支因子 2）与 k=21（分支因子 4，≈EAGLE 的树）；k = 目标模型一次并行验证的草稿 token 数；chain 用 **FlashAttention-3**、树用 **FlashInfer**；SGLang 默认走**动态草稿树**策略；图 2 横轴 batch = 1/16/64/128；测的是**吞吐比**（generated tokens/sec，开 SD vs 不开）；硬件按原文 *"Unless otherwise noted, all other settings follow those described earlier"* 承接 §3.1 的 **H100 80GB**（8B 单卡、70B TP=4）。
+> **v2 给出的数字**：bs=1 时 Qwen3-8B/GSM8K **chain 1.65× → k=6 1.68× → k=21 1.85×**；Llama3-70B/ShareGPT **1.81× → 1.90× → 2.03×**。接受长度 Qwen3-8B/GSM8K **2.25 → 2.51 → 2.92**、接受率 **0.415 → 0.300 → 0.095**；Llama3-70B/ShareGPT 接受长度 **2.29 → 2.55 → 2.93**、接受率 **0.429 → 0.310 → 0.097**。
+> ⚠️ **原文未指明这组 bs=1 数字属于 EAGLE 还是 EAGLE-3**（图 2 图例两族都有，正文只写 *"tree-based EAGLE/EAGLE-3"*）。引用时必须带这句"未指明"。
+> **核验方式**：v1/v2 的 HTML 与 PDF 四份全部 `curl` 落盘，本地 `pdftotext -layout` + 正则比对；项目网站（末次更新 **2026-04-02**）单独落盘核对，其"Tree vs Chain Verification"一节与 v2 正文逐条对得上。
+
 **为什么这篇没穿破 1.0× 而 EAGLE-3 论文穿破了**——这正是"不许跨来源合表"的活教材：
 - 硬件不同（H100 vs RTX3090）：3090 的 算力/带宽 比更低，但 vLLM 生产优化程度、kernel 成熟度、批调度都不同；
 - 框架版本不同（v0.10.1.1 vs EAGLE-3 论文当时的版本）；
@@ -201,7 +211,7 @@
 | Meta 2508.08192 | bs 48 时 0.7× | vLLM（原始 EAGLE 实现） | Llama 系 | EAGLE | 缺具体硬件说明 |
 | SqueezeBits | 并发 32（1K 输入）/ 16（2K 输入） | 4×A100 | Llama-3.1-70B | 独立草稿 0.5B | 较完整 |
 | Batch SD Done Right | bs 8 以后负向缩放（针对 EqSpec 对齐方案） | A100 | 多个 | 多个 | 较完整 |
-| SpecDecode-Bench | 到 bs128 仍 > 1.0× | H100 | 多个 | 4 种 | 完整 |
+| SpecDecode-Bench | 到 bs128 仍 > 1.0×（※ 见下方复核：这只对**链式 k=3** 成立） | H100 | 多个 | 4 种 | 完整 |
 | Nightjar（§8.5） | 高 QPS 下最多比 vanilla 慢 30.25% | RTX 4090 | 7B | 独立草稿 0.5B | 较完整 |
 
 **这张表的正确用法**：证明"交叉点存在且分布极广（bs8 ~ bs128+）"，**不是**用来取一个平均值当阈值。
@@ -556,6 +566,12 @@ vLLM 文档逐字：
 
 **结论**：极可能确实存在于原文（截断导致抽取失败的可能性最大），但**本库标记为【待核验】**。写正文时若要引用，**必须人工打开 PDF 核对章节号与原句**，不得直接从本文搬运。
 （该报告确定包含的一句是：*"we can also repurpose these MTP modules for speculative decoding to further improve the generation latency"*，§2.2。）
+
+> ※ **2026-08-22 复核：此处的【待核验】已解除 —— 数字是真的，原判断"极可能确实存在于原文"正确。**
+> **核验方式**（不走摘要模型，避免二次幻觉）：`curl` 把 arXiv HTML **v1**（549 443 B）、**v2**（549 352 B）与**官方 PDF**（1 887 366 B / 53 页）全部落盘，本地去标签 + `pdftotext -layout` 后正则定位。**三种渲染逐字一致。**
+> **原文位置**：**§5.4.3 Multi-Token Prediction Evaluation**（PDF **第 35 页**，紧接 §5.4.2 Self-Rewarding 之后、§6 Conclusion 之前）。前四次抽取失败的原因确认是**抽取工具在到达 §5.4.3 之前截断**，不是原文没有。
+> **逐字原句**：*"Based on our evaluation, the acceptance rate of the second token prediction ranges between 85% and 90% across various generation topics, demonstrating consistent reliability. This high acceptance rate enables DeepSeek-V3 to achieve a significantly improved decoding speed, delivering 1.8 times TPS (Tokens Per Second)."*
+> **但按铁律二，口径仍然严重不全，不可横向比较**：batch size **原文未给出**；推理硬件**原文未在该节给出**（§3.4 说线上部署在 H800 集群、解码最小单元 40 节点 320 GPU、TP4+SP+DP80+EP320，**但论文没有说 §5.4.3 的 1.8× 是在该配置下测的 —— 不许替它连线**）；TPS **未区分 per-user 输出速度还是系统总吞吐**；数据集只写 *"across various generation topics"*；**接受率的定义口径未给**（是逐位接受率还是第二 token 的 argmax 一致率，无从判断）。γ 隐含 =1（*"predicts the next 2 tokens"*，$D=1$）。
 
 ---
 
@@ -983,6 +999,9 @@ SuffixDecoding 论文口径：8×NVIDIA H100 80G + 2TB 内存（AWS p5.48xlarge�
 见 §6.5 完整记录。**广泛引用，我 4 次定向抽取 arXiv HTML 未能逐字定位（其中一次明确报告文档被截断）。标记【待核验】。**
 **教训**：一个数字被引用一万次，不等于有人核对过原文。写正文前必须自己打开 PDF。
 
+> ※ **2026-08-22 复核：已核到，【待核验】解除。** 逐字原句在 **§5.4.3（PDF 第 35 页）**，arXiv HTML v1/v2 与官方 PDF 三种渲染一致，详见 §6.5 的复核记录。
+> **教训要改写**：原来的教训"必须自己打开 PDF"是对的，但**还漏了半句 —— 抽取失败不等于原文没有**。四次失败里至少一次是明确的截断报告；把"我抽不到"直接读成"原文没有"，是本库这次差点犯的错。**正确的动作是换渲染（HTML→PDF）+ 落盘本地正则，而不是换一个摘要模型再问一遍。**
+
 ### 10.5 SqueezeBits 同一配置的接受率被记作两个值
 
 - 同一篇文章、同一个草稿模型（Qwama-0.5B）、1K 输入下的接受率，我两次抽取分别得到 **53.5%** 和 **54.0%**。
@@ -996,6 +1015,12 @@ SuffixDecoding 论文口径：8×NVIDIA H100 80G + 2TB 内存（AWS p5.48xlarge�
 - **差异来源**：无法确定——可能是网站含论文外的补充实验，也可能是某一次自动抽取产生了幻觉。
 - **处理**：**以论文正文为准**；k=21 的说法标记【待核验】，**正文不得引用**。
 - **教训**：项目主页的"亮点摘要"和论文正文经常不是同一套实验，引用请指向论文。
+
+> ※ **2026-08-22 复核：此处记载有误，上面这条"冲突"根本不存在。**
+> **真相是版本差**：我读的是 **v1**（无树实验），网站对齐的是 **v2**（2026-03-18 修订，新增 "Tree-Style Verification" 节 + Figure 2）。**网站摘要是对的，两个"差异来源"猜测都不对**（既不是网站的论文外实验，也不是抽取幻觉）。完整复核与全口径见 §2.4 的复核块。
+> **教训要整个换掉**：原来那条"网站与论文常常不是同一套实验"在这里**不成立**，而且它把我导向了错误的处理动作（禁用一条真数据）。
+> **正确的教训（本库新增踩坑）**：**网站摘要和论文正文"打架"时，第一件要查的不是谁可信，是它们是不是同一个版本。** arXiv 的 `abs/` 页会明写 *"last revised …(this version, v2)"*；而本库四处引用的全是写死的 `…/html/<编号>v1`，**把版本号焊死在 URL 里，等于让自己永远读不到修订**。
+> **可操作的规矩两条**：① 引用 arXiv 正文时**先开 `abs/` 页看有没有 vN**，正文 URL 优先用**不带版本号**的形式（或显式写明"本库核的是 vX"）；② 记录"论文里没有 X"这类**否定断言**时，**必须同时记下核的是哪个版本、哪天核的** —— 否定断言的保质期比肯定断言短得多。
 
 ### 10.7 MoE 到底受益还是受损：四方混战
 
@@ -1050,7 +1075,7 @@ SuffixDecoding 论文口径：8×NVIDIA H100 80G + 2TB 内存（AWS p5.48xlarge�
 7. **一份权威的、逐框架的"greedy 下投机 vs 非投机输出逐 token 一致性"测试报告。** §5.5 只有单篇论文的主张。
 8. **长数字串 / 随机 token 串等病理输入上的接受率实测。** 直觉上应当极低，但**未查到数据**（本轮 WebSearch 配额在此项前耗尽）。
 9. **chunked prefill 与各类投机方法在具体 vLLM 版本上的完整支持矩阵**，以及二者同开时收益被削薄的**定量**幅度。§7.1 只有机制分析。
-10. **DeepSeek-V3 MTP 的 85–90% / 1.8× TPS 原句**（§6.5、§10.4）——需人工打开 PDF 核对。
+10. ~~**DeepSeek-V3 MTP 的 85–90% / 1.8× TPS 原句**（§6.5、§10.4）——需人工打开 PDF 核对。~~ ※ **2026-08-22 已核验关闭**：原句在 §5.4.3（PDF 第 35 页），HTML v1/v2 与 PDF 三渲染一致；口径仍不全，见 §6.5 复核块。
 11. **vLLM V1 当前是否已重新实现按 batch size 禁用投机**（§8.2 基于 v0.10.1 的 issue，可能已在更新版本中改变）。上线前请在**你自己的版本**上实测。
 
 ---

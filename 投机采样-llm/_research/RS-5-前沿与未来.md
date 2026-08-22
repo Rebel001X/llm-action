@@ -339,7 +339,7 @@ D-cut 在线上流量下：等 per-user 解码速度 ~15.3 tok/s 时，**聚合�
 
 | 模型 | 证据 | 机制细节 | 级别 |
 |---|---|---|---|
-| **DeepSeek-V3** | arXiv:2412.19437 技术报告 | MTP 模块；报告称第二 token 接受率 **85%–90%**，TPS **1.8×** | 「**B**」（数字来自检索摘要转述报告，未逐字核原文页码）|
+| **DeepSeek-V3** | arXiv:2412.19437 技术报告 **§5.4.3**（PDF 第 35 页） | MTP 模块；报告称第二 token 接受率 **85%–90%**，TPS **1.8×** | 「**A**」（原「B」；**2026-08-22 复核**已在 HTML v1/v2 + 官方 PDF 三渲染逐字定位并对到页码。**但 batch 与推理硬件原文未给出，不可合表**）|
 | **MiniMax-M2** | **arXiv:2605.26494**（v2 2026-07-30） | 62 层 decoder-only，229.9B 总参 / **9.8B 激活**；在**持续预训练的 decay 阶段**把 MTP 模块**从 1 个扩到 3 个（K=3）**以支持多步投机；MTP 模块**用主模型权重拷贝初始化**而非随机初始化 | 「**B**」 |
 | **DeepSeek-V4** | vllm-ascend v0.23.0 release notes + DSpark 论文 | V4 生产线原基线就是 **MTP-1** | 「**A**」 |
 | **Qwen3.5** | 第三方（mlx-lm PR #990、个人博客） | checkpoint 自带 MTP head，config 里 `mtp_num_hidden_layers: 1`；从 t 位置 backbone hidden state + token t 的 embedding 预测 **t+2** | 「**C**」——**官方技术报告我未查证** |
@@ -1018,7 +1018,7 @@ RLVR/RLHF 训练里 rollout 生成占大头，这是投机解码的天然战场�
 | **验证吃掉大部分时间** | **42%–95%** 的执行时间；Llama-3-70B bs=512 + n-gram 时验证占 **~95%**，drafting 基本免费 |
 | Llama-3-70B + EAGLE，ShareGPT | bs=1 时 **1.96×** |
 | Llama-3.1-8B + EAGLE，GSM8K | bs=128 时 **1.21×** |
-| **Qwen3-8B + EAGLE，GSM8K（tree k=21）** | bs=1 **1.65×** → **bs=128 时 < 1×（负收益）** |
+| **Qwen3-8B + EAGLE，GSM8K（tree k=21）** | bs=1 **1.65×** → **bs=128 时 < 1×（负收益）** ※ **2026-08-22 复核：此行标错了，见下** |
 | Llama-3-70B + EAGLE，GPQA/AIME（推理负载） | 1.64–1.80× |
 | **树 vs 链** | 树在 bs=1 有微弱优势，**bs=64 时掉到 1× 以下** |
 | **请求间接受长度方差巨大** | InstructCoder + Llama-3-70B：EAGLE **2.7–7.4**，n-gram **1.1–15.0**，draft-model **5.6–18.3** |
@@ -1032,6 +1032,23 @@ RLVR/RLHF 训练里 rollout 生成占大头，这是投机解码的天然战场�
 3. **实测离理论上界还有巨大空间，尤其是"按请求/按位置动态选方法"**（Oracle Combine 4.9× vs 单方法 2.2×）。
 
 → 所以这篇既是**最强的反方**，又给出了**最明确的开放方向**。
+
+> ※ **2026-08-22 复核（针对上表的两行树数据）：方向记对了，数字标错了一个，阈值和引擎也要更正。** 不删原文，更正如下。
+>
+> **原文出处已定位**：arXiv:2601.11580 **v2**（2026-03-18 修订）的 **"Tree-Style Verification"** 一节 + **Figure 2**。**v1 里没有这一节** —— 这正是 RS-4 当时抽取不到、并据此把它判成【待核验】的原因（RS-4 §2.4 / §10.6 已就地更正）。**这一条 RS-5 是对的，RS-4 是错的；但 RS-5 的具体数字也不干净。**
+>
+> **逐字原句**：*"By batch size 64, the k=21 tree falls below 1× speedup on all workloads for both models, whereas the chain remains above 1× throughout."*
+>
+> **三处要改**：
+> 1. ❌ **「tree k=21 在 bs=1 是 1.65×」是错的。** 原文：*"speedup increases from 1.65× for the chain to 1.68× for k=6 and 1.85× for k=21"* —— **1.65× 是 chain(k=3) 的数字**，k=21 的树在 bs=1 是 **1.85×**。我把基线的数字挂到了树头上，方向恰好相反（树在 bs=1 是**更快**，不是更慢）。
+> 2. ⚠️ **穿破 1× 的阈值，论文写的是 bs=64，不是 bs=128。** 原文明说 *"By batch size 64 …"*，且是 *"on all workloads for both models"*（Qwen3-8B 与 Llama3-70B 的四个非推理负载全部）。写 bs=128 是从图上外推的、比原文弱的说法。
+> 3. ❌ **引擎不是 vLLM，是 SGLang v0.5.9。** 上表其余各行是 vLLM 上的主实验，**唯独树这两行是 SGLang** —— 原文自陈原因：*"the draft-tree path in the vLLM version we evaluated is not yet sufficiently optimized for a fair comparison across tree configurations."* 把它和上表其它行并列，本身就违反铁律二。
+>
+> **正确的全口径版本（可直接供正文引用）**：SGLang v0.5.9；Qwen3-8B 与 Llama3-70B；H100 80GB（8B 单卡 / 70B TP=4，承自原文 *"Unless otherwise noted, all other settings follow those described earlier"*）；四个非推理负载；**树深固定为 3**；chain 基线 k=3，树 k=6（分支因子 2）、k=21（分支因子 4，≈EAGLE 的树）；chain 用 FlashAttention-3、树用 FlashInfer；SGLang 默认动态草稿树；横轴 batch=1/16/64/128；测的是**吞吐比**（generated tokens/sec，开 SD vs 不开）。
+> **bs=1**：Qwen3-8B/GSM8K chain **1.65×** → k=6 **1.68×** → k=21 **1.85×**；Llama3-70B/ShareGPT **1.81× → 1.90× → 2.03×**。
+> **机制（原文自己给的解释，正是本库 §16 的立场）**：宽树**抬高接受长度但压垮接受率** —— Qwen3-8B/GSM8K 接受长度 2.25→2.51→**2.92**，接受率 0.415→0.300→**0.095**；Llama3-70B/ShareGPT 接受长度 2.29→2.55→**2.93**，接受率 0.429→0.310→**0.097**。原文：*"wider trees increase the accepted length, but also verify many more tokens that are later rejected"*，而验证本就吃掉 42%–95% 的时间，所以大 batch 下这笔浪费迅速压过收益。
+> ⚠️ **原文未指明这组 bs=1 数字属于 EAGLE 还是 EAGLE-3**（Figure 2 图例两族都画了，正文只写 *"tree-based EAGLE/EAGLE-3"*）。引用时必须带上这句"未指明"。
+> **证据等级：维持〔A〕**（一手论文正文 + 官方 PDF + 项目网站三源一致），但**上表那两行的具体数字按本复核块改读**。
 
 ### 12.2 反方论证二（次强）：扩散 LLM 会不会直接取代自回归
 
@@ -1164,6 +1181,8 @@ SuffixDecoding 进 vLLM 主干；MLSys 2026 测出 prompt-output BLEU-4 重合 >
 
 **1. 固定形状的大树（tree attention 的激进用法）。**〔证据〕
 MLSys 2026 实测：树在 bs=1 只有微弱优势，**bs=64 就掉到 1× 以下**；Qwen3-8B + EAGLE + tree(k=21) 在 bs=128 是**负收益**。〔推断〕树的浪费（大部分分支必被拒）在 compute-bound 区间是纯亏损，而生产并发正在越走越高。**树没有死，但"固定的大树"死了，活下来的是"按预算动态裁剪的树"（D-cut / ECHO）。**
+
+> ※ **2026-08-22 复核：结论成立，措辞要收紧两处**（完整复核见 §12.1 末尾的复核块）。① "树在 bs=1 只有微弱优势"——原文数字是 chain 1.65× → tree k=21 **1.85×**（Qwen3-8B/GSM8K），**优势谈不上"微弱"，只是它在 bs=64 就全部蒸发**；② 阈值以原文为准写 **bs=64**（*"By batch size 64, the k=21 tree falls below 1× speedup on all workloads for both models"*），bs=128 是外推。③ 这组树实验跑在 **SGLang v0.5.9**，不是 vLLM。出处是 **arXiv:2601.11580 v2**（2026-03-18 新增的 "Tree-Style Verification" 节 + Figure 2），v1 无此节。
 
 **2. 「独立的小模型当草稿」（draft_model 路线）。**〔证据〕
 MLSys 2026 给了它唯一的生存位——target 足够大时（70B 上 draft 前向只占 12.5%，8B 上要占 37.5%）。〔推断〕但 EAGLE 系头只有一两层，成本比任何独立小模型都低一个量级；draft_model 路线只在「拿不到 target hidden state」或「跨 tokenizer」时还有意义。

@@ -174,7 +174,9 @@ def test_weight_quantization_shrinks_the_usable_batch_range():
     """**量化与投机采样是竞争关系，不是叠加关系。**
 
     权重量化把访存项砍小 -> 前向更早离开 memory-bound 区 -> "验证几乎免费"更早失效
-    -> 投机可用的 batch 区间缩小。实测交叉点：fp16 在 273，fp8 在 137，int4 在 69。
+    -> 投机可用的 batch 区间缩小。模型给出的交叉点：fp16 在 265，fp8 在 133，int4 在 67
+    （2026-08-22 修正：原 docstring 留的 273/137/69 是 attention FLOPs 漏乘层数修复前的旧值，
+     与第 23 篇 §4.1 的表对不上；断言只锁比值 >3.0，所以旧数字一直没被测试抓到）。
     """
     hw = scale(H100, 8)
     cb = [crossover_batch("llama3-70b", "llama3.2-1b", hw, 1024, 4, 3.0, wb)
