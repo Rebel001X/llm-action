@@ -128,7 +128,7 @@ def test_chain_beats_tree_at_small_budget():
 
 
 def test_expected_accept_ceiling_is_c_over_one_minus_c():
-    """$\sum_{d\ge1}c^d = c/(1-c)$：**每种形状都有一个与预算无关的渐近天花板**。
+    r"""$\sum_{d\ge1}c^d = c/(1-c)$：**每种形状都有一个与预算无关的渐近天花板**。
 
     这条是下面几条的基础，也是第 16 篇 §5.3 改写后的核心原理。
     """
@@ -140,7 +140,7 @@ def test_expected_accept_ceiling_is_c_over_one_minus_c():
 
 
 def test_higher_coverage_always_means_higher_ceiling():
-    """**恒真的那一半**：$c_k>c_1 \Rightarrow c_k/(1-c_k) > c_1/(1-c_1)$。
+    r"""**恒真的那一半**：$c_k>c_1 \Rightarrow c_k/(1-c_k) > c_1/(1-c_1)$。
 
     $x\mapsto x/(1-x)$ 在 $[0,1)$ 上严格增，所以这条**不需要任何阈值**，
     实测 40 种子 × 3 一致度 × 3 个 k 共 360 组，360/360 成立。
@@ -162,7 +162,7 @@ def test_higher_coverage_always_means_higher_ceiling():
 
 
 def test_tree_actually_overtakes_when_gain_is_meaningful():
-    """**需要条件的那一半**：相对增益 >1% 时，树在预算 4096 上真的反超。
+    r"""**需要条件的那一半**：相对增益 >1% 时，树在预算 4096 上真的反超。
 
     为什么要加"1%"这个门槛（这是跑数字跑出来的，不是拍的）：
     增益若只有浮点噪声量级（本库的 `make_draft` 在 agree=0.5/0.8 上恰好落在并列点，
@@ -190,7 +190,7 @@ def test_tree_actually_overtakes_when_gain_is_meaningful():
 
 
 def test_coverage_gain_is_always_strictly_positive():
-    """**再深一层的更正**：$c_k>c_1$ 是**恒真**的，"边际增益为 0"根本不可能发生。
+    r"""**再深一层的更正**：$c_k>c_1$ 是**恒真**的，"边际增益为 0"根本不可能发生。
 
     理由很简单：top-$k$ 候选集包含 top-1 再加 $k-1$ 个 token，而 $p$ 是全支撑的
     （Zipf 每个分量都 >0），多加一个 token 必然多加一份正概率。

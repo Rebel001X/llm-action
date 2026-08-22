@@ -35,7 +35,7 @@ verify.py —— 全库自检：把五条铁律变成可执行的检查，而不
   **教训**：在这之前 `test_repo_has_no_rule_warnings` 一直是绿的 —— 它守的是一个
   **本身就漏检的检查器**。"全绿"只能证明检查器没报警，不能证明库是干净的；
   所以本文件的每条豁免都必须在 test_verify_rules.py 里同时钉住"正例仍被抓"。
-"""
+r"""
 from __future__ import annotations
 
 import argparse
