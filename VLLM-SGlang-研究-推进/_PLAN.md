@@ -99,8 +99,8 @@ python -m pytest tests -q
 - ✅ `08-vLLM-HTTP-API表面全解.md`
 - ✅ `09-vLLM-Python-API与EngineArgs.md`
 - ✅ `10-vLLM-投机解码.md`
-- ⬜ `11-vLLM-结构化输出.md`
-- ⬜ `12-vLLM-PD分离与KV-Connector.md`
+- ✅ `11-vLLM-结构化输出.md`
+- ✅ `12-vLLM-PD分离与KV-Connector.md`
 
 ### 02-SGLang/（取证基准 `sglang`）
 - ✅ `01-SGLang-全景与代码地图.md`
@@ -117,29 +117,29 @@ python -m pytest tests -q
 
 ### 03-其他引擎/
 - ✅ `01-TensorRT-LLM.md`
-- ⬜ `02-LMDeploy与TurboMind.md`
-- ⬜ `03-TGI.md`
-- ⬜ `04-LightLLM.md`
-- ⬜ `05-llama.cpp-server.md`
-- ⬜ `06-MLC-LLM.md`
-- ⬜ `07-KTransformers.md`
-- ⬜ `08-Mooncake传输引擎.md`
-- ⬜ `09-NVIDIA-Dynamo.md`
+- ✅ `02-LMDeploy与TurboMind.md`
+- ✅ `03-TGI.md`
+- ✅ `04-LightLLM.md`
+- ✅ `05-llama.cpp-server.md`
+- ✅ `06-MLC-LLM.md`
+- ✅ `07-KTransformers.md`
+- ✅ `08-Mooncake传输引擎.md`
+- ✅ `09-NVIDIA-Dynamo.md`
 - ✅ `10-Tokasaurus.md`
-- ⬜ `11-开源推理引擎谱系图.md`
+- ✅ `11-开源推理引擎谱系图.md`
 
 ### 04-横向对比/
-- ⬜ `01-API兼容性横向对比.md`
-- ⬜ `02-调度策略横向对比.md`
-- ⬜ `03-KV缓存与前缀复用横向对比.md`
-- ⬜ `04-工程规模与代码结构对比.md`
+- ✅ `01-API兼容性横向对比.md`
+- ✅ `02-调度策略横向对比.md`
+- ✅ `03-KV缓存与前缀复用横向对比.md`
+- ✅ `04-工程规模与代码结构对比.md`
 - ⬜ `05-选型决策树.md`
-- ⬜ `06-性能口径与基准陷阱.md`
+- ✅ `06-性能口径与基准陷阱.md`
 
 ### 05-改进机会/
-- ⬜ `01-vLLM可改进点.md`
-- ⬜ `02-SGLang可改进点.md`
-- ⬜ `03-跨引擎共性缺口.md`
+- ✅ `01-vLLM可改进点.md`
+- ✅ `02-SGLang可改进点.md`
+- ✅ `03-跨引擎共性缺口.md`
 - ⬜ `04-可落地贡献清单.md`
 
 ### 99 收束

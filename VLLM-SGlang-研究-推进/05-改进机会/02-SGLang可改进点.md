@@ -10,7 +10,7 @@
 - **语法编译异步，但"编译完没完"这一步在调度主循环里跑一个最长 5ms 的忙等**——只要 `grammar_queue` 非空，`event_loop_normal`/`event_loop_overlap` 每一轮（不只是等语法的那个请求，是**整批**）都要先过这道忙等（`python/sglang/srt/constrained/grammar_manager.py:205-225`，默认间隔 `python/sglang/srt/environ.py:377` 的 `EnvFloat(0.005)`）。见 `## 8` 第 2 条。
 - **`RadixCache`（863 行）在生产工厂链里从未被直接构造**，`default_radix_cache_factory` 的每条分支最终都落到 `UnifiedRadixCache`（2,894 行）或其它专用类；`RadixCache` 唯一的构造点是给调度策略做本地模拟用的 `create_simulated()`。它的子类 `HiRadixCache` 更进一步：全仓唯一的实例化点是一个单元测试，生产代码路径完全不认识这个类。见 `## 8` 第 3 条。
 - **机器信号里最扎眼的"SGLang 热路径静默 except 密度是 vLLM 的 2.6 倍"这个数字，本篇抽样后认为大部分是分类口径造成的，不是真实的风险密度差**——原因和结论见 `## 7`，这是本库诚实标准要求的自我核验，不是走过场。
-- 本篇给出 **14 条可改进点**（模板：现状/问题/证据等级/改进方向/代价与反驳/难度）和 **3 条"不建议改"**，两边都要求证据，不许只列缺点不列代价。
+- 本篇给出 **14 条可改进点**（模板：现状/问题/证据等级/改进方向/代价与反驳/难度）和 **4 条"不建议改"**（任务要求至少 3 条，本篇多给一条），两边都要求证据，不许只列缺点不列代价。
 
 **速查：任务要求的问题在哪一节回答**
 
@@ -20,7 +20,7 @@
 | 语法编译忙等对调度延迟的影响 | `## 8` 第 2 条 |
 | RadixCache/UnifiedRadixCache 的默认路径 | `## 8` 第 3 条 |
 | 热路径静默 except 密度数字的抽样核验 | `## 7` |
-| 不建议改的三条 | `## 8` 末尾「不建议改」 |
+| 不建议改的四条 | `## 8` 末尾「不建议改」 |
 
 ## 1. 它在系统里的位置
 
@@ -176,6 +176,7 @@
 | 工程规范 / 可观测性 | 第 5、13 条（第 13 条同时属于语法约束和可观测性） |
 
 证据等级上，14 条里 **9 条纯「源码为证」**（第 1、2、3、4、7、8、9、10、13 条），**5 条在「现状」用源码为证、但「问题」的严重程度评估或「改进方向」的具体方案掺了「本库推断」**（第 5、6、11、12、14 条——具体是哪句推断，在各条正文里用「本库推断」显式标出，不是笼统盖章）。没有一条是纯粹靠印象、查不到源码支撑就写的——这也是本篇和"随手列一份代码异味清单"的区别：每条都要求先能回到 `file:line`，再谈值不值得改。
+
 ### 1. jump-forward decoding 是全仓死代码
 
 - **现状**：四个语法后端（`python/sglang/srt/constrained/base_grammar_backend.py:120-140` 定义接口，`python/sglang/srt/constrained/xgrammar_backend.py:164-174`、`python/sglang/srt/constrained/llguidance_backend.py:191-201`、`python/sglang/srt/constrained/outlines_backend.py:80-108` 分别实现）都完整实现了 `try_jump_forward`/`jump_forward_str_state`/`jump_and_retokenize`。全仓（`python/`、`test/`）对这三个方法名的调用，只有 `python/sglang/srt/constrained/reasoner_grammar_backend.py:228`、`:233`、`:238` 三处纯委托转发，`python/sglang/srt/managers/` 整个目录零命中。outlines 后端更进一步：`python/sglang/srt/constrained/outlines_backend.py:157-158` 构造 `OutlinesGrammar` 时把 `jump_forward_map` 硬编码成 `None`，自身实现里的 `try_jump_forward` 第一行判断永远为真、直接返回 `None`（`python/sglang/srt/constrained/outlines_backend.py:81-82`）。
@@ -191,7 +192,7 @@
 - **问题**：只要 `grammar_queue` 非空（有任意请求的 schema 还在编译），调度器接下来的每一轮 `get_next_batch_to_run` 都要先过这道最长 5ms 的忙等，才能继续给**所有**运行中的请求（包括跟语法编译毫无关系、纯解码的请求）组装本轮要跑的 batch。对小模型、小 batch、单步解码延迟本来就在个位数毫秒量级的部署，这道忙等可能和真实前向延迟一个数量级，等于把"一个请求的语法还没编译完"这件事，变成"全体请求这一轮都要多等最多 5ms"。
 - **证据等级**：源码为证。
 - **改进方向**：把内层 `while ... sleep` 循环改成只在 `running_batch` 本轮无事可做（没有可推进的运行中请求、也没有其它可调度的等待请求）时才允许等待到 `SGLANG_GRAMMAR_POLL_INTERVAL`；否则只做一次不等待的即时检查（`.done()` 查一遍就返回），把"还没编译完的请求"留到下一轮自然的调度节拍里再捡——反正 `get_next_batch_to_run` 本来就是每个前向步都会被调用一次，不需要在函数内部再自己造一个等待窗口。
-- **代价与反驳**：现在的忙等本质是在拿"让新就绪的请求赶上这一轮"去换"其它请求多等一点"，如果编译经常在几毫秒内完成，这个设计能让语法请求少排一轮队；改成即时返回会让编译完成的请求systematically多等一个调度周期（通常 < 一次前向步耗时），对大 batch、长前向步耗时的部署几乎无感——所以这条问题的严重性和"batch 小、单步延迟低"这个具体场景强相关，不是所有部署都会踩到，这也可能是它至今没被当作优先级很高的 bug 修的原因。
+- **代价与反驳**：现在的忙等本质是在拿"让新就绪的请求赶上这一轮"去换"其它请求多等一点"，如果编译经常在几毫秒内完成，这个设计能让语法请求少排一轮队；改成即时返回会让编译完成的请求系统性地多等一个调度周期（通常 < 一次前向步耗时），对大 batch、长前向步耗时的部署几乎无感——所以这条问题的严重性和"batch 小、单步延迟低"这个具体场景强相关，不是所有部署都会踩到，这也可能是它至今没被当作优先级很高的 bug 修的原因。
 - **难度**：小改（改一个条件判断，不涉及数据结构变更）。
 
 ### 3. `RadixCache` 已不是默认生产路径，`HiRadixCache` 是彻底的死代码
@@ -253,7 +254,7 @@
 - **现状**：`BaseGrammarBackend.cache`（`python/sglang/srt/constrained/base_grammar_backend.py:207`）的类型是 `Dict[Tuple[str, str], BaseGrammarObject]`，`get_cached_or_future_value()`（`python/sglang/srt/constrained/base_grammar_backend.py:284-296`）直接用 `(key_type, key_string)` 这个原始字符串元组做字典 key（`python/sglang/srt/constrained/base_grammar_backend.py:287`、`296`），没有任何归一化步骤。
 - **问题**：两个字段顺序不同但语义完全等价的 JSON Schema（比如 `{"a": ..., "b": ...}` 和 `{"b": ..., "a": ...}`）会被当成两个不同的缓存条目，各自触发一次完整的语法编译——编译本身跑在线程池里不阻塞主循环（`## 8` 第 2 条已经说明检查完成状态才是真正的成本），但重复编译本身仍然浪费 CPU、且让缓存命中率低于理论值。
 - **证据等级**：源码为证。
-- **改进方向**：在 `key = ("json", req.sampling_params.json_schema)` 这类构造缓存 key 的地方（`python/sglang/srt/constrained/grammar_manager.py:145`），对 JSON 类型的 schema 先做一次 `json.dumps(json.loads(schema), sort_keys=True)` 归一化再作为 key 的一部分,理论上其它可解析成结构化对象的类型（比如部分 `structural_tag`）也可以做类似处理。
+- **改进方向**：在 `key = ("json", req.sampling_params.json_schema)` 这类构造缓存 key 的地方（`python/sglang/srt/constrained/grammar_manager.py:145`），对 JSON 类型的 schema 先做一次 `json.dumps(json.loads(schema), sort_keys=True)` 归一化再作为 key 的一部分，理论上其它可解析成结构化对象的类型（比如部分 `structural_tag`）也可以做类似处理。
 - **代价与反驳**：归一化本身有 CPU 开销（一次 `json.loads`+`json.dumps`），需要确认这个开销显著小于一次完整语法编译才划算——大 schema 场景下应该是净赚，但对本来就很小的 schema，归一化的相对开销占比可能不小，需要用真实 schema 分布验证收益（本库不产出性能数字，这里只给方向）。
 - **难度**：小改。
 
@@ -272,7 +273,7 @@
 - **问题**：一段很短的前缀即使命中一次就写入 host 层，重算这段前缀的成本可能比一次 PCIe 往返还低，提前写入纯粹是浪费带宽；反过来一段很长的前缀本该更积极地被写入。命中次数这个单一维度没有用到"这段前缀有多少 token"这个已经在代码别处存在的量。
 - **证据等级**：源码为证（现状）+ 本库推断（"短前缀重算比 PCIe 往返更便宜"是基于常识的推断，本库没有做过实测对比，也没有 GPU 环境可以测）。
 - **改进方向**：把 admission 判据从单纯的命中次数，改成命中次数和前缀 token 数的联合判断——比如"命中次数 × 前缀长度"超过某个阈值才触发 write-through，短前缀需要更多次命中才达标。
-- **代价与反驳**：这个改动引入了一个新的复合公式和至少一个新的可调参数,调不好可能比现在的固定阈值更难预测；源码自己留的 `TODO` 只说"动态调整"，没有说明具体往哪个方向调，本条给出的"结合前缀长度"是本库推断的一种可能方向，不是源码作者原本设想的方案（未查证作者的真实意图）。
+- **代价与反驳**：这个改动引入了一个新的复合公式和至少一个新的可调参数，调不好可能比现在的固定阈值更难预测；源码自己留的 `TODO` 只说"动态调整"，没有说明具体往哪个方向调，本条给出的"结合前缀长度"是本库推断的一种可能方向，不是源码作者原本设想的方案（未查证作者的真实意图）。
 - **难度**：中等（需要先弄清楚 `cell_size`/带宽这类量在当前代码里以什么形式存在，再决定怎么接入判据）。
 
 ### 12. GPU 驱逐与 Host 驱逐各自独立触发，长期 host 紧张时会抖动
@@ -286,8 +287,8 @@
 
 ### 13. 语法编译指标的 Prometheus 导出桥接函数本身是死代码——比材料清单原本描述的问题更深一层
 
-- **现状**：`GrammarStats`（`python/sglang/srt/constrained/base_grammar_backend.py:39-47`）在编译期间被逐字段填充（`compilation_time`/`schema_count`/`ebnf_size`/`tree_traversal_time`/`is_cache_hit`/`is_grammar_aborted`/`num_timeout`，例如 `python/sglang/srt/constrained/base_grammar_backend.py:281` 写入 `compilation_time`）；`python/sglang/srt/observability/metrics_collector.py:744-868` 也确实注册了对应的 Prometheus `Histogram`（`sglang:grammar_compilation_time_seconds`、`sglang:grammar_tree_traversal_time_avg` 等），并且 `python/sglang/srt/observability/metrics_collector.py:1420-1441` 写了一个 `log_grammar_stats(self, grammar_stats)` 方法,把 `GrammarStats` 的字段一一喂给这些 histogram。但全仓（`python/`、`test/`）搜索 `log_grammar_stats`，唯一命中的就是这个方法自己的定义——没有任何调用点。
-- **问题**：这比"没有导出路径"更容易误导人——指标本身已经在 `/metrics` 端点注册（会出现在 Prometheus 抓取结果里），运维看到指标名存在,会以为它在正常汇报数据,实际上这些 histogram 永远不会被写入任何数据点，因为唯一能把 `GrammarStats` 灌进它们的 `log_grammar_stats` 从未被调用。这是本篇继 jump-forward 之后第二次在约束解码这个子系统里发现"接口/基础设施建好了,粘合调用那一步却漏掉了"的模式，值得作为一类通用风险记下来：**新功能落地时,数据结构、消费端接口都写完之后,容易漏掉"谁在什么时候调用消费端"这最后一环，且这一环缺失不会有任何报错提示**。
+- **现状**：`GrammarStats`（`python/sglang/srt/constrained/base_grammar_backend.py:39-47`）在编译期间被逐字段填充（`compilation_time`/`schema_count`/`ebnf_size`/`tree_traversal_time`/`is_cache_hit`/`is_grammar_aborted`/`num_timeout`，例如 `python/sglang/srt/constrained/base_grammar_backend.py:281` 写入 `compilation_time`）；`python/sglang/srt/observability/metrics_collector.py:744-868` 也确实注册了对应的 Prometheus `Histogram`（`sglang:grammar_compilation_time_seconds`、`sglang:grammar_tree_traversal_time_avg` 等），并且 `python/sglang/srt/observability/metrics_collector.py:1420-1441` 写了一个 `log_grammar_stats(self, grammar_stats)` 方法，把 `GrammarStats` 的字段一一喂给这些 histogram。但全仓（`python/`、`test/`）搜索 `log_grammar_stats`，唯一命中的就是这个方法自己的定义——没有任何调用点。
+- **问题**：这比"没有导出路径"更容易误导人——指标本身已经在 `/metrics` 端点注册（会出现在 Prometheus 抓取结果里），运维看到指标名存在，会以为它在正常汇报数据，实际上这些 histogram 永远不会被写入任何数据点，因为唯一能把 `GrammarStats` 灌进它们的 `log_grammar_stats` 从未被调用。这是本篇继 jump-forward 之后第二次在约束解码这个子系统里发现"接口/基础设施建好了，粘合调用那一步却漏掉了"的模式，值得作为一类通用风险记下来：**新功能落地时，数据结构、消费端接口都写完之后，容易漏掉"谁在什么时候调用消费端"这最后一环，且这一环缺失不会有任何报错提示**。
 - **证据等级**：源码为证。
 - **改进方向**：在 `GrammarManager`（或 `Scheduler` 里语法请求编译完成、状态转移到 ready 的那个位置，`get_ready_grammar_requests` 之后）加一次 `metrics_collector.log_grammar_stats(req.grammar.grammar_stats)` 调用，把已经写好的数据结构和已经写好的导出函数用一行代码接上。
 - **代价与反驳**：这条改动本身代价很低（一行调用），唯一需要确认的是调用时机——`GrammarStats` 的字段是在编译期间逐步填充的（比如 `tree_traversal_time` 可能在多次 `accept_token` 过程中持续追加），需要先搞清楚"编译完成的那一刻"是不是所有字段都已经是最终值，还是有些字段（比如运行期持续更新的树遍历耗时）本来就该在请求结束时才汇报一次——如果是后者，接入点应该放在请求生命周期结束的地方而不是编译完成的地方，这需要先读一遍 `tree_traversal_time` 具体在哪些时间点被追加（本篇未展开）。
@@ -299,16 +300,16 @@
 - **问题**：这是一条 opt-in 但已经写进代码、随时可能被用户打开的路径，它和默认路径（`UnifiedRadixCache`）之间"哪些功能受支持、哪些参数组合会被拒绝"目前只能靠读两份完全独立的实现逐行对比才能确认——`_reject_cache_salt` 这种"显式拒绝"还算友好（至少会报错），但没有文档保证所有的功能差异都用这种显式拒绝的方式暴露出来，用户打开这个实验开关之前无法一眼看出自己会失去什么。
 - **证据等级**：源码为证（`RadixCacheCpp` 的独立继承关系和 `_reject_cache_salt` 这一具体差异）+ 本库推断（"没有文档保证所有差异都显式拒绝"是基于本篇未逐行比对两个实现的全部方法得出的合理担忧，不是穷举验证过的结论）。
 - **改进方向**：在 `SGLANG_EXPERIMENTAL_CPP_RADIX_TREE` 的帮助文本或专门的一份对照文档里，列出已知的功能差异清单（目前至少已知 `cache_salt` 不支持），并且理想情况下用一组共享的行为测试（相同的插入/匹配/驱逐序列，同时跑两个实现，断言可比较的输出一致）来自动发现新增差异，而不是依赖开发者记得在改一个实现时想到去核对另一个。
-- **代价与反驳**：两个实现分属 Python 和 C++（通过 `cpp_radix_tree` 绑定），写共享的行为等价性测试本身工作量不小,需要先定义清楚"什么叫等价"（比如驱逐顺序在实现细节不同的情况下是否允许不同,只要求最终缓存内容集合一致）；纯文档层面的差异清单成本低得多，可以先做,等价性测试作为更完整但更贵的后续步骤。
+- **代价与反驳**：两个实现分属 Python 和 C++（通过 `cpp_radix_tree` 绑定），写共享的行为等价性测试本身工作量不小，需要先定义清楚"什么叫等价"（比如驱逐顺序在实现细节不同的情况下是否允许不同，只要求最终缓存内容集合一致）；纯文档层面的差异清单成本低得多，可以先做，等价性测试作为更完整但更贵的后续步骤。
 - **难度**：小改（差异清单文档）；中等（共享行为等价性测试）。
 
-### 不建议改的三条
+### 不建议改的四条
 
 **A. `except ImportError: pass` 这类可选依赖探测，不该被无差别地"补上日志"或改成显式抛错。**
 `python/sglang/kernels/ops/attention/flash_attention_v4.py:18-19`、`check_env.py` 系列（`## 7.1` 已经举了具体例子）大量使用"尝试导入可选后端，失败就把标志位设成不可用"的模式。这类代码的语义就是"这个能力在当前环境下可能存在也可能不存在，两种情况都是合法状态"——给每一处都加日志会在没装可选依赖（比如没装 AMD ROCm 相关包、没装某个厂商专用 kernel 库）的正常环境里刷出大量无意义的警告，把真正的问题淹没在噪音里。这类 `except` 本来就该"安静地失败"，改动它是在制造问题而不是解决问题。
 
 **B. `server_args.py` 巨大（10,142 行），但作为唯一权威来源集中一处，未必比拆分更差——这条要两面说。**
-支持集中的一面：`_run_resolution_pipeline`（`python/sglang/srt/server_args.py:3646-3667`）不是一坨杂乱代码,它有一份写在 docstring 里的五条排序原则（按依赖域分组、把厂商/特性细节隐藏在通用命名的 handler 名字后面等），是一个**有纪律的分发器模式**，不是"越写越乱"的产物；把 476 个字段集中在一个文件里,任何一次"这个旋钮的默认值是什么"的排查都只需要 `grep` 一个文件，不需要在几十个小文件之间跳转,也不需要担心跨文件的循环 import。反对集中的一面：这个仓库自己的工程规范文档（`sglang:.claude/rules/general-code-style.md:14`）明确写着"Files stay small. Keep each file under ~2k LOC"——10,142 行是这条自定规则上限的五倍多；即便有分发器纪律,单文件超过一万行本身还是会拖慢 IDE 索引、拉长 diff、增加合并冲突概率。**本条不建议做"大拆分"这种大动作**：`ServerArgs` 本质上是一份不可再分割的全局配置命名空间（几乎每个字段都可能被 `_run_resolution_pipeline` 里任意一个 handler 读到）,强行拆成多个文件大概率只是把"一处大文件"换成"十处互相 import 的小文件 + 一处更复杂的组装逻辑",复杂度未必真的下降；真正值得做的是本篇 `## 8` 第 4、6 条这种局部改进（补日志、收敛白名单）,而不是推倒重来。
+支持集中的一面：`_run_resolution_pipeline`（`python/sglang/srt/server_args.py:3646-3667`）不是一坨杂乱代码，它有一份写在 docstring 里的五条排序原则（按依赖域分组、把厂商/特性细节隐藏在通用命名的 handler 名字后面等），是一个**有纪律的分发器模式**，不是"越写越乱"的产物；把 476 个字段集中在一个文件里，任何一次"这个旋钮的默认值是什么"的排查都只需要 `grep` 一个文件，不需要在几十个小文件之间跳转，也不需要担心跨文件的循环 import。反对集中的一面：这个仓库自己的工程规范文档（`sglang:.claude/rules/general-code-style.md:14`）明确写着"Files stay small. Keep each file under ~2k LOC"——10,142 行是这条自定规则上限的五倍多；即便有分发器纪律，单文件超过一万行本身还是会拖慢 IDE 索引、拉长 diff、增加合并冲突概率。**本条不建议做"大拆分"这种大动作**：`ServerArgs` 本质上是一份不可再分割的全局配置命名空间（几乎每个字段都可能被 `_run_resolution_pipeline` 里任意一个 handler 读到），强行拆成多个文件大概率只是把"一处大文件"换成"十处互相 import 的小文件 + 一处更复杂的组装逻辑"，复杂度未必真的下降；真正值得做的是本篇 `## 8` 第 4、6 条这种局部改进（补日志、收敛白名单），而不是推倒重来。
 
 **C. 四个独立实现的投机解码 worker（`MultiLayerEagleWorkerV2`/`DFlashWorkerV2`/`DSparkWorkerV2`/`NGRAMWorker`）不该被强行合并进共享基类。**
 `## 7.2` 已经纠正过"这是 v1/v2 并存"的错误说法——真实情况是 SGLang 已经完成了 worker 层的版本统一（`python/sglang/srt/speculative/spec_registry.py:37-40`），当前的多套实现是**算法本身不同**导致的：这四个 worker 的验证/KV 裁剪语义有实质差异（非树验证、ragged 布局、无神经网络草稿这几种情况互相之间没有共同的抽象），继承共享基类 `EAGLEWorkerV2` 换不来真正的代码复用，只会强迫不同的算法削足适履去适配一套不适合它们的接口——[[10-SGLang-投机解码EAGLE]] `## 4` 已经用具体代码路径说明过这一点。反过来 `StandaloneWorkerV2`/`FrozenKVMTPWorkerV2` 这两个确实继承了 `EAGLEWorkerV2` 并复用了它的编排逻辑，说明团队并不是不知道"能复用就复用"，而是已经按"能不能共享语义"这条线做过一次取舍，四个独立实现是这次取舍之后的合理结果，不是没做完的重构。
@@ -324,11 +325,11 @@
 3. `RadixCache` 类现在在生产环境里到底扮演什么角色？它和 `UnifiedRadixCache`、`HiRadixCache` 三者的可达性（能不能被生产工厂构造出来）分别是什么？
 4. 材料清单里"speculative/ 下 v1/v2 worker 并存"这个说法为什么是错的？真正的证据在哪一行代码/文档？
 5. "SGLang 热路径静默 except 密度是 vLLM 的 2.6 倍"——本篇认为这个数字被高估了，给出的两条独立理由分别是什么（跟"分类口径"和"分母定义"两个角度对应）？
-6. 本篇给出的三条"不建议改"分别是什么？对 `server_args.py` 那一条,支持集中和反对集中的证据各是什么（各举一处源码/文档依据）？
+6. 本篇给出的四条"不建议改"分别是什么？对 `server_args.py` 那一条，支持集中和反对集中的证据各是什么（各举一处源码/文档依据）？
 7. `TODO` 认领率 24% 这个数字为什么会被空格问题拉低？举出仓库里的具体一行代码。
 
 **延伸阅读**：
 
-- [[06-SGLang-约束解码与语法后端]]——本篇 `## 8` 第 1、2、9、10 条（jump-forward、语法忙等、缓存 key 归一化、llguidance assert）全部建立在这一篇 `## 4`/`## 5`/`## 7` 已经做过的第一手走读之上，想看完整的语法后端架构、bitmask 生命周期、四个后端支持类型对照表,去那一篇。
-- [[03-SGLang-RadixAttention与前缀缓存]]——本篇 `## 8` 第 3 条（`RadixCache`/`HiRadixCache` 死代码）依赖那一篇 `## 7` 第 1、2 条已经发现的"`RadixCache` 不是默认路径"这条线索,本篇在此基础上把 `HiRadixCache` 的死代码程度坐实到"全仓唯一构造点是一个单元测试"。
-- [[10-SGLang-投机解码EAGLE]]——本篇 `## 7.2` 纠正的"v1/v2 并存"错误说法、以及「不建议改」第 3 条关于四个独立 worker 实现的论证,证据链完整版在那一篇的 `## 0` 第 2 条和 `## 4`。
+- [[06-SGLang-约束解码与语法后端]]——本篇 `## 8` 第 1、2、9、10 条（jump-forward、语法忙等、缓存 key 归一化、llguidance assert）全部建立在这一篇 `## 4`/`## 5`/`## 7` 已经做过的第一手走读之上，想看完整的语法后端架构、bitmask 生命周期、四个后端支持类型对照表，去那一篇。
+- [[03-SGLang-RadixAttention与前缀缓存]]——本篇 `## 8` 第 3 条（`RadixCache`/`HiRadixCache` 死代码）依赖那一篇 `## 7` 第 1、2 条已经发现的"`RadixCache` 不是默认路径"这条线索，本篇在此基础上把 `HiRadixCache` 的死代码程度坐实到"全仓唯一构造点是一个单元测试"。
+- [[10-SGLang-投机解码EAGLE]]——本篇 `## 7.2` 纠正的"v1/v2 并存"错误说法、以及「不建议改」第 3 条关于四个独立 worker 实现的论证，证据链完整版在那一篇的 `## 0` 第 2 条和 `## 4`。

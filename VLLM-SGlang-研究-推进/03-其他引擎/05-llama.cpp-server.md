@@ -15,6 +15,8 @@
 - **GGUF 的量化类型远不止"Q4 还是 Q8"这么简单。** `ggml_type` 枚举定义了 35 个存活类型（`GGML_TYPE_COUNT=43` 是数组哨兵，中间跳过 8 个历史废弃占位，`ggml/include/ggml.h:392`-`433`），其中 27 个是权重量化格式，分属三个机制完全不同的家族（传统线性量化、K-quant 分层量化、I-quant 码本量化，`## 4` 逐一拆）；上层暴露给 CLI 的 `llama_ftype` 有 36 个预设（如 `Q4_K_M`），每个预设不是"全模型统一比特宽度"，而是一张按张量角色分配不同类型的**混合表**（`src/llama-quant.cpp:608`-`613`）。
 - **HTTP 连接断开不等于生成中止，这是一个 vLLM 侧找不到对应实现的能力。** 每次生成对应一个按 `conversation_id` 索引的环形缓冲区（`tools/server/server-stream.h:11`-`12`），客户端断线重连后可以从任意偏移量继续读；`_src/vllm/vllm/entrypoints/` 下对同名机制的 grep 是零命中，`## 6` `## 7` 会给出这条能力在两边目标场景下的价值差异。
 - **默认配置下这是一个"不设防"的服务，不是"弱设防"。** `middleware_validate_api_key`（`tools/server/server-http.cpp:206`-`208`）在没传 `--api-key` 时直接放行所有请求；如果同时开了 `--tools all`，模型能调用的 `exec_shell_command` 工具默认又是在 `llama-server` 进程本身的权限下跑（`tools/server/server-tools.cpp:1250` 的 `permission_write = true`）——两条默认行为叠在一起，是本篇 `## 7` 要重点展开的风险面。
+- **支持一个新模型架构，是 Python 转换层和 C++ 图构建层两侧对称的手工劳动，不是"补一个配置文件"。** `conversion/` 下 222 处 `@ModelBase.register`（本库现场统计）对应 `src/models/` 下 151 个手写图构建文件——两个数字量级接近，说明这从来不是单侧工作量，`## 1.4` `## 5` 会展开这一点的代价。
+- **`--n-gpu-layers` 部分卸载时，先牺牲的是靠近输入的层，不是随机挑或者简单砍后半段。** `i_gpu_start = max(n_layer_all + 1 - n_gpu_layers, 0)`（`src/llama-model.cpp:1365`）配合按层归属判断（`:1368`），层号小于 `i_gpu_start` 的（离输入近）留在 CPU，其余的（离输出近）才上 GPU——`## 4.4` 会给出完整级联逻辑。
 - **它和 vLLM 不是同一类东西，源码层面能给出至少四条独立证据。** 没有跨进程/跨机器的调度器-执行器分层（一次 `update_slots()` 里只有一处 `llama_decode()` 调用，`:3612`，所有活跃 slot 的下一步 token 拼进同一个 batch 一起跑）；没有 PD 分离的代码痕迹；仓库里唯一的分布式路径（`ggml-rpc`）在文档里被作者自己标注为"proof-of-concept…fragile and insecure…Never run on an open network"（`tools/rpc/README.md:4`-`5`）；"router mode"做的是同一台机器上管理多个模型进程的生命周期（`tools/server/server-models.h:113` 的 `server_models`），不是跨节点的集群编排。`## 6` 会逐条对照 vLLM 给出反例。
 
 ## 1. 它在系统里的位置
@@ -141,7 +143,12 @@
 | 重排序端点 | `tools/server/server-context.cpp:5064`-`5066` | `post_rerank`：要求 `--reranking`（`params.embedding && pooling_type == RANK`），否则报错 |
 | 重排序协议兼容 | `tools/server/server-context.cpp:5072`-`5075` | 同时兼容 TEI 与 Jina 两种重排序请求体格式，按请求体是否含 `"texts"` 字段自动判断 |
 
-以上 44 条只是骨架，`## 3` `## 4` 会把其中若干条的上下文摊开细读。
+| Router 子进程 | `tools/server/server-models.cpp:1022`、`:1044`-`1046` | 按需 spawn 一个独立 `llama-server` 子进程，失败时抛 `"failed to spawn server instance"` |
+| Web UI 构建产物 | `tools/ui/CMakeLists.txt:36`-`37` | 生成 `ui.cpp`/`ui.h`，作为字节数组编译进 `llama-ui` 静态库 |
+| chunked prefill | `tools/server/server-context.cpp:3033`-`3035` | 长 prompt 按 `n_batch`/`n_ubatch` 拆块处理，一个 slot 可能跨多次 `update_slots()` 迭代才吃完 |
+| chunked prefill 旋钮 | `common/arg.cpp:1659`-`1667` | `-b/--batch-size`（逻辑批大小）与 `-ub/--ubatch-size`（物理批大小） |
+
+以上 48 条只是骨架，`## 3` `## 4` 会把其中若干条的上下文摊开细读。
 
 ## 3. 核心数据结构
 
@@ -205,6 +212,7 @@
 
 这套逻辑解释了 `## 0` 提到的"ggml 一份代码打通所有硬件"具体是怎么落地的:**不是每个后端单独写一套加载流程,而是所有后端共用同一套 buft 级联分配逻辑**,后端之间的差异被封装进 `ggml_backend_dev_buffer_type`/`ggml_backend_dev_host_buffer_type` 这类统一接口背后。
 
+第 4 层更细的粒度是**按层**决定 CPU/GPU 归属,而不是整模型二选一。`-ngl`/`--n-gpu-layers`(`common/arg.cpp:2764`)控制"多少层放到 GPU 上",默认值 `-1` 不是字面意义的负一层,而是一个哨兵,解析成"全部层"(`n_gpu_layers() const` 的实现,`src/llama-model.cpp:1756`-`1758`:`params.n_gpu_layers >= 0 ? params.n_gpu_layers : hparams.n_layer_all + 1`)。当显存装不下全部层、用户手动调小 `-ngl` 时,`i_gpu_start = max(n_layer_all + 1 - n_gpu_layers, 0)`(`src/llama-model.cpp:1365`)决定从哪一层开始上 GPU——**越靠近输出的层越优先留在 GPU 上,越靠近输入的层越先被挤到 CPU**,不是简单的"前 N 层"或"随机挑 N 层"。
 ### 4.5 slot 内部的另外两条支线:投机解码与多模态
 
 `server_slot`(`## 3`)里的字段其实透露了两条没有在主流程走读里展开的支线:
@@ -276,6 +284,12 @@
 - **不这样会怎样**:如果反过来默认强制鉴权(比如启动时自动生成一个随机 key 并打印到终端),对"本机跑着玩"这个场景会变成纯粹的摩擦——用户还要再复制一遍 key 传给客户端。但代价在 `## 7` 已经写清楚:一旦用户把 `--host` 从 `127.0.0.1` 改成 `0.0.0.0`(哪怕只是为了让同一局域网的另一台设备连上),不设防的默认值就从"没问题"变成"局域网内任何人都能调用,包括调用像 `exec_shell_command` 这样的高风险内置工具"。这个由使用场景切换触发的风险跃迁,代码层面没有任何提示或阻拦——唯一的提示是 `## 7` 提到的那条 `cors_origins == "*"` 警告,而且这条警告的触发条件是 CORS 配置,不是监听地址本身。
 - **什么时候可以不这样**:任何"服务可能被除操作者以外的第三方访问到"的场景——多用户共享的开发机、暴露在公司内网、更不用说公网——都应该显式传 `--api-key`,并且如果开了内置工具,认真考虑 `## 5` 决策三提到的 `--tools-runtime` 隔离。这不是 llama.cpp 特有的取舍,但因为它的目标场景默认偏向"单用户本机",默认值选择了对这类场景更友好的一侧,把风险判断的责任转移给了使用者。
 
+### 决策七:Web UI 编译进同一个二进制,不是独立部署的前端服务
+
+- **为什么这么设计**:`## 1.3` 已给出机制——`tools/ui` 的构建产物被生成成 `ui.cpp`/`ui.h`(`tools/ui/CMakeLists.txt:36`-`37`),编译进 `llama-ui` 静态库,链接进最终的 `llama-server` 可执行文件。这直接服务于"一个二进制、一条命令跑起来"这条 `## 5` 决策一反复强调的目标:用户执行 `llama serve -hf <repo>` 得到的不只是一个 API,还自带一个能直接在浏览器打开的聊天界面,不需要额外 `npm install`、`npm run build`,也不需要单独起一个前端服务器再配置它去访问后端 API。
+- **不这样会怎样**:如果 Web UI 是一个独立部署的前端项目(类似很多云服务"后端一个仓库、前端另一个仓库,各自发布"的做法),用户要么自己搭一套前端托管,要么依赖项目方额外提供一个托管好的公共实例——后者意味着离线、内网场景下 Web UI 直接不可用。llama.cpp 选择把前端资产编译进二进制,换来的是**离线可用性**,代价是这个二进制里永远比"纯粹只有推理逻辑"多出 110,392 行 TypeScript 编译产物对应的体积(`## 1.1` 已给出这个行数),即便用户只想用 API、完全不碰 Web UI。
+- **什么时候可以不这样**:构建时可以用 `LLAMA_BUILD_UI=OFF` 这类选项跳过 Web UI 编译(`tools/ui/CMakeLists.txt` 里能看到 `LLAMA_BUILD_WEBUI`/`LLAMA_BUILD_UI` 这一组开关及其向后兼容别名,`:7`-`9`),得到一个更小的、纯 API 的二进制——这是"单体但可选裁剪"和"完全解耦的独立前端"之间的一个折中,不是非此即彼。
+
 ## 6. 同位对照:vLLM 在同一位置怎么做
 
 **并发单位:固定 slot vs 动态 block 池。** llama.cpp 的 `server_slot`(`tools/server/server-context.cpp:196`)数量在启动时由 `-np` 定死,每个 slot 的上下文容量也是启动时算好的固定值(`n_ctx / n_parallel`,`src/llama-context.cpp:293`)。vLLM 的 `Scheduler`(`` `vllm:vllm/v1/core/sched/scheduler.py:73` ``)不预分配"槽位",而是维护一个 `BlockPool`(`` `vllm:vllm/v1/core/block_pool.py:143` ``)——所有请求共享同一个物理块池,`free_block_queue`(`` `vllm:vllm/v1/core/block_pool.py:181` ``)按需分配、按 LRU 近似策略驱逐,一个请求能用多少块只取决于当前显存里还有多少空闲块,不取决于它落在"第几个 slot"。这是两种资源模型的根本区别:llama.cpp 是**固定车位**(车位数量和大小开工前定死,某个车位空着别的车也停不进去),vLLM 是**弹性车道**(车道总容量固定,但怎么分给谁是每一步都在重算的动态决策)。
@@ -298,6 +312,8 @@
 
 **鉴权覆盖的协议面、比较方式都不同。** llama.cpp 的 `middleware_validate_api_key`(`tools/server/server-http.cpp:206`-`231`)同时接受 `Authorization: Bearer` 和 `X-Api-Key` 两种请求头(`## 2` 已给出证据),比较方式是普通的 `std::find`。vLLM 的 `AuthenticationMiddleware.verify_token`(`` `vllm:vllm/entrypoints/serve/middleware/authenticate.py:29` ``)只校验 `Authorization` 头的 `Bearer` scheme,但比较前先对 token 做 SHA-256 哈希、再用 `secrets.compare_digest`(常量时间比较,防时序侧信道)。这个细节对应 `## 0` 已给出的硬结论——vLLM 和 llama.cpp 都实现了 `/v1/messages`(Anthropic 协议兼容),但 llama.cpp 在鉴权这一层也顺带接住了 Anthropic 生态惯用的 `X-Api-Key` 请求头,协议兼容面比"多一个路由"更往前走了一步;而 vLLM 在密钥比较这一个更窄的点上,多做了一层时序攻击防护。**两边各自更用心的地方不一样**,不是哪边全面更严谨。
 
+**同机多模型:进程级路由 vs 无内建概念。** `## 4.9` 已给出证据:llama.cpp 的 router 模式在同一个二进制里内建了"按需拉起模型子进程、代理转发请求"的能力(`tools/server/server-models.cpp:1022` 的 spawn 日志)。vLLM 没有对应的内建组件(**源码为证**:`_src/vllm/vllm/entrypoints/` 下对 `Router`/`model_router` 一类命名的 grep 零命中),多模型场景依赖外部编排——起多个独立的 vLLM 实例,前面挂一层 Nginx 或 Kubernetes Service 做路由。这不是能力缺失,而是两边对"谁负责编排"这件事的默认答案不同:llama.cpp 假设使用者没有现成的编排基础设施(端侧/单机场景通常也确实没有),所以把这层内建进来;vLLM 假设部署环境本来就有容器编排能力,不重复造轮子。
+
 ## 7. 踩坑与反直觉
 
 - **`_lab/out/api_surface.json` 里的 36 条路由,方法全标成 `POST`——这是抽取脚本的盲区,不是 llama.cpp 只支持 POST。** 正则只匹配了 `ctx_http.post(...)` 这一种调用形态(`_lab/out/api_surface.json` 的 `"method": "regex"` 字段就是明确的自曝),`server.cpp` 里同样数量级的 `ctx_http.get(...)`(`GET /health`、`GET /props`、`GET /models`、`GET /lora-adapters`、`GET /slots`、`GET /v1/stream`、`GET /tools` 等)和 `ctx_http.del(...)`(`DELETE /models`、`DELETE /v1/stream`)一条都没被统计进去。读这份 JSON 时如果直接拿"36"当作"llama.cpp 一共暴露 36 个能力点",会明显低估。
@@ -314,6 +330,7 @@
 - **router 模式下"模型"这个词有一个独立于 GGUF 文件的生命周期状态机,和 slot 的生命周期是两回事。** `server_model_status`(`tools/server/server-models.h:30`-`38`)有 `DOWNLOADING`/`DOWNLOADED`/`UNLOADED`/`LOADING`/`LOADED`/`SLEEPING` 六个状态,管理的是"这个模型的子进程现在处于什么阶段",和 `## 3` 描述的 `slot_state`(管理"这个 slot 现在在干什么")是两套完全独立的状态机,分别对应 router 进程和某个具体模型子进程内部——读代码时看到"状态"两个字要先确认这是哪一层的状态,不能默认它们是同一个概念的不同叫法。
 - **`## 4.9` 提到的"router 每个模型一个独立子进程",容易被误读成"和 vLLM 的多副本部署是一回事"。** 表面上都是"多个独立进程各自跑一份模型",但触发扩容/缩容的机制完全不同:vLLM 的多副本通常靠外部编排(K8s、`--data-parallel-size` 之类的启动期静态配置)决定副本数,运行时不会自己去起停副本;llama.cpp 的 router 子进程数量是**请求触发**的动态行为——`POST /models/load`(`## 2` 已列出)按需拉起一个新子进程,`SLEEPING` 状态(`server_model_status` 已给出)则是子进程存活但模型权重被换出。这更接近"按需唤醒的模型仓库",不是"预先配置好副本数的负载均衡集群"。
 - **`server_task` 的 `is_parent()`/`child_tasks` 看起来像"高级调度信号",实际服务的是相对朴素的一对多协同场景,不是抢占或优先级调度。** `## 3` 已经指出这对字段支持"一个父任务扇出多个子任务、各自抢一个 slot"的模式;第一次看到"父子任务"容易联想到 vLLM 里请求优先级或者投机解码草稿-验证这类复杂调度概念,但 llama.cpp 这里对应的是更朴素的场景(比如同一次请求需要多个 slot 协同处理),背后不存在一个"谁的优先级更高"的判断逻辑——所有子任务平权,一起等资源,`slot_state::WAIT_OTHER` 纯粹是"等其他子任务的 slot 先处理完 prompt"这个同步点,不涉及优先级比较。
+- **`n_batch`/`n_ubatch` 是两个独立的旋钮,不是同一个概念的两种叫法。** `-b/--batch-size` 的帮助文本写的是"logical maximum batch size",`-ub/--ubatch-size` 写的是"physical maximum batch size"(`common/arg.cpp:1659`-`1667`,`## 2` 已给出行号)。第一次看只有"batch"字样容易以为是同一件事的默认值和覆盖值,实际上"逻辑"批大小是 `update_slots()` 单次处理的 token 上限(`## 4.2` 已展开的 chunked prefill 单位),"物理"批大小是这个逻辑块内部再往 GPU/CPU kernel 提交时实际用的子批大小——两者可以配成不同的值,`n_ubatch` 通常小于等于 `n_batch`。
 
 
 ## 8. 可改进点
@@ -330,6 +347,7 @@
 8. **`middleware_validate_api_key` 的密钥比较不是常量时间的。** `## 6` 已给出对照:vLLM 的 `AuthenticationMiddleware.verify_token`(`` `vllm:vllm/entrypoints/serve/middleware/authenticate.py:29` ``)对 token 先哈希再用 `secrets.compare_digest` 做常量时间比较,llama.cpp 这边是普通的 `std::find`(`tools/server/server-http.cpp:231`)。对绝大多数"本机跑、只有自己用"的场景,这个差异几乎不构成实际威胁;但既然 `--api-key` 这个选项本身就是为"有必要设防"的场景准备的,补一个常量时间比较的成本很低(标准库 `std::equal` 配合按位或累加,或直接引入现成的实现),用一致的心智模型对待"启用鉴权"这件事,比只保护一半更清楚。
 9. **`GET /props` 目前不区分"用户请求的配置"和"实际生效的配置"。** `## 8` 第 5 条已经指出 `--ctx-size` 被截断这一个具体场景,但同样的落差(用户传的参数值和运行时实际生效值不一致)理论上不止这一处。一个更系统性的改进是让 `server_context` 在启动期把"每个曾经被静默调整过的参数"统一记进一张小表,`GET /props` 响应体里加一个 `adjusted_params` 字段列出来,而不是每发现一处降级就单独打一次补丁式的日志——这样以后再新增一种静默降级路径,客户端可观测性是自动继承的,不需要每次都记得手动加一处上报。
 10. **Router 模式下,子进程的资源账本(每个模型占多少显存/内存)没有在 `## 2` 提到的路由表面暴露出来。** `server_model_status`(`## 7` 已给出六态状态机)只回答"这个模型现在处于哪个阶段",不直接回答"这台机器现在还能不能再多起一个模型"。如果 router 能在生成状态响应时顺带汇总"当前已加载模型的显存占用总量 vs 硬件总量",对于同机多模型场景的运维决策(现在能不能再 `POST /models/load` 一个新模型)会比现在"试了才知道"更可预测。
+11. **`_lab/repo_stats.py` 目前统计不到 `conversion/` 目录下按架构注册的转换类数量,只给出目录总行数。** `## 1.4` 这份"222 处 `@ModelBase.register`"的数字是本篇现场跑 `grep -rc` 得到的,不在 `_lab/out/repo_stats.json` 的既有字段里。给 `repo_stats.py` 补一个"按装饰器/关键类统计注册数"的通用小工具(不只对 llama.cpp,对任何用装饰器模式做插件注册的引擎都适用),能让"一个仓库到底支持多少种可插拔的东西"这类问题从"临时手动 grep"变成"跑一次脚本就有的确定性数字"。
 
 
 ## 9. 自测题与延伸阅读
@@ -349,6 +367,8 @@
 11. `--tools all` 打开 `exec_shell_command` 之后,这个工具默认运行在什么权限下?要让它跑在隔离环境(容器或远程主机)里,需要额外配置哪个参数?
 12. `POST /rerank` 在什么条件下会直接返回错误,不进入实际的重排序逻辑?这个端点同时兼容哪两种业界重排序 API 格式,靠请求体里的什么特征区分?
 13. `qs.has_imatrix` 这个标志位会不会改变同一个量化预设(比如 `Q4_K_M`)下的张量类型分配?举一个源码里能找到的具体分支作为证据。
+14. 支持一个新模型架构,llama.cpp 需要在哪两个目录、用哪两种语言各写一份代码?这两处各自的文件/注册数量级(本篇给出的现场统计)大致是多少?
+15. router 模式下,一个新模型被加载时,router 进程本身会不会去读取或持有这个模型的权重?真正持有权重的是谁?
 
 **延伸阅读**(双链只取自 `_PLAN.md` §6 名册):
 

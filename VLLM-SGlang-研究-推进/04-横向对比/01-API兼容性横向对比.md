@@ -24,6 +24,8 @@
 
 本篇只看 HTTP 请求/响应这一层的"表面兼容性"：路由存不存在、字段叫什么、字段语义是否一致、鉴权覆盖到哪。不看各引擎内部怎么把这个请求体转换成调度器能理解的对象（那是 `[[03-SGLang-RadixAttention与前缀缓存]]`、`[[03-vLLM-调度器解剖]]` 这类篇目的范围），也不产出任何性能数字。
 
+之所以值得单独写一篇跨引擎对比，而不是让读者自己去读 12 份单引擎文档再脑内做差集，是因为**"兼容"这个判断本身具有欺骗性的复合结构**：路由层面兼容（都有 `/v1/chat/completions`）不代表字段层面兼容（22/68 字段重叠），字段名相同不代表字段语义相同（`## 5.3`），协议标准相同（都叫"OpenAI 兼容"）不代表鉴权模型相同（`## 5.5`）。任何一层单独拿出来看都会给出过于乐观的结论，只有把四层叠在一起，才能回答"我现在用 vLLM 客户端代码，能不能直接指向 SGLang 的 endpoint"这个实际问题——这正是本篇存在的理由。
+
 ---
 
 ## 2. 代码地图（文件 → 职责，带行号）
@@ -127,6 +129,9 @@
 | `/v1/chat/completions/render` | vLLM | 把"组装 prompt 但不跑推理"这一步单独开成端点，服务于无 GPU 的 render-only 进程，见 `08-vLLM-HTTP-API表面全解` |
 | `/v1/batches` | Dynamo、Tokasaurus | OpenAI Batch API 语义，两家都在做"异步批处理任务队列"，其余引擎没有对应的任务持久化层 |
 | `/slots/:id_slot` | llama.cpp | 单进程多 slot 并发槽位的调试接口，对应 llama.cpp 的"进程内槽位"并发模型，其余引擎没有这个并发单元 |
+| `/hicache/storage-backend` | SGLang | 分层前缀缓存（HiCache）的存储后端查询，对应 `[[11-SGLang-PD分离与HiCache分层]]` 描述的多级缓存架构，其余引擎没有对等的分层缓存管理面 |
+| `/distserve/p2p_connect` 等 6 条 | LMDeploy | PD 分离场景下节点间点对点连接管理，是 LMDeploy 自家 DistServe 实现的内部管控面，命名风格（`p2p_connect`/`p2p_drop_connect`/`p2p_initialize`）看得出是独立于 vLLM/SGLang PD 实现的另一套协议 |
+| `/v2/models/:model_name/versions/:model_version/infer` | TGI | KServe v2 推理协议的直接映射，服务于已经在用 Kubernetes/KServe 生态做模型服务编排的团队，与 `/v1/*` 是两条完全独立的协议栈 |
 
 ### 3.3 字段级重叠度（抄自 `_lab/out/compare.json` 的 `chat_field_matrix`）
 
@@ -202,6 +207,21 @@ vLLM 与 SGLang 都是 68 字段、22 个 OpenAI 标准、46 个私有——但*
 | 推理/输出控制 | 5 | `separate_reasoning` `stream_reasoning` `skip_special_tokens` |
 | PD 分离/KV 传输 | 4 | `bootstrap_host` `bootstrap_port` `bootstrap_room` |
 | 前缀缓存控制 | 2 | `cache_salt` `extra_key` |
+
+**第三个样本：TensorRT-LLM 的 33 个私有字段**（用来验证上面的分族模式不是 vLLM/SGLang 两家的巧合）
+
+| 族 | 字段数 | 举例 |
+|---|---:|---|
+| 采样扩展 | 13 | `best_of` `early_stopping` `length_penalty` `top_p_min` `use_beam_search` |
+| Prompt 模板构造 | 10 | `add_generation_prompt` `chat_template` `conversation_params` `thinking_token_budget` |
+| Prompt token 直传 | 3 | `prompt_token_ids` `prompt_token_ids_b64` `prompt_ignore_length` |
+| 多模态 | 2 | `media_io_kwargs` `mm_processor_kwargs` |
+| PD 分离/KV 传输 | 2 | `disaggregated_params` `cache_salt` |
+| 调度 | 1 | `priority` |
+| LoRA | 1 | `lora_request` |
+| Agent/工具编排 | 1 | `agent_hierarchy` |
+
+三个样本（vLLM 46、SGLang 46、TRT-LLM 33）里，"采样扩展"和"Prompt 模板构造"两族**始终是最大的两族**——这不是巧合：OpenAI 标准字段集里的采样参数只有 `temperature`/`top_p`/`frequency_penalty`/`presence_penalty` 四个，而 HuggingFace `generate()` 系的采样参数（`top_k`/`min_p`/`repetition_penalty`/`length_penalty`/`use_beam_search`……）本来就有十几个，三家不约而同地把这批"HF 系但非 OpenAI 系"的采样参数原样透传成私有字段，说明**私有字段膨胀的第一大驱动力是"OpenAI 标准的采样参数集合本来就比开源推理框架的习惯集合窄"**，而不是各家发明了多少全新概念。
 
 - **为什么这样**：两家都在 OpenAI 协议之上叠了自己的调度器（vLLM 的 `kv_transfer_params`/SGLang 的 `bootstrap_*` 对应各自的 PD 分离实现）、自己的结构化输出后端（vLLM 走 `structured_outputs` 统一开关，SGLang 直接暴露 `ebnf`/`regex` 两种语法）、自己的可观测性诉求（两家的调试字段数量都排进前二，这是"生产环境需要比 OpenAI 协议给得更多的可观测性"这一诉求的直接产物）。这些能力如果不放进请求体字段，就得放进只有本引擎知道的 header 或者单独端点，字段化是成本最低的暴露方式。
 - **不这样会怎样**：如果拒绝加私有字段、坚持"纯 OpenAI 协议"，PD 分离、Radix 会话续接、专家路由观测这些能力就必须挪到非 `/v1/*` 的独占端点或者环境变量里配置——SGLang 的 `bootstrap_host`/`bootstrap_port`/`bootstrap_room` 恰好证明了这条路径是可行的（它们本可以做成独立端点，但选择了放进请求体，理由是 PD 分离要求这些参数**逐请求**变化，做成端点意味着每个请求都要多一次 HTTP 调用）。
@@ -281,6 +301,20 @@ vLLM 与 SGLang 在**功能对等**的 RLHF 权重更新能力上做出了相反
 - **不这样会怎样（即"逐端点声明鉴权"的代价）**：如果每个端点都要显式声明"是否需要鉴权"，多出的工程量是每次新增端点都要过一遍安全检查清单，历史上这类逐端点声明的方案容易出现"忘了标注"的疏漏——前缀白名单的失误模式相反，是"忘了把端点放进受保护前缀"，两种方案都依赖人工纪律，只是失误的方向不同。
 - **什么时候可以不这样**：单机本地开发、网络完全隔离（不暴露公网端口）的场景下，`--api-key` 覆盖面不完整这件事本身不构成风险——这也是为什么 vLLM 文档反复强调"不要仅依赖 `--api-key`"而不是"修复覆盖面"：生产部署本来就应该叠加反向代理 + 网络隔离，`--api-key` 只是最后一道非必须的软保险。
 
+### 5.6 容易被漏掉的第三个标准：OpenAI 自己的 Responses API
+
+`## 0`/`## 5.4` 讲的是"OpenAI 之外"的第二标准（Anthropic），但还有一个更容易被忽略的事实：**OpenAI 自己在 Chat Completions 之外又推出了一套 Responses API（`/v1/responses`），这是第三套需要单独兼容的协议，不是 Chat Completions 的简单包装**。`## 3.2` 已经给出覆盖数字——7/12 家实现了 `/v1/responses`（dynamo、lightllm、llama.cpp、lmdeploy、sglang、tensorrt-llm、vllm），vLLM、SGLang、TensorRT-LLM 三家都各自定义了独立的 `ResponsesRequest` 类，不是复用 `ChatCompletionRequest`：
+
+- vLLM：`vllm/entrypoints/openai/responses/protocol.py:136`
+- SGLang：`sglang:python/sglang/srt/entrypoints/openai/protocol.py:1577`
+- TensorRT-LLM：`tensorrt-llm:tensorrt_llm/serve/openai_protocol.py:1204`
+
+**口径提醒（未查证部分）**：`_lab/compare.py` 目前只对 `ChatCompletionRequest` 做了字段级差集运算，`ResponsesRequest` 没有对应的字段对比——本篇因此**不产出** Responses API 的字段级兼容性数字，只能确认"三家都各自定义了独立协议类"这一结构性事实。想知道 Responses API 层面私有字段有多少、缺席哪些 OpenAI 标准字段，需要先给 `compare.py` 补一条 `responses_request` 的差集运算，这是 `## 8` 可改进点之外一个具体的、本篇没有完成的后续工作项。
+
+- **为什么会有 Responses API 这第三个标准**：OpenAI 自己的产品文档把 Responses API 定位为面向"有状态多轮 Agent 工作流"的下一代接口（支持内建工具调用、服务端会话状态），Chat Completions 则保留为"无状态单次补全"接口——两者不是替代关系，是并存关系。开源引擎跟进 Responses API，本质上是在追一个**还在演进中的、OpenAI 自己都没有停止修改的协议**，这与追 Chat Completions（相对稳定）的确定性完全不同。
+- **不这样会怎样**：如果引擎只实现 Chat Completions、不跟进 Responses API，任何基于 OpenAI 官方 Agent SDK（默认走 Responses API）构建的客户端就无法直接接入——这是 5 家（ktransformers/mlc-llm/mooncake/tgi/tokasaurus）目前的状态，它们的客户端要么手动转换成 Chat Completions 调用，要么完全接不上这类新款 Agent 框架。
+- **什么时候可以不跟进**：Responses API 目前主要服务"官方 Agent SDK 生态"这一个细分场景，如果引擎的目标用户群本来就是通过 LangChain/自建 Chat Completions 客户端接入（不依赖官方 Agent SDK），不跟进 Responses API 的代价很小——这也是为什么面向端侧（MLC-LLM）、面向研究极简部署（Tokasaurus）的引擎选择不做的合理原因，而不是"做不到"。
+
 ---
 
 ## 6. 口径差异与抽取限制
@@ -345,6 +379,8 @@ SGLang 的 Ollama 兼容路由写成 `@app.post(os.environ.get("SGLANG_OLLAMA_CH
 | vLLM → llama.cpp | `/classify` `/score` `/pooling` 在 llama.cpp 的 236 条路径并集里完全没有对应端点（`## 3.2` 路由矩阵） | 分类、非 `/v1` 打分、pooling 三类能力在 llama.cpp 上**没有任何形式的替代端点**，不是换个名字的问题，是能力缺口 | `_lab/out/compare.md` §B |
 | vLLM → llama.cpp | LoRA 管理 API 形状不同：vLLM 是 `/v1/load_lora_adapter`/`/v1/unload_lora_adapter` 两个动作端点，llama.cpp 是 `/lora-adapters` 一个资源端点（GET 查询、POST 更新，`llama.cpp:tools/server/server.cpp:270-271`） | 不是字段级差异，是整个调用模式（RPC 风格 vs REST 资源风格）要重写 | `## 2` 代码地图 |
 | llama.cpp → vLLM | `/infill` `/props` `/apply-template` 这类面向本地编辑器集成的端点在 vLLM 里没有对应物 | 依赖代码补全"中间填空"语义的客户端整体功能缺失，不是接口不兼容，是场景本身在 vLLM 的产品定位里不存在 | `## 3.2` 独占端点表 |
+| vLLM → LMDeploy | `session_id` 类型从 `str \| None` 变成 `int \| None = -1`：如果客户端习惯传 UUID 字符串当 `session_id`，直接发给 LMDeploy 会在字段校验层被拒绝（类型不匹配），而不是像 `## 7.1` 前两行那样静默生效 | 这是本表里**少数会直接报错、而不是静默失败**的迁移风险，报错本身反而比静默失败更容易在测试阶段就发现 | `## 2` 代码地图 |
+| vLLM → LMDeploy | `min_tokens` 要改叫 `min_new_tokens`；vLLM 的 46 个私有字段绝大多数在 LMDeploy 的 21 个私有字段里没有对应物（`## 5.2` 字段分族表），尤其是 PD 分离相关的 `kv_transfer_params` 完全没有等价字段 | 同 `## 7.1` 的"静默丢弃"模式：字段名不对的直接被丢弃，字段类型不对的（如上一行）才会报错 | `## 3.1` 字段规模表 |
 
 **为什么迁移风险普遍是"静默失败"而不是"报错失败"**：pydantic（Python 侧）和 serde（Rust 侧）的默认行为都是"忽略请求体里未声明的字段"，这是为了向前兼容——新客户端给旧服务端发新字段不应该导致整个请求失败。但这条对 API 演进友好的设计，恰好也是"引擎间迁移最危险的陷阱都不报错"的根因：**私有字段被静默丢弃，比字段类型错误被 422 拒绝更难发现**，因为请求"看起来成功了"。
 
@@ -358,6 +394,17 @@ SGLang 的 Ollama 兼容路由写成 `@app.post(os.environ.get("SGLANG_OLLAMA_CH
 - **KTransformers 的案例是双重巧合**：抽取工具漏抓了真实存在的 `/v1/chat/completions`，但这段代码本身又恰好是上游已经归档、不再是主推方向的遗留实现——两个独立成立的事实拼在一起，让 `## 3.2` 表格里"KTransformers 未覆盖"这个最终展示结论意外地"蒙对了"，但支撑它的中间推理链是错的，`## 6.2` 已经把两条原因拆开说清楚。
 - **共享字段名不必然是陷阱**：`## 5.3` 三个反例（`session_id`/`min_tokens` vs `min_new_tokens`/`priority`）容易让人觉得"跨引擎同名字段都不可信"，但 `cache_salt` 恰恰是反例的反例——三家实现语义一致，且背后对应同一个真实安全问题（CVE-2025-46570）。**判断一个共享字段是否可信，不能只看名字，要看它是否对应一个双方都独立认可的、外部世界的具体问题**（时序侧信道是密码学/安全领域的公认问题，`priority` 的调度方向则纯粹是各家内部约定，没有外部标准可对齐）。
 
+### 7.3 切引擎之前，给自己列一张检查清单
+
+把本篇的结论压缩成一个迁移前能照着走一遍的检查清单，不是新结论，是对 `## 5`/`## 7.1` 的重新编排：
+
+1. **先分清客户端用到的字段落在哪个圈层**：OpenAI 标准 22 字段（`## 3.1`）？目标引擎的私有字段（`## 5.2`）？还是恰好两边都有但语义可能不同的共享字段（`## 5.3`）？只有第三类需要真正逐字段核实，前两类分别是"稳"和"注定要重写"。
+2. **搜一遍客户端代码里有没有硬编码 `priority` 的具体数值**，如果有，先确认目标引擎的方向约定（`## 5.3` 例三），不要假设数值语义可移植。
+3. **确认客户端是否依赖 `session_id` 做跨请求状态延续**（不只是日志打标），如果是，目标引擎必须原生支持"会话"这个概念（SGLang/LMDeploy 有，vLLM 没有，`## 5.3` 例一），否则这段业务逻辑要重新设计，不是换个字段名能解决的。
+4. **不要相信"请求返回 200 就说明字段生效了"**——`## 7.1` 已经证明 pydantic/serde 的默认行为是静默丢弃未声明字段，200 只代表"格式合法"，不代表"每个字段都被使用"。迁移后第一件事应该是**对照 `## 5.2` 的私有字段清单，逐个检查目标引擎的响应里是否体现了预期效果**，而不是只看状态码。
+5. **鉴权配置不能跨引擎照抄**：`--api-key` 在 vLLM 上只护住 4 个前缀（`## 5.5`），换一个引擎要重新确认它的鉴权中间件覆盖面，不能假设"配了 key 就等于配了鉴权"这件事在所有引擎上程度一致。
+6. **`_lab/out/compare.md` 上显示"不支持"的格子，先按 `## 6` 的四种漏抽模式排除一遍工具误报，再下结论**——本篇亲自订正过 3 处，说明这不是小概率事件。
+
 ---
 
 ## 8. 可改进点
@@ -368,6 +415,7 @@ SGLang 的 Ollama 兼容路由写成 `@app.post(os.environ.get("SGLANG_OLLAMA_CH
 2. **`priority` 这类方向性字段，建议在 OpenAPI schema 层面就用 enum 或显式描述消除歧义，而不是只在 Python 类的 `description=` 里写一句话**。当前 vLLM（`:380`）、TRT-LLM（`:1020`）的字段描述其实都写清楚了方向，问题不是文档缺失，是**客户端开发者切换 base_url 时默认"字段名一样=行为一样"，不会去重新读每个字段的 description**——这是人的习惯问题，不是文档问题，所以更彻底的解法是让方向不一致的字段**改名**（比如 TRT-LLM/SGLang 把 `priority` 改成 `priority_higher_first` 这种自解释命名），而不是指望使用者读文档。
 3. **pydantic/serde 的"静默丢弃未声明字段"行为，建议加一个可选的严格模式**（比如 `X-Strict-Fields: true` 请求头或环境变量），命中未声明字段时至少打一条 WARNING 日志而不是完全无声——这不需要改变默认行为（`## 7.1` 已经论证了默认静默有其合理性），只是给想要"迁移时发现哪些字段被丢了"的开发者一个可选的调试开关。据 `## 6.5` 的口径限制，TGI/llama.cpp/Dynamo 三家甚至可能更需要这个开关，因为它们没有 Python 层面 pydantic 校验器那种"至少能看到未声明字段列表"的中间产物。
 4. **本库自己的抽取工具存在三处可修的漏抽**（`## 6.1`-`## 6.4`），修复优先级建议：① `_lab/api_surface.py` 的 llama.cpp 正则加 `\s*` 容忍方法名与括号间的空格（一行改动，直接修复 `/v1/models` 这类漏抽）；② AST 抽取器给 `APIRouter(prefix=...)` 到 `include_router()` 的组合关系做一层浅层追踪（收益是修复 KTransformers 这类漏抽，但需要处理跨文件的路由组合树，工作量明显大于①）；③ 非字面量路径参数（`os.environ.get(...)` 这类）至少输出一条"检测到动态路径，未抽取"的占位记录，而不是完全静默跳过——让"抽取脚本主动承认抽不到"比"表格显示为空"更诚实。
+5. **给 `_lab/compare.py` 补一条 `ResponsesRequest` 的字段级差集运算**（`## 5.6` 已指出这是缺口）。当前只对 `ChatCompletionRequest` 做了字段对比，但 `/v1/responses` 已经有 7 家实现、3 家（vLLM/SGLang/TensorRT-LLM）各自定义了独立协议类——这条数据目前完全空缺，落地成本和现有 `chat_request` 差集运算是同一套代码换一个类名，性价比很高。
 
 ---
 
@@ -382,11 +430,24 @@ SGLang 的 Ollama 兼容路由写成 `@app.post(os.environ.get("SGLANG_OLLAMA_CH
 5. vLLM 的 `--api-key` 保护哪四个路径前缀？`/collective_rpc` 为什么被本篇称为"叠了两层暴露面"？这两层分别是什么？
 6. 为什么 TGI、llama.cpp、Dynamo 三家没有出现在 `## 3.1` 的 `ChatCompletionRequest` 字段规模对比表里？这是否代表它们的请求字段确实更少？
 7. `cache_salt` 字段在 vLLM/SGLang/TensorRT-LLM 三家语义一致，本篇为什么把它当成"共享字段里的正例"而不是像 `session_id`/`priority` 那样的陷阱？判断标准是什么？
+8. OpenAI 自己的 Responses API（`/v1/responses`）和 Chat Completions API 是什么关系？12 个引擎里有几家实现了前者？本篇为什么没有给出 Responses API 的字段级兼容性数字？
+9. vLLM 的 46 个私有字段和 TensorRT-LLM 的 33 个私有字段里，哪两族始终是占比最大的两族？这个共性说明了私有字段膨胀的第一大驱动力是什么？
 
 ### 9.2 延伸阅读
 
 - `[[08-vLLM-HTTP-API表面全解]]` —— vLLM 单引擎纵切，63 条路由的完整装配链与条件注册闸门
 - `[[08-SGLang-HTTP-API表面全解]]` —— SGLang 单引擎纵切，四层兼容协议如何收口成同一个内部请求
 - `[[01-TensorRT-LLM]]` —— TensorRT-LLM 全景，本篇多处私有字段（`agent_hierarchy`/`disaggregated_params`/`prompt_token_ids_b64`）的完整上下文在这篇里
+- `[[09-vLLM-Python-API与EngineArgs]]` —— 本篇只看 HTTP 请求字段，服务端启动参数（`EngineArgs` 233 个字段）的完整旋钮清单在这篇
+- `[[09-SGLang-ServerArgs旋钮全景]]` —— 同上，SGLang 侧的 `ServerArgs`（476 个字段），`## 5.3` 例三引用的 `schedule_low_priority_values_first` 在这篇有完整上下文
 
-原始数据：`_lab/out/compare.md`（人读版）、`_lab/out/compare.json`（机器读版，`chat_field_matrix`/`routes`/`chat_request` 三个键是本篇主要数据源）、`_lab/out/api_surface.json`（逐引擎路由与协议类原始抽取结果，`## 6` 的四个漏抽案例均可在这里复现）。
+### 9.3 原始数据速查
+
+| 文件 | 用途 | 本篇主要引用的键 |
+|---|---|---|
+| `_lab/out/compare.md` | 人读版对比表 | §B 路由覆盖、§C 字段规模 |
+| `_lab/out/compare.json` | 机器读版对比表 | `chat_field_matrix`、`routes`、`chat_request` |
+| `_lab/out/api_surface.json` | 逐引擎原始抽取结果 | `<engine>.routes`、`<engine>.protocol_classes`、`<engine>.method` |
+| `_lab/out/repo_stats.json` | 各引擎 clone sha 与日期 | `<engine>.ref`，本篇开头取证基准表照抄自此 |
+
+`## 6` 的四个漏抽案例（llama.cpp 正则空格敏感、KTransformers 前缀拼接盲区、Dynamo 默认值可改写、SGLang 非字面量路径）均可在 `api_surface.json` 与对应引擎源码里复现，复现方法见各小节引用的文件行号。

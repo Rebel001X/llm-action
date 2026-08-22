@@ -78,11 +78,19 @@ PKG_ROOTS: dict[str, list[str]] = {
 EXCLUDE_PARTS = ("/test", "/tests/", "/benchmark", "/docs/", "/examples/", "/third_party/")
 
 
-def _classify(relpath: str) -> list[str]:
+# 第三个已知缺陷（工程规模那篇写作时发现）：SUBSYSTEMS 里有几个关键词恰好是**引擎自己的名字**
+# （`disagg` 桶里的 "mooncake"、"nixl"）。扫 Mooncake 仓库时，路径里处处是 "mooncake"，
+# 于是 disagg 桶 100% 自我命中 —— 报出 268,180 行"PD 分离代码"，全是假的。
+# 解决：某个关键词等于当前引擎名时，对该引擎禁用这个关键词。
+SELF_MATCH_KEYWORDS = {"mooncake": "mooncake", "nixl": "nixl", "dynamo": "dynamo"}
+
+
+def _classify(relpath: str, engine: str | None = None) -> list[str]:
     low = relpath.lower()
+    banned = {k for k, v in SELF_MATCH_KEYWORDS.items() if engine and v == engine}
     hits = []
     for sub, keys in SUBSYSTEMS.items():
-        if any(k in low for k in keys):
+        if any(k in low for k in keys if k not in banned):
             hits.append(sub)
     return hits
 
@@ -144,7 +152,7 @@ def analyze(name: str) -> dict:
             key = "/".join(parts[:3]) if len(parts) > 3 else "/".join(parts[:-1]) or "<root>"
             tree_lines[key] += total
             tree_files[key] += 1
-            for sub in _classify(r):
+            for sub in _classify(r, name):
                 per_sub[sub]["files"].append({"file": r, "lines": total})
                 per_sub[sub]["lines"] += total
 
@@ -184,6 +192,12 @@ def selftest() -> int:
     got2 = set(_classify("python/sglang/srt/mem_cache/radix_cache.py"))
     if "kv_cache" not in got2:
         print(f"FAIL classify kv_cache -> {got2}"); ok = False
+    # 引擎名自我命中必须被禁掉：扫 Mooncake 时路径处处是 "mooncake"，
+    # 不禁的话 disagg 桶 100% 假阳性
+    if "disagg" in _classify("mooncake-store/src/master_service.cpp", "mooncake"):
+        print("FAIL mooncake 自我命中未被禁"); ok = False
+    if "disagg" not in _classify("mooncake-store/src/master_service.cpp", "vllm"):
+        print("FAIL 对别的引擎 mooncake 关键词应仍然有效"); ok = False
     if _classify("vllm/utils/__init__.py"):
         print(f"FAIL classify should be empty -> {_classify('vllm/utils/__init__.py')}"); ok = False
 
