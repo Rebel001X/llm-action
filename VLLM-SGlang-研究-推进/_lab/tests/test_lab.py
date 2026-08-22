@@ -23,6 +23,7 @@ import api_surface  # noqa: E402
 import common  # noqa: E402
 import compare  # noqa: E402
 import improve  # noqa: E402
+import prefix_sim  # noqa: E402
 import repo_stats  # noqa: E402
 import struct_map  # noqa: E402
 
@@ -36,6 +37,7 @@ def test_selftests_all_pass():
     assert struct_map.selftest() == 0
     assert compare.selftest() == 0
     assert improve.selftest() == 0
+    assert prefix_sim.selftest() == 0
 
 
 def test_engine_registry_consistent():
@@ -279,3 +281,97 @@ def test_improve_density_is_comparable_across_engines():
             continue
         expect = round(s["silent_except"] * 10000 / s["python_lines_scanned"], 1)
         assert s["silent_except_per_10k_lines"] == expect, name
+
+
+# ------------------------------------------------------ 前缀缓存差分模拟器
+
+def test_chained_hash_kills_everything_after_a_miss():
+    """链式哈希的定义性质：中间断一块，后面全部作废。这是 vLLM 与基数树的根本差别。"""
+    v = prefix_sim.VllmBlockCache(block_size=4, capacity_blocks=9999)
+    base = list(range(40))
+    v.process(base)
+    # 只改第 21 个 token（落在第 6 块），前 5 块应仍命中，后面全丢
+    changed = base[:20] + [777] + base[21:]
+    assert v.process(changed) == 20
+
+
+def test_block_granularity_loses_the_unaligned_tail():
+    """共享前缀不是 block_size 整数倍时，块粒度会丢掉尾巴 —— 差异的唯一来源。"""
+    a = list(range(100))
+    b = list(range(70)) + [777] * 30           # 共享 70，不是 16 的倍数
+    v = prefix_sim.VllmBlockCache(block_size=16, capacity_blocks=9999)
+    v.process(a)
+    assert v.process(b) == 64                  # 70 → 向下取整到 64
+
+    sg = prefix_sim.SglangRadixCache(page_size=1, capacity_tokens=999999)
+    sg.process(a)
+    assert sg.process(b) == 70                 # page=1 才是 token 粒度
+
+
+def test_radix_tree_is_not_automatically_token_granular():
+    """把 page_size 拉到 16，基数树同样只命中 64 —— 粒度来自 page_size，不是"树"。"""
+    a = list(range(100))
+    b = list(range(70)) + [777] * 30
+    sg = prefix_sim.SglangRadixCache(page_size=16, capacity_tokens=999999)
+    sg.process(a)
+    assert sg.process(b) == 64
+
+
+def test_vllm_fine_grained_hashing_closes_the_matching_gap():
+    """vLLM 的细粒度 hash 单元能把块粒度损失完全补回来 —— hash 单元=1 时追平基数树。"""
+    a = list(range(100))
+    b = list(range(70)) + [777] * 30
+    v = prefix_sim.VllmBlockCache(block_size=16, capacity_blocks=9999, hash_block_size=1)
+    v.process(a)
+    assert v.process(b) == 70
+
+
+def test_vllm_eviction_is_recency_based_not_insertion_fifo():
+    """**这条锁住一个我自己犯过的错**。
+
+    vLLM 的空闲队列在命中时 touch() 把块摘掉、释放时追加到队尾
+    （block_pool.py:702/:714/:737），所以顺序是「按最近释放」而非「按首次插入」。
+    把它建模成 insert-FIFO 会凭空造出 SGLang 的优势 —— 这里用一条构造 trace 钉死：
+    反复命中的热前缀在真实策略下必须活下来，在稻草人策略下会被冷流量冲掉。
+    """
+    hot = list(range(64))
+    real = prefix_sim.VllmBlockCache(block_size=16, capacity_blocks=8, evict="freequeue")
+    straw = prefix_sim.VllmBlockCache(block_size=16, capacity_blocks=8, evict="insert_fifo")
+    for i in range(12):
+        for c in (real, straw):
+            c.process(hot)                                   # 热前缀反复访问
+            c.process([9000 + i * 100 + j for j in range(64)])  # 冷流量冲刷
+    assert real.st.hit_tokens > straw.st.hit_tokens, (
+        f"真实策略应保住热前缀：real={real.st.hit_tokens} straw={straw.st.hit_tokens}")
+
+
+def test_no_shared_prefix_means_no_hits_for_either():
+    """无共享前缀时两边都必须是 0 —— 否则说明模拟器在自己制造命中。"""
+    v = prefix_sim.VllmBlockCache(block_size=16, capacity_blocks=9999)
+    sg = prefix_sim.SglangRadixCache(page_size=1, capacity_tokens=999999)
+    for t in ([1] * 80, [2] * 80, [3] * 80):
+        v.process(t)
+        sg.process(t)
+    assert v.st.hit_tokens == 0 and sg.st.hit_tokens == 0
+
+
+def test_workloads_are_deterministic():
+    """同 seed 必须逐位可复现，否则实验结论不可复算。"""
+    for kind in ("shared_system", "tree_branch", "misaligned_share", "no_share", "hot_cold"):
+        assert prefix_sim.gen_workload(kind, 20, 7) == prefix_sim.gen_workload(kind, 20, 7)
+
+
+@pytest.mark.corpus
+def test_prefix_sim_results_match_committed_json():
+    """产物里的结论必须能被重跑复现（同 seed 同参数 → 同数字）。"""
+    fp = common.OUT / "prefix_sim.json"
+    if not fp.exists():
+        pytest.skip("先跑 python prefix_sim.py")
+    saved = json.loads(fp.read_text(encoding="utf-8"))["results"]
+    for r in saved[:3]:
+        again = prefix_sim.run_case(r["workload"], r["n_req"], r["block_size"],
+                                    r["page_size"], r["capacity_tokens"],
+                                    r["hash_block_size"] if r["hash_block_size"] != r["block_size"] else None,
+                                    seed=7)
+        assert again["vllm"]["hit_tokens"] == r["vllm"]["hit_tokens"], r["workload"]
+        assert again["sglang"]["hit_tokens"] == r["sglang"]["hit_tokens"], r["workload"]

@@ -66,6 +66,9 @@ git clone --depth 1 --no-tags --single-branch -c core.longpaths=true https://git
 | `api_surface.py` | **AST** 抽 HTTP 路由 / pydantic 协议类 / 配置对象 / argparse 开关 | `out/api_surface.json` |
 | `struct_map.py` | 按 10 个子系统定位文件与关键类（带行号） | `out/struct_map.json` |
 | `compare.py` | 跨引擎集合运算：路由差、chat 字段差、同名旋钮默认值差 | `out/compare.json` `out/compare.md` |
+| `improve.py` | 可改进点信号（TODO/未实现/废弃/静默吞异常/超大文件），按热路径口径 | `out/improve.json` |
+| `fixcite.py` | 修「路径写短了」的引用，多义只报告不自动选 | — |
+| `prefix_sim.py` | **前缀缓存策略差分模拟器**：两家匹配/驱逐策略如实重实现，同 trace 对拍 | `out/prefix_sim.json` |
 
 规矩：
 - 每个脚本都有 `--selftest`，**用临时目录造假仓库自检解析逻辑**，不依赖 `_src` 也能验对错；
@@ -141,6 +144,12 @@ python -m pytest tests -q
 - ✅ `02-SGLang可改进点.md`
 - ✅ `03-跨引擎共性缺口.md`
 - ✅ `04-可落地贡献清单.md`
+
+### 06-拓展方向/（第二轮 /goal：vLLM 与 SGLang 还能拓展成什么）
+- ⬜ `01-前缀缓存差分实验-亲笔.md` —— **亲笔**，`_lab/prefix_sim.py` 的方法与结论（含自我推翻）
+- ⬜ `02-可编程调度与缓存策略.md`
+- ⬜ `03-降级信号契约.md`
+- ⬜ `04-拓展优先级-亲笔.md` —— **亲笔**
 
 ### 99 收束
 - ✅ `99-本质总结-亲笔.md` —— **亲笔**，不许 agent 代写

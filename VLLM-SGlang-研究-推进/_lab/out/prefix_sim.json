@@ -1,0 +1,465 @@
+{
+  "disclaimer": "这是**策略模拟**不是性能实测：无显存、无 kernel、无拷贝开销。只回答「同一条 trace 下两家能命中多少前缀、淘汰谁」。任何'谁更快'的结论都不能从这里得出。",
+  "modeled_from": {
+    "vllm_chained_hash": "vllm/v1/core/kv_cache_utils.py:620",
+    "vllm_phase1_break": "vllm/v1/core/single_type_kv_cache_manager.py:734",
+    "vllm_phase2_fine_grained": "vllm/v1/core/single_type_kv_cache_manager.py:742",
+    "vllm_eviction_two_queues": "vllm/v1/core/block_pool.py:719",
+    "sglang_match_page_aligned": "python/sglang/srt/mem_cache/radix_cache.py:181",
+    "sglang_split_node": "python/sglang/srt/mem_cache/radix_cache.py:705",
+    "sglang_evict_leaf_lru": "python/sglang/srt/mem_cache/radix_cache.py:593"
+  },
+  "results": [
+    {
+      "workload": "misaligned_share",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 16,
+      "capacity_tokens": 65536,
+      "total_tokens": 110472,
+      "vllm": {
+        "hit_tokens": 101888,
+        "hit_rate": 0.9223,
+        "lookups": 6556,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 450
+      },
+      "sglang": {
+        "hit_tokens": 102897,
+        "hit_rate": 0.9314,
+        "descends": 213,
+        "splits": 15,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 216
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.9223,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.9223,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 1009,
+      "delta_hit_rate_pp": 0.91,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.91
+      }
+    },
+    {
+      "workload": "misaligned_share",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 4,
+      "capacity_tokens": 65536,
+      "total_tokens": 110472,
+      "vllm": {
+        "hit_tokens": 102684,
+        "hit_rate": 0.9295,
+        "lookups": 7156,
+        "fine_grained_extra": 796,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 468
+      },
+      "sglang": {
+        "hit_tokens": 102897,
+        "hit_rate": 0.9314,
+        "descends": 213,
+        "splits": 15,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 216
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.9295,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.9295,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 213,
+      "delta_hit_rate_pp": 0.19,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.19
+      }
+    },
+    {
+      "workload": "misaligned_share",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 1,
+      "capacity_tokens": 65536,
+      "total_tokens": 110472,
+      "vllm": {
+        "hit_tokens": 102897,
+        "hit_rate": 0.9314,
+        "lookups": 8739,
+        "fine_grained_extra": 1009,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 473
+      },
+      "sglang": {
+        "hit_tokens": 102897,
+        "hit_rate": 0.9314,
+        "descends": 213,
+        "splits": 15,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 216
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.9314,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.9314,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 0,
+      "delta_hit_rate_pp": 0.0,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.0
+      }
+    },
+    {
+      "workload": "shared_system",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 16,
+      "capacity_tokens": 65536,
+      "total_tokens": 109472,
+      "vllm": {
+        "hit_tokens": 101888,
+        "hit_rate": 0.9307,
+        "lookups": 6530,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 374
+      },
+      "sglang": {
+        "hit_tokens": 101902,
+        "hit_rate": 0.9308,
+        "descends": 213,
+        "splits": 15,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 216
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.9307,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.9307,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 14,
+      "delta_hit_rate_pp": 0.01,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.01
+      }
+    },
+    {
+      "workload": "shared_system",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 16,
+      "hash_block_size": 16,
+      "capacity_tokens": 65536,
+      "total_tokens": 109472,
+      "vllm": {
+        "hit_tokens": 101888,
+        "hit_rate": 0.9307,
+        "lookups": 6530,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 374
+      },
+      "sglang": {
+        "hit_tokens": 101888,
+        "hit_rate": 0.9307,
+        "descends": 213,
+        "splits": 1,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 202
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.9307,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.9307,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 0,
+      "delta_hit_rate_pp": 0.0,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.0
+      }
+    },
+    {
+      "workload": "shared_system",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 4,
+      "capacity_tokens": 65536,
+      "total_tokens": 109472,
+      "vllm": {
+        "hit_tokens": 101888,
+        "hit_rate": 0.9307,
+        "lookups": 7116,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 455
+      },
+      "sglang": {
+        "hit_tokens": 101902,
+        "hit_rate": 0.9308,
+        "descends": 213,
+        "splits": 15,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 216
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.9307,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.9307,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 14,
+      "delta_hit_rate_pp": 0.01,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.01
+      }
+    },
+    {
+      "workload": "tree_branch",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 16,
+      "capacity_tokens": 65536,
+      "total_tokens": 50091,
+      "vllm": {
+        "hit_tokens": 44288,
+        "hit_rate": 0.8842,
+        "lookups": 2925,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 259
+      },
+      "sglang": {
+        "hit_tokens": 44292,
+        "hit_rate": 0.8842,
+        "descends": 399,
+        "splits": 9,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 210
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.8842,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.8842,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 4,
+      "delta_hit_rate_pp": 0.01,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.01
+      }
+    },
+    {
+      "workload": "tree_branch",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 4,
+      "capacity_tokens": 65536,
+      "total_tokens": 50091,
+      "vllm": {
+        "hit_tokens": 44288,
+        "hit_rate": 0.8842,
+        "lookups": 3508,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 0,
+        "peak_cached_blocks": 344
+      },
+      "sglang": {
+        "hit_tokens": 44292,
+        "hit_rate": 0.8842,
+        "descends": 399,
+        "splits": 9,
+        "evicted_nodes": 0,
+        "evicted_tokens": 0,
+        "peak_nodes": 210
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.8842,
+        "evicted_blocks": 0
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.8842,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 4,
+      "delta_hit_rate_pp": 0.01,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.01
+      }
+    },
+    {
+      "workload": "no_share",
+      "n_req": 200,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 16,
+      "capacity_tokens": 65536,
+      "total_tokens": 79200,
+      "vllm": {
+        "hit_tokens": 0,
+        "hit_rate": 0.0,
+        "lookups": 200,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 759,
+        "peak_cached_blocks": 4096
+      },
+      "sglang": {
+        "hit_tokens": 0,
+        "hit_rate": 0.0,
+        "descends": 0,
+        "splits": 0,
+        "evicted_nodes": 36,
+        "evicted_tokens": 14182,
+        "peak_nodes": 167
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.0,
+        "evicted_blocks": 759
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.0,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 0.0,
+      "delta_hit_tokens": 0,
+      "delta_hit_rate_pp": 0.0,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.0
+      }
+    },
+    {
+      "workload": "hot_cold",
+      "n_req": 300,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 16,
+      "capacity_tokens": 16384,
+      "total_tokens": 83154,
+      "vllm": {
+        "hit_tokens": 24832,
+        "hit_rate": 0.2986,
+        "lookups": 1820,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 2479,
+        "peak_cached_blocks": 1024
+      },
+      "sglang": {
+        "hit_tokens": 24833,
+        "hit_rate": 0.2986,
+        "descends": 98,
+        "splits": 4,
+        "evicted_nodes": 223,
+        "evicted_tokens": 42006,
+        "peak_nodes": 89
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.2986,
+        "evicted_blocks": 2479
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.274,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 2.46,
+      "delta_hit_tokens": 1,
+      "delta_hit_rate_pp": 0.0,
+      "attribution": {
+        "eviction_policy_pp": 0.0,
+        "matching_policy_pp": 0.0
+      }
+    },
+    {
+      "workload": "hot_cold",
+      "n_req": 300,
+      "block_size": 16,
+      "page_size": 1,
+      "hash_block_size": 16,
+      "capacity_tokens": 4096,
+      "total_tokens": 83154,
+      "vllm": {
+        "hit_tokens": 22992,
+        "hit_rate": 0.2765,
+        "lookups": 1709,
+        "fine_grained_extra": 0,
+        "evicted_blocks": 3362,
+        "peak_cached_blocks": 256
+      },
+      "sglang": {
+        "hit_tokens": 22529,
+        "hit_rate": 0.2709,
+        "descends": 89,
+        "splits": 13,
+        "evicted_nodes": 294,
+        "evicted_tokens": 56623,
+        "peak_nodes": 25
+      },
+      "vllm_lru_control": {
+        "hit_rate": 0.2709,
+        "evicted_blocks": 3364
+      },
+      "vllm_strawman_insert_fifo": {
+        "hit_rate": 0.1838,
+        "note": "不是 vLLM 的行为，用来量化误建模的代价"
+      },
+      "modeling_error_pp": 9.27,
+      "delta_hit_tokens": -463,
+      "delta_hit_rate_pp": -0.56,
+      "attribution": {
+        "eviction_policy_pp": -0.56,
+        "matching_policy_pp": 0.0
+      }
+    }
+  ]
+}
