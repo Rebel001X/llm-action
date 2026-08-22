@@ -4077,7 +4077,12 @@
   },
   "shared_knobs": [
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "factory",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "dataclasses.field(default_factory=list)",
         "vllm": "ModelConfig.allowed_media_domains"
@@ -4086,10 +4091,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "allowed_media_domains"
+      "knob": "allowed_media_domains",
+      "why_not_comparable": "至少一方的默认值不是字面量（sglang=factory, vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "AttentionConfig.backend"
@@ -4098,10 +4109,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "attention_backend"
+      "knob": "attention_backend",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
+      "comparable": true,
       "default_differs": true,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "vllm": "literal"
+      },
       "defaults": {
         "lmdeploy": "64",
         "vllm": "None"
@@ -4113,7 +4130,12 @@
       "knob": "block_size"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "0",
         "vllm": "UVAOffloadConfig.cpu_offload_gb"
@@ -4122,10 +4144,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "cpu_offload_gb"
+      "knob": "cpu_offload_gb",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "'ag_rs'",
         "vllm": "ParallelConfig.dcp_comm_backend"
@@ -4134,10 +4162,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "dcp_comm_backend"
+      "knob": "dcp_comm_backend",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "False",
         "vllm": "ParallelConfig.disable_custom_all_reduce"
@@ -4146,10 +4180,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "disable_custom_all_reduce"
+      "knob": "disable_custom_all_reduce",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "None",
         "vllm": "ParallelConfig.distributed_executor_backend"
@@ -4158,10 +4198,17 @@
         "lmdeploy",
         "vllm"
       ],
-      "knob": "distributed_executor_backend"
+      "knob": "distributed_executor_backend",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "None",
         "sglang": "None",
@@ -4172,10 +4219,17 @@
         "sglang",
         "vllm"
       ],
-      "knob": "download_dir"
+      "knob": "download_dir",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "'auto'",
         "sglang": "'auto'",
@@ -4186,10 +4240,17 @@
         "sglang",
         "vllm"
       ],
-      "knob": "dtype"
+      "knob": "dtype",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "False",
         "sglang": "False",
@@ -4200,10 +4261,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "enable_eplb"
+      "knob": "enable_eplb",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
+      "comparable": true,
       "default_differs": true,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "literal"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "False"
@@ -4215,7 +4282,12 @@
       "knob": "enable_lora"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "False",
         "vllm": "MambaConfig.enable_stochastic_rounding"
@@ -4224,10 +4296,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "enable_mamba_cache_stochastic_rounding"
+      "knob": "enable_mamba_cache_stochastic_rounding",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
+      "comparable": true,
       "default_differs": true,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal"
+      },
       "defaults": {
         "lmdeploy": "True",
         "sglang": "False"
@@ -4239,7 +4317,12 @@
       "knob": "enable_metrics"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "False",
         "vllm": "ObservabilityConfig.enable_mfu_metrics"
@@ -4248,10 +4331,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "enable_mfu_metrics"
+      "knob": "enable_mfu_metrics",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
+      "comparable": true,
       "default_differs": true,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "vllm": "literal"
+      },
       "defaults": {
         "lmdeploy": "False",
         "vllm": "None"
@@ -4263,7 +4352,13 @@
       "knob": "enable_prefix_caching"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "False",
         "sglang": "False",
@@ -4274,10 +4369,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "enable_return_routed_experts"
+      "knob": "enable_return_routed_experts",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "vllm": "factory"
+      },
       "defaults": {
         "lmdeploy": "None",
         "vllm": "get_field(ModelConfig, 'hf_overrides')"
@@ -4286,10 +4387,16 @@
         "lmdeploy",
         "vllm"
       ],
-      "knob": "hf_overrides"
+      "knob": "hf_overrides",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=factory），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "'auto'",
         "vllm": "CacheConfig.cache_dtype"
@@ -4298,10 +4405,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "kv_cache_dtype"
+      "knob": "kv_cache_dtype",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
+      "comparable": true,
       "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "literal"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "None"
@@ -4313,7 +4426,13 @@
       "knob": "kv_events_config"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "False",
         "sglang": "False",
@@ -4324,10 +4443,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "language_model_only"
+      "knob": "language_model_only",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "'auto'",
         "vllm": "LoadConfig.load_format"
@@ -4336,10 +4461,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "load_format"
+      "knob": "load_format",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "None",
         "vllm": "ModelConfig.logprobs_mode"
@@ -4348,10 +4479,16 @@
         "lmdeploy",
         "vllm"
       ],
-      "knob": "logprobs_mode"
+      "knob": "logprobs_mode",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "LoRAConfig.target_modules"
@@ -4360,10 +4497,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "lora_target_modules"
+      "knob": "lora_target_modules",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "expression"
+      },
       "defaults": {
         "sglang": "'triton'",
         "vllm": "MambaBackendEnum.TRITON"
@@ -4372,10 +4515,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "mamba_backend"
+      "knob": "mamba_backend",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=expression），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "0",
         "vllm": "MambaConfig.stochastic_rounding_philox_rounds"
@@ -4384,10 +4533,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "mamba_cache_philox_rounds"
+      "knob": "mamba_cache_philox_rounds",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "LoRAConfig.max_lora_rank"
@@ -4396,10 +4551,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "max_lora_rank"
+      "knob": "max_lora_rank",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "'auto'",
         "vllm": "ModelConfig.model_impl"
@@ -4408,10 +4569,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "model_impl"
+      "knob": "model_impl",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "factory"
+      },
       "defaults": {
         "sglang": "'{}'",
         "vllm": "get_field(LoadConfig, 'model_loader_extra_config')"
@@ -4420,10 +4587,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "model_loader_extra_config"
+      "knob": "model_loader_extra_config",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=factory），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "1",
         "vllm": "ParallelConfig.nnodes"
@@ -4432,10 +4605,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "nnodes"
+      "knob": "nnodes",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "0",
         "vllm": "ParallelConfig.node_rank"
@@ -4444,10 +4623,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "node_rank"
+      "knob": "node_rank",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "-1",
         "vllm": "PrefetchOffloadConfig.offload_group_size"
@@ -4456,10 +4641,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "offload_group_size"
+      "knob": "offload_group_size",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "1",
         "vllm": "PrefetchOffloadConfig.offload_num_in_group"
@@ -4468,10 +4659,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "offload_num_in_group"
+      "knob": "offload_num_in_group",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "1",
         "vllm": "PrefetchOffloadConfig.offload_prefetch_step"
@@ -4480,10 +4677,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "offload_prefetch_step"
+      "knob": "offload_prefetch_step",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "'localhost:4317'",
         "vllm": "ObservabilityConfig.otlp_traces_endpoint"
@@ -4492,10 +4695,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "otlp_traces_endpoint"
+      "knob": "otlp_traces_endpoint",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "ModelConfig.quantization"
@@ -4504,10 +4713,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "quantization"
+      "knob": "quantization",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "StructuredOutputsConfig.reasoning_parser"
@@ -4516,10 +4731,17 @@
         "sglang",
         "vllm"
       ],
-      "knob": "reasoning_parser"
+      "knob": "reasoning_parser",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "lmdeploy": "literal",
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "lmdeploy": "None",
         "sglang": "None",
@@ -4530,10 +4752,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "revision"
+      "knob": "revision",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "None",
         "vllm": "ModelConfig.served_model_name"
@@ -4542,10 +4770,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "served_model_name"
+      "knob": "served_model_name",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "False",
         "vllm": "ModelConfig.skip_tokenizer_init"
@@ -4554,10 +4788,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "skip_tokenizer_init"
+      "knob": "skip_tokenizer_init",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "1",
         "vllm": "SchedulerConfig.stream_interval"
@@ -4566,10 +4806,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "stream_interval"
+      "knob": "stream_interval",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "'auto'",
         "vllm": "ModelConfig.tokenizer_mode"
@@ -4578,10 +4824,16 @@
         "sglang",
         "vllm"
       ],
-      "knob": "tokenizer_mode"
+      "knob": "tokenizer_mode",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     },
     {
-      "default_differs": true,
+      "comparable": false,
+      "default_differs": false,
+      "default_kinds": {
+        "sglang": "literal",
+        "vllm": "delegated"
+      },
       "defaults": {
         "sglang": "False",
         "vllm": "ModelConfig.trust_remote_code"
@@ -4590,7 +4842,8 @@
         "sglang",
         "vllm"
       ],
-      "knob": "trust_remote_code"
+      "knob": "trust_remote_code",
+      "why_not_comparable": "至少一方的默认值不是字面量（vllm=delegated），跨引擎比字面量会得出假结论，故不判定"
     }
   ]
 }

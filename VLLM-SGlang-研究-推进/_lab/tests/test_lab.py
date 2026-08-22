@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import api_surface  # noqa: E402
 import common  # noqa: E402
 import compare  # noqa: E402
+import improve  # noqa: E402
 import repo_stats  # noqa: E402
 import struct_map  # noqa: E402
 
@@ -34,6 +35,7 @@ def test_selftests_all_pass():
     assert api_surface.selftest() == 0
     assert struct_map.selftest() == 0
     assert compare.selftest() == 0
+    assert improve.selftest() == 0
 
 
 def test_engine_registry_consistent():
@@ -134,6 +136,35 @@ def test_compare_marks_default_difference_not_presence():
     assert by == {"k": True, "same": False}
 
 
+def test_compare_refuses_to_judge_non_literal_defaults():
+    """vLLM 把默认值转交给子配置（`ModelConfig.dtype`），拿它和字面量比会得出假结论。
+
+    这类必须被判为「不可比」而不是「不同」—— 否则表格会凭空造出几十条假差异。
+    """
+    assert compare.classify_default("256") == "literal"
+    assert compare.classify_default("'auto'") == "literal"
+    assert compare.classify_default(None) == "literal"
+    assert compare.classify_default("ModelConfig.dtype") == "delegated"
+    assert compare.classify_default("dataclasses.field(default_factory=list)") == "factory"
+    assert compare.classify_default("get_field(ModelConfig, 'hf_overrides')") == "factory"
+
+    api = {"engines": {
+        "a": {"summary": {"unique_paths": []}, "protocol_classes": [], "engine_classes": [],
+              "config_classes": [{"name": "EngineArgs", "file": "a", "line": 1, "n_fields": 2,
+                                  "fields": [{"name": "dtype", "default": "ModelConfig.dtype"},
+                                             {"name": "n", "default": "1"}]}]},
+        "b": {"summary": {"unique_paths": []}, "protocol_classes": [], "engine_classes": [],
+              "config_classes": [{"name": "ServerArgs", "file": "b", "line": 1, "n_fields": 2,
+                                  "fields": [{"name": "dtype", "default": "'auto'"},
+                                             {"name": "n", "default": "2"}]}]},
+    }}
+    rows = {k["knob"]: k for k in compare.build(api, {"engines": {}})["shared_knobs"]}
+    assert rows["dtype"]["comparable"] is False
+    assert rows["dtype"]["default_differs"] is False, "转交式默认值不许被判成'不同'"
+    assert "why_not_comparable" in rows["dtype"]
+    assert rows["n"]["comparable"] is True and rows["n"]["default_differs"] is True
+
+
 def test_compare_openai_field_split_is_disjoint():
     """标准字段与私有字段必须互斥且并集等于全集 —— 防止分类漏项。"""
     api = {"engines": {"a": {
@@ -217,3 +248,34 @@ def test_struct_map_citations_resolve():
                 checked += 1
     if checked == 0:
         pytest.skip("没有可核的类")
+
+
+@pytest.mark.corpus
+def test_improve_signals_point_at_real_lines():
+    """可改进点是要写进正文并被引用的，每条样本的 file:line 必须真实存在。"""
+    data = _out("improve.json")["engines"]
+    checked = 0
+    for name, d in data.items():
+        root = common.engine_path(name)
+        if root is None:
+            continue
+        for bucket, items in d["samples"].items():
+            for e in items[:4]:
+                fp = root / e["file"]
+                assert fp.exists(), f"{name}:{e['file']} 不存在（{bucket}）"
+                n = sum(1 for _ in fp.open("r", encoding="utf-8", errors="replace"))
+                assert e["line"] <= n, f"{name}:{e['file']}:{e['line']} 越界（共 {n} 行，{bucket}）"
+                checked += 1
+    if checked == 0:
+        pytest.skip("没有可核的信号")
+
+
+@pytest.mark.corpus
+def test_improve_density_is_comparable_across_engines():
+    """密度口径必须是「每万行」而不是绝对条数，否则大仓库天然吃亏，跨引擎不可比。"""
+    for name, d in _out("improve.json")["engines"].items():
+        s = d["summary"]
+        if not s["python_lines_scanned"]:
+            continue
+        expect = round(s["silent_except"] * 10000 / s["python_lines_scanned"], 1)
+        assert s["silent_except_per_10k_lines"] == expect, name

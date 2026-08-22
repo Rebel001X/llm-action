@@ -91,51 +91,18 @@
 | SGLang | `ServerArgs` | `python/sglang/srt/server_args.py:473` | 476 |
 | vLLM | `EngineArgs` | `vllm/engine/arg_utils.py:424` | 233 |
 
-## E. 同名旋钮但默认值不同（共 41 个）
+## E. 同名旋钮的默认值（可比 5 个：不同 4、相同 1；**不可比 37 个已排除**）
+
+> 口径：只有当**所有参与引擎的默认值都是字面量**时才判定异同。vLLM 的 `EngineArgs` 大量把默认值转交给子配置（写成 `ModelConfig.dtype` 这种），拿它和别家的字面量直接比会得出假结论，所以这类一律排除、不下判断。
 
 | 旋钮 | dynamo | ktransformers | lightllm | llama.cpp | lmdeploy | mlc-llm | mooncake | sglang | tensorrt-llm | tgi | tokasaurus | vllm |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `allowed_media_domains` | — | — | — | — | — | — | — | dataclasses.field(default_factory=list) | — | — | — | ModelConfig.allowed_media_domains |
-| `attention_backend` | — | — | — | — | — | — | — | None | — | — | — | AttentionConfig.backend |
 | `block_size` | — | — | — | — | 64 | — | — | — | — | — | — | None |
-| `cpu_offload_gb` | — | — | — | — | — | — | — | 0 | — | — | — | UVAOffloadConfig.cpu_offload_gb |
-| `dcp_comm_backend` | — | — | — | — | — | — | — | 'ag_rs' | — | — | — | ParallelConfig.dcp_comm_backend |
-| `disable_custom_all_reduce` | — | — | — | — | — | — | — | False | — | — | — | ParallelConfig.disable_custom_all_reduce |
-| `distributed_executor_backend` | — | — | — | — | None | — | — | — | — | — | — | ParallelConfig.distributed_executor_backend |
-| `download_dir` | — | — | — | — | None | — | — | None | — | — | — | LoadConfig.download_dir |
-| `dtype` | — | — | — | — | 'auto' | — | — | 'auto' | — | — | — | ModelConfig.dtype |
-| `enable_eplb` | — | — | — | — | False | — | — | False | — | — | — | ParallelConfig.enable_eplb |
 | `enable_lora` | — | — | — | — | — | — | — | None | — | — | — | False |
-| `enable_mamba_cache_stochastic_rounding` | — | — | — | — | — | — | — | False | — | — | — | MambaConfig.enable_stochastic_rounding |
 | `enable_metrics` | — | — | — | — | True | — | — | False | — | — | — | — |
-| `enable_mfu_metrics` | — | — | — | — | — | — | — | False | — | — | — | ObservabilityConfig.enable_mfu_metrics |
 | `enable_prefix_caching` | — | — | — | — | False | — | — | — | — | — | — | None |
-| `enable_return_routed_experts` | — | — | — | — | False | — | — | False | — | — | — | ModelConfig.enable_return_routed_experts |
-| `hf_overrides` | — | — | — | — | None | — | — | — | — | — | — | get_field(ModelConfig, 'hf_overrides') |
-| `kv_cache_dtype` | — | — | — | — | — | — | — | 'auto' | — | — | — | CacheConfig.cache_dtype |
-| `language_model_only` | — | — | — | — | False | — | — | False | — | — | — | MultiModalConfig.language_model_only |
-| `load_format` | — | — | — | — | — | — | — | 'auto' | — | — | — | LoadConfig.load_format |
-| `logprobs_mode` | — | — | — | — | None | — | — | — | — | — | — | ModelConfig.logprobs_mode |
-| `lora_target_modules` | — | — | — | — | — | — | — | None | — | — | — | LoRAConfig.target_modules |
-| `mamba_backend` | — | — | — | — | — | — | — | 'triton' | — | — | — | MambaBackendEnum.TRITON |
-| `mamba_cache_philox_rounds` | — | — | — | — | — | — | — | 0 | — | — | — | MambaConfig.stochastic_rounding_philox_rounds |
-| `max_lora_rank` | — | — | — | — | — | — | — | None | — | — | — | LoRAConfig.max_lora_rank |
-| `model_impl` | — | — | — | — | — | — | — | 'auto' | — | — | — | ModelConfig.model_impl |
-| `model_loader_extra_config` | — | — | — | — | — | — | — | '{}' | — | — | — | get_field(LoadConfig, 'model_loader_extra_config') |
-| `nnodes` | — | — | — | — | — | — | — | 1 | — | — | — | ParallelConfig.nnodes |
-| `node_rank` | — | — | — | — | — | — | — | 0 | — | — | — | ParallelConfig.node_rank |
-| `offload_group_size` | — | — | — | — | — | — | — | -1 | — | — | — | PrefetchOffloadConfig.offload_group_size |
-| `offload_num_in_group` | — | — | — | — | — | — | — | 1 | — | — | — | PrefetchOffloadConfig.offload_num_in_group |
-| `offload_prefetch_step` | — | — | — | — | — | — | — | 1 | — | — | — | PrefetchOffloadConfig.offload_prefetch_step |
-| `otlp_traces_endpoint` | — | — | — | — | — | — | — | 'localhost:4317' | — | — | — | ObservabilityConfig.otlp_traces_endpoint |
-| `quantization` | — | — | — | — | — | — | — | None | — | — | — | ModelConfig.quantization |
-| `reasoning_parser` | — | — | — | — | — | — | — | None | — | — | — | StructuredOutputsConfig.reasoning_parser |
-| `revision` | — | — | — | — | None | — | — | None | — | — | — | ModelConfig.revision |
-| `served_model_name` | — | — | — | — | — | — | — | None | — | — | — | ModelConfig.served_model_name |
-| `skip_tokenizer_init` | — | — | — | — | — | — | — | False | — | — | — | ModelConfig.skip_tokenizer_init |
-| `stream_interval` | — | — | — | — | — | — | — | 1 | — | — | — | SchedulerConfig.stream_interval |
-| `tokenizer_mode` | — | — | — | — | — | — | — | 'auto' | — | — | — | ModelConfig.tokenizer_mode |
-| `trust_remote_code` | — | — | — | — | — | — | — | False | — | — | — | ModelConfig.trust_remote_code |
+
+被排除的 37 个旋钮及排除原因见 `compare.json` 的 `shared_knobs[*].why_not_comparable`。
 
 ---
 

@@ -17,6 +17,8 @@
 """
 from __future__ import annotations
 
+import ast
+import re
 import sys
 from collections import defaultdict
 
@@ -40,6 +42,36 @@ OPENAI_CHAT_FIELDS = {
     "top_p", "tools", "tool_choice", "parallel_tool_calls", "user",
     "function_call", "functions", "metadata", "reasoning_effort",
 }
+
+
+def classify_default(expr: str | None) -> str:
+    """给「默认值表达式」定性，决定它能不能拿来跨引擎比。
+
+    三类：
+      literal   —— 常量（`256` / `'auto'` / `False` / `None`），**唯一可比的**
+      factory   —— `dataclasses.field(default_factory=list)` / `get_field(...)`，值要运行才知道
+      delegated —— `ModelConfig.dtype` 这种把默认值转交给子配置对象的写法
+
+    为什么必须分：vLLM 的 `EngineArgs` 大量用 delegated 写法，
+    直接和 SGLang 的字面量比，会得到「41 个旋钮默认值不同」这种**假结论** ——
+    实际上多数只是"一个写字面量、一个写引用"，值本身可能完全一样。
+    真要比，得去把被引用的那个 Config 展开，本工具不做，就老实标出来不比。
+    """
+    if expr is None:
+        return "literal"                       # 无默认值，视作 None，可比
+    e = expr.strip()
+    if e in ("None", "True", "False") or e.startswith(("'", '"')):
+        return "literal"
+    try:
+        ast.literal_eval(e)
+        return "literal"
+    except (ValueError, SyntaxError):
+        pass
+    if "field(" in e or "get_field(" in e or "factory" in e:
+        return "factory"
+    if re.match(r"^[A-Z]\w*(Config|Args)\.\w+$", e):
+        return "delegated"
+    return "expression"
 
 
 def _find_class(engine_data: dict, names: list[str], buckets=("protocol_classes",
@@ -109,10 +141,19 @@ def build(api: dict, stats: dict) -> dict:
     for k, owners in sorted(knob_owner.items()):
         if len(owners) < 2:
             continue
-        row = {"knob": k, "engines": sorted(owners),
-               "defaults": {n: knobs[n]["defaults"].get(k) for n in sorted(owners)}}
-        vals = {v for v in row["defaults"].values()}
-        row["default_differs"] = len(vals) > 1
+        defaults = {n: knobs[n]["defaults"].get(k) for n in sorted(owners)}
+        kinds = {n: classify_default(v) for n, v in defaults.items()}
+        row = {"knob": k, "engines": sorted(owners), "defaults": defaults,
+               "default_kinds": kinds}
+        # 只有**所有参与方都是字面量**时，"默认值不同"这句话才成立
+        comparable = all(v == "literal" for v in kinds.values())
+        row["comparable"] = comparable
+        row["default_differs"] = comparable and len(set(defaults.values())) > 1
+        if not comparable:
+            row["why_not_comparable"] = (
+                "至少一方的默认值不是字面量（"
+                + ", ".join(f"{n}={kinds[n]}" for n in sorted(kinds) if kinds[n] != "literal")
+                + "），跨引擎比字面量会得出假结论，故不判定")
         shared_knobs.append(row)
 
     # ---- D. 规模 -----------------------------------------------------------
@@ -188,14 +229,25 @@ def to_markdown(cmp: dict) -> str:
                  f"`{d['file']}:{d['line']}` | {d['n_fields']} |")
 
     diff = [k for k in cmp["shared_knobs"] if k["default_differs"]]
-    L.append(f"\n## E. 同名旋钮但默认值不同（共 {len(diff)} 个）\n")
-    L.append("| 旋钮 | " + " | ".join(engines) + " |")
-    L.append("|---|" + "---|" * len(engines))
-    for k in diff[:60]:
-        cells = [str(k["defaults"].get(e, "—")) for e in engines]
-        L.append(f"| `{k['knob']}` | " + " | ".join(cells) + " |")
-    if len(diff) > 60:
-        L.append(f"\n> 表已截断，完整 {len(diff)} 行见 `compare.json` 的 `shared_knobs`。")
+    same = [k for k in cmp["shared_knobs"] if k["comparable"] and not k["default_differs"]]
+    skipped = [k for k in cmp["shared_knobs"] if not k["comparable"]]
+    L.append(f"\n## E. 同名旋钮的默认值（可比 {len(diff) + len(same)} 个：不同 {len(diff)}、"
+             f"相同 {len(same)}；**不可比 {len(skipped)} 个已排除**）\n")
+    L.append("> 口径：只有当**所有参与引擎的默认值都是字面量**时才判定异同。"
+             "vLLM 的 `EngineArgs` 大量把默认值转交给子配置（写成 `ModelConfig.dtype` 这种），"
+             "拿它和别家的字面量直接比会得出假结论，所以这类一律排除、不下判断。\n")
+    if diff:
+        L.append("| 旋钮 | " + " | ".join(engines) + " |")
+        L.append("|---|" + "---|" * len(engines))
+        for k in diff[:60]:
+            cells = [str(k["defaults"].get(e, "—")) for e in engines]
+            L.append(f"| `{k['knob']}` | " + " | ".join(cells) + " |")
+        if len(diff) > 60:
+            L.append(f"\n> 表已截断，完整 {len(diff)} 行见 `compare.json` 的 `shared_knobs`。")
+    else:
+        L.append("（本次没有可比且不同的旋钮。）")
+    L.append(f"\n被排除的 {len(skipped)} 个旋钮及排除原因见 `compare.json` 的 "
+             "`shared_knobs[*].why_not_comparable`。")
 
     L.append(f"\n---\n\n> 口径说明：{cmp['notes']['caveat']}  \n"
              f"> OpenAI 字段清单来源：{cmp['notes']['openai_field_list_source']}\n")

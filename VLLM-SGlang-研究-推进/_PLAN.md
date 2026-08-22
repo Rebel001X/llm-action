@@ -89,34 +89,34 @@ python -m pytest tests -q
 - ✅ `00-总览与阅读地图.md` —— **亲笔**，不许 agent 代写
 
 ### 01-vLLM/（取证基准 `vllm`）
-- ⬜ `01-vLLM-全景与代码地图.md`
-- ⬜ `02-vLLM-V1架构与EngineCore循环.md`
-- ⬜ `03-vLLM-调度器解剖.md`
-- ⬜ `04-vLLM-KV缓存与前缀缓存.md`
-- ⬜ `05-vLLM-注意力后端与算子层.md`
-- ⬜ `06-vLLM-模型执行与CUDA-Graph.md`
-- ⬜ `07-vLLM-分布式与并行策略.md`
-- ⬜ `08-vLLM-HTTP-API表面全解.md`
-- ⬜ `09-vLLM-Python-API与EngineArgs.md`
-- ⬜ `10-vLLM-投机解码.md`
+- ✅ `01-vLLM-全景与代码地图.md`
+- ✅ `02-vLLM-V1架构与EngineCore循环.md`
+- ✅ `03-vLLM-调度器解剖.md`
+- ✅ `04-vLLM-KV缓存与前缀缓存.md`
+- ✅ `05-vLLM-注意力后端与算子层.md`
+- ✅ `06-vLLM-模型执行与CUDA-Graph.md`
+- ✅ `07-vLLM-分布式与并行策略.md`
+- ✅ `08-vLLM-HTTP-API表面全解.md`
+- ✅ `09-vLLM-Python-API与EngineArgs.md`
+- ✅ `10-vLLM-投机解码.md`
 - ⬜ `11-vLLM-结构化输出.md`
 - ⬜ `12-vLLM-PD分离与KV-Connector.md`
 
 ### 02-SGLang/（取证基准 `sglang`）
-- ⬜ `01-SGLang-全景与代码地图.md`
-- ⬜ `02-SGLang-Scheduler事件循环.md`
-- ⬜ `03-SGLang-RadixAttention与前缀缓存.md`
-- ⬜ `04-SGLang-内存池与KV布局.md`
-- ⬜ `05-SGLang-注意力后端矩阵.md`
-- ⬜ `06-SGLang-约束解码与语法后端.md`
-- ⬜ `07-SGLang-前端DSL与编程模型.md`
-- ⬜ `08-SGLang-HTTP-API表面全解.md`
-- ⬜ `09-SGLang-ServerArgs旋钮全景.md`
-- ⬜ `10-SGLang-投机解码EAGLE.md`
-- ⬜ `11-SGLang-PD分离与HiCache分层.md`
+- ✅ `01-SGLang-全景与代码地图.md`
+- ✅ `02-SGLang-Scheduler事件循环.md`
+- ✅ `03-SGLang-RadixAttention与前缀缓存.md`
+- ✅ `04-SGLang-内存池与KV布局.md`
+- ✅ `05-SGLang-注意力后端矩阵.md`
+- ✅ `06-SGLang-约束解码与语法后端.md`
+- ✅ `07-SGLang-前端DSL与编程模型.md`
+- ✅ `08-SGLang-HTTP-API表面全解.md`
+- ✅ `09-SGLang-ServerArgs旋钮全景.md`
+- ✅ `10-SGLang-投机解码EAGLE.md`
+- ✅ `11-SGLang-PD分离与HiCache分层.md`
 
 ### 03-其他引擎/
-- ⬜ `01-TensorRT-LLM.md`
+- ✅ `01-TensorRT-LLM.md`
 - ⬜ `02-LMDeploy与TurboMind.md`
 - ⬜ `03-TGI.md`
 - ⬜ `04-LightLLM.md`
