@@ -369,4 +369,200 @@ top_k=4  total=8000  expect=8000
 
 ### 3.6 三个函数各自的测试落点
 
-`_lab/tests/test_advanced.py` 的"二、并行：输出恒等"一节（`_lab/tests/test_advanced.py:91-131`）把上面六段手动脚本全部收进了 pytest：`test_tensor_parallel_mlp_is_exact`（`:91-99`，对 `tp in (1,2,4,8)` 参数化）对应 `## 3.1`；`test_gelu_is_not_additive`（`:101-105`）对应 `## 2.1` 的非线性证明；`test_head_count_must_divide_tp`（`:108-114`）对应 `## 3.3`；`test_allreduce_volume_grows_with_tp`（`:117-120`）对应 `## 3.2`；`test_pipeline_bubble_matches_formula`（`:123-126`，参数化 5 组 `(p,m)`）对应 `## 3.4`；`test_moe_topk_does_not_lose_tokens`（`:129-131`）对应 `## 3.5` 最后一段。**这一节测试与 `## 1` 的 `selftest()` 断言几乎一一对应**——教学库的惯例是同一条数学事实在 `--selftest` 和 `pytest` 里各留一份独立证据，`_PLAN.md` §2 把这条写成了"regul"：`test_lab.py`/`test_advanced.py` 这类恒等测试的判据永远是"算两遍，逐位比"。
+`_lab/tests/test_advanced.py` 的"二、并行：输出恒等"一节（`_lab/tests/test_advanced.py:91-131`）把上面六段手动脚本全部收进了 pytest：`test_tensor_parallel_mlp_is_exact`（`:91-99`，对 `tp in (1,2,4,8)` 参数化）对应 `## 3.1`；`test_gelu_is_not_additive`（`:101-105`）对应 `## 2.1` 的非线性证明；`test_head_count_must_divide_tp`（`:108-114`）对应 `## 3.3`；`test_allreduce_volume_grows_with_tp`（`:117-120`）对应 `## 3.2`；`test_pipeline_bubble_matches_formula`（`:123-126`，参数化 5 组 `(p,m)`）对应 `## 3.4`；`test_moe_topk_does_not_lose_tokens`（`:129-131`）对应 `## 3.5` 最后一段。**这一节测试与 `## 1` 的 `selftest()` 断言几乎一一对应**——教学库的惯例是同一条数学事实在 `--selftest` 和 `pytest` 里各留一份独立证据，`_PLAN.md` §2 把这条写成了明文规矩：`test_lab.py`/`test_advanced.py` 这类恒等测试的判据永远是"算两遍，逐位比"。
+
+## 4. 真实引擎是怎么做的（对照 vLLM/SGLang 等，带 `引擎:文件:行`）
+
+`## 2.1` 讲的"列切 `w1`、行切 `w2`"不是本库自己发明的说法——真实引擎里这两个类**直接用这两个名字命名**。
+
+**vLLM**：`vllm/model_executor/layers/linear.py` 里 `ColumnParallelLinear`（`vllm:vllm/model_executor/layers/linear.py:407`）的文档字符串开门见山："The linear layer is defined as `Y = XA + b`. A is parallelized along its second dimension"——**沿第二维（列）切**，跟 `## 2.1` 的 `w1_shard = w1[:, r*h//tp:(r+1)*h//tp]` 是同一件事。`RowParallelLinear`（`vllm:vllm/model_executor/layers/linear.py:1510`）的文档字符串画了一张 ASCII 图，把 `A` 竖着切成 `A_1..A_p` 摞在一起、`X` 横着切成 `X_1..X_p`——**沿第一维（行）切**，对应 `## 2.1` 的 `w2_shard = w2[r*h//tp:(r+1)*h//tp, :]`。两个类各自的 `forward()` 把 `## 2.1` 推导的"列切之后零通信、行切之后 all-reduce"直接写成了代码：
+
+```python
+# vllm:vllm/model_executor/layers/linear.py:584-588（ColumnParallelLinear.forward，节选）
+if self.gather_output and self.tp_size > 1:
+    output = tensor_model_parallel_all_gather(output_parallel)
+else:
+    output = output_parallel          # 默认 gather_output=False：不通信
+```
+
+```python
+# vllm:vllm/model_executor/layers/linear.py:1659-1662（RowParallelLinear.forward，节选）
+if self.reduce_results and self.tp_size > 1:
+    output = tensor_model_parallel_all_reduce(output_parallel)
+else:
+    output = output_parallel
+```
+
+`ColumnParallelLinear` 的 `gather_output` 参数默认 `False`（`vllm:vllm/model_executor/layers/linear.py:443`）——因为它的典型用法就是接一个非线性激活再喂给下一个 `RowParallelLinear`，中间**不需要**把结果聚合成完整张量，正是 `## 2.1` 的"GELU 可以就地做"；`RowParallelLinear` 的 `reduce_results` 参数默认 `True`（`vllm:vllm/model_executor/layers/linear.py:1553`），对应"最后一次 all-reduce"。**注意力的 Q/K/V 投影 `QKVParallelLinear` 直接继承自 `ColumnParallelLinear`**（`vllm:vllm/model_executor/layers/linear.py:971`）——`## 2.2` 说"按头切跟 MLP 的列切是同一个道理"在这里不是类比，是同一个基类。
+
+**头数整除约束在真实引擎里长什么样**：`vllm/distributed/utils.py` 有一个全局共用的小函数：
+
+```python
+# vllm:vllm/distributed/utils.py:53-64
+def ensure_divisibility(numerator, denominator):
+    assert numerator % denominator == 0, "{} is not divisible by {}".format(...)
+
+def divide(numerator, denominator):
+    ensure_divisibility(numerator, denominator)
+    return numerator // denominator
+```
+
+`## 2.2` 提到的头数约束在具体模型实现里是一条独立的 `assert`（不是复用 `divide`，因为这里不需要求商，只需要检查）：
+
+```python
+# vllm:vllm/model_executor/models/llama.py:140-153（节选）
+tp_size = get_tensor_model_parallel_world_size()
+self.total_num_heads = num_heads
+assert self.total_num_heads % tp_size == 0
+self.num_heads = self.total_num_heads // tp_size
+self.total_num_kv_heads = num_kv_heads
+if self.total_num_kv_heads >= tp_size:
+    assert self.total_num_kv_heads % tp_size == 0
+else:
+    assert tp_size % self.total_num_kv_heads == 0     # KV 头比 tp 还少，改成复制
+self.num_kv_heads = max(1, self.total_num_kv_heads // tp_size)
+```
+
+这正是 `## 2.2` 说的"GQA 之后约束更紧"的真实版本：`_lab/parallel.py` 的 `attn_tensor_parallel()` 只处理了 `n_head % tp == 0` 这一层（Q 头数约束），vLLM 多出的这几行专门处理 KV 头数比 `tp` 还少的情况——**这时候不再是"切分"，是"复制"**（`tp_size % total_num_kv_heads == 0`，每个 KV 头被复制给 `tp_size / total_num_kv_heads` 张卡共享）。本库为了保持代码可读，没有实现这条分支。
+
+**PP 在真实引擎里怎么把层分给不同卡、怎么传激活**：`Llama` 模型的 `forward()` 直接用 `## 2.2` 说的"不同卡拿到不同层"来组织代码：
+
+```python
+# vllm:vllm/model_executor/models/llama.py:408-433（节选）
+if get_pp_group().is_first_rank:
+    hidden_states = self.embed_input_ids(input_ids)
+    ...
+else:
+    hidden_states = intermediate_tensors["hidden_states"]   # 从上一级接收激活
+    residual = intermediate_tensors["residual"]
+
+for idx, layer in enumerate(islice(self.layers, self.start_layer, self.end_layer)):
+    hidden_states, residual = layer(...)                    # 只算自己这一段层
+
+if not get_pp_group().is_last_rank:
+    return IntermediateTensors({"hidden_states": hidden_states, "residual": residual})
+```
+
+`self.start_layer`/`self.end_layer`（在 `vllm:vllm/model_executor/models/llama.py:383` 由 `make_layers()` 计算得到）决定这张卡具体拿哪几层——`islice(self.layers, self.start_layer, self.end_layer)` 就是 `## 2.4` 的"第 s 级只算自己那一段"；不是最后一级就打包成 `IntermediateTensors` 往下传，正对应 `_lab/parallel.py` 的 `pipeline_schedule()` 里 `tl[s][s+m]` 记录"这一级这一步在处理哪个 micro-batch"背后真正发生的事——**级与级之间传递的就是这份 `IntermediateTensors`**，本库没有模拟这份数据本身，只模拟了"谁在第几步处理第几个 micro-batch"这张时间表。
+
+**层数分配也有一处比 TP 更宽松的地方，值得对照 `## 2.2` 的硬约束看**：
+
+```python
+# vllm:vllm/distributed/utils.py:127-142（get_pp_indices，节选文档字符串）
+"""Try to evenly distribute layers across partitions.
+If the number of layers is not divisible by the number of partitions,
+the remaining layers are evenly distributed across all but the last
+partition. ...
+"""
+```
+
+**TP 的头数约束是硬报错（`n_head % tp != 0` 直接 `assert` 失败），PP 的层数分配却允许不整除**——`get_pp_indices()`（`vllm:vllm/distributed/utils.py:127-171`）在层数除不尽时把多出来的层软性摊到中间几个 partition，而不是报错。这条差异不是随意的：头是不可再分的原子计算单元（切一半没有意义），但"层"这个粒度本身就是可以不均匀分配的——一张卡多算一层、少算一层，只是让某张卡多花一点时间，不会破坏任何数学上的等价性；`## 5` 会把这条差异正式写进决策里。
+
+`## 2.3` 提到"TP 只在单机内做"，`vllm/distributed/parallel_state.py` 的 `initialize_model_parallel()` 文档字符串直接给了一个例子说明 TP/PP 是两个可以正交组合的维度：
+
+```python
+# vllm:vllm/distributed/parallel_state.py:1751-1774（节选文档字符串）
+"""
+Let's say we have a total of 8 GPUs ... 2 GPUs to parallelize the model
+tensor, and 4 GPUs to parallelize the model pipeline. ... create 4 tensor
+model-parallel groups and 2 pipeline model-parallel groups:
+    4 tensor model-parallel groups: [g0,g1],[g2,g3],[g4,g5],[g6,g7]
+    2 pipeline model-parallel groups: [g0,g2,g4,g6],[g1,g3,g5,g7]
+Note that for efficiency, the caller should make sure adjacent ranks
+are on the same DGX box.
+"""
+```
+
+**"adjacent ranks are on the same DGX box"这句注释就是 `## 2.3`/`## 5` 反复讲的"TP 组必须放在同一台机器内"的官方表述**——TP 组 `[g0,g1]` 相邻编号被有意放在同一物理机，PP 组之间才允许跨机。`tensor_parallel_size`/`pipeline_parallel_size` 分别是两个独立的配置字段（`vllm:vllm/config/parallel.py:122` 是 `pipeline_parallel_size`，`vllm:vllm/config/parallel.py:124` 是 `tensor_parallel_size`），`enable_expert_parallel`（`vllm:vllm/config/parallel.py:165`）是第三个独立开关——三个维度在配置层面就是三个正交的旋钮，可以同时打开，这与 `## 0` 说的"三个方向"完全对应。
+
+**SGLang**：类名与切法完全对应这条在 SGLang 里也成立——`python/sglang/srt/layers/linear.py` 同样有 `ColumnParallelLinear`（`sglang:python/sglang/srt/layers/linear.py:302`）和 `RowParallelLinear`（`sglang:python/sglang/srt/layers/linear.py:1407`），`forward()` 里同样是"列切默认不通信、行切默认 all-reduce"：
+
+```python
+# sglang:python/sglang/srt/layers/linear.py:490-494（ColumnParallelLinear.forward，节选）
+if self.gather_output:
+    output = tensor_model_parallel_all_gather(output_parallel)
+else:
+    output = output_parallel
+```
+
+```python
+# sglang:python/sglang/srt/layers/linear.py:1641-1660（RowParallelLinear.forward，节选）
+if (
+    ((self.reduce_results and self.tp_size > 1) or self.use_decode_attn_tp)
+    and not skip_all_reduce
+    and not should_skip_mlp_all_reduce()
+):
+    ...
+    output = tensor_model_parallel_all_reduce(output_parallel)
+```
+
+SGLang 这一段比 vLLM 复杂得多——多了 `use_decode_attn_tp`、`should_skip_mlp_all_reduce()`、量化通信分支（`tensor_model_parallel_quant_all_reduce`）——**骨架仍然是"该不该 all-reduce"这一条 if，但真实生产代码要处理教学代码完全不用管的一堆特例**（解码阶段的专门优化、通信量化以省带宽、caller 端显式跳过等）。这正是教学库和生产引擎的差距所在：`_lab/parallel.py` 只用一行 `out = sum(parts)` 模拟 all-reduce，SGLang 要考虑"什么时候可以不做这次 all-reduce"本身就是一层需要精心设计的优化。
+
+三个并行度在 SGLang 里也是三个独立的命令行参数：
+
+```python
+# sglang:python/sglang/srt/server_args.py:1040-1063（节选）
+tp_size: A[int, Arg(help="The tensor parallelism size.", ...)] = 1
+pp_size: A[int, Arg(help="The pipeline parallelism size.", ...)] = 1
+```
+
+```python
+# sglang:python/sglang/srt/server_args.py:2380-2388（节选）
+ep_size: A[int, Arg(help="The expert parallelism size.", ...)] = 1
+```
+
+`--tp-size`/`--pp-size`/`--ep-size` 三个旗标独立设置，默认都是 1（不启用）——跟 `## 0` 的"三个方向"、`## 5` 即将讲的"先 TP、不够再 PP、MoE 才谈 EP"这个优先级完全对得上：三个旋钮互不依赖，但**实践中怎么组合**才是本篇 `## 5` 要讲的事。
+
+## 5. 设计决策与代价（为什么这样 / 不这样会怎样 / 什么时候可以不这样）
+
+**决策一：TP 只在单机内做，不跨机。**
+- 为什么这样：`## 2.3`/`## 3.2` 算过，每个 Transformer 层要付两次 all-reduce（注意力一次、MLP 一次），每次的通信系数 `2(tp-1)/tp` 随 `tp` 增大而单调爬升、逼近 2.00 却降不下来，同时每卡分到的计算量随 `tp` 增大而线性减少——通信/计算比一路恶化。这种"每一层都要停下来同步"的模式，只有单机内的高速互联（同一物理机内多卡直连）才扛得住这个频率；`## 4` 引的 vLLM 文档字符串把这条写得很直接："adjacent ranks are on the same DGX box"。
+- 不这样会怎样：跨机做 TP，两次 all-reduce 都要走机间链路，机间链路的带宽和延迟相对机内链路差了不止一个数量级（这是并行计算的常识性认知，本文不给具体数字，红线见 `## 0`）——整个前向计算被通信主导，GPU 大部分时间在等网络往返，而不是在算。
+- 什么时候可以不这样：`tp` 度设得很小（比如 `tp=2`）、且确实需要横跨物理机才能凑够显存时，业界有专门优化过的跨机 TP 尝试（配合更细的通信调度、通信计算重叠），但这是需要专门工程投入的特例，不是默认应该采用的路线；`## 4` 提到的 `prefill_context_parallel_size`（`vllm:vllm/config/parallel.py`）之类更细分的并行维度，正是为了在不硬扛跨机 TP 的前提下扩展并行范围。
+
+**决策二：为什么推理服务里 PP 不如训练里常见。**
+- 为什么这样：`## 2.4` 推过 `bubble = (P-1)/(M+P-1)`，要把气泡压到个位数，`M`（micro-batch 数）要远大于 `P`。训练场景的 global batch 是提前设定好、离线切好的，可以轻松设成几十上百份 micro-batch；在线推理服务的请求是逐条到达的，`[[04-连续批处理]]` 里 `Engine` 的 `max_running` 决定了同时能有多少条请求"活着"，这个数字往往是几十到几百，远达不到把 `P=8` 的气泡压到 10% 以下所需要的量级（`## 1` 表里 `P=8,M=64` 才降到 9.9%），而且这些"活着"的请求本身长度参差不齐、随时有新请求加入/旧请求退出——不像训练那样每个 step 前就能一次性把 `M` 份数据摆整齐。
+- 不这样会怎样：拿在线服务里天然凑不齐的小 `M` 硬上 PP，`## 3.4` 的 `idle_cells` 是固定的（只取决于 `P`），`M` 小则总容量小，气泡比例居高不下——`P=8,M=8` 时气泡 46.7%，接近一半的 GPU 时间在空转，比不切、单纯用 TP 或者纯数据并行更糟。
+- 什么时候可以不这样：离线批量推理（一次性给几千条 prompt 打分/生成，不追求单条延迟）天然能攒出很大的 `M`，这时候 PP 的气泡问题和训练场景一样可以被摊薄，是 PP 在推理场景里少数真正划算的用法。
+
+**决策三：EP 只对 MoE 模型有意义，且是三者中优先级最低的一个。**
+- 为什么这样：EP 解决的是"专家太多、单卡装不下所有专家"和"MoE 特有的路由负载不均"这两个问题，稠密模型没有专家结构，EP 无从谈起。即便是 MoE 模型，EP 引入的是 TP/PP 都不需要处理的**额外通信模式**——`## 2.5` 讲过，token 要被送到路由选中的专家所在的卡（`(token, expert)` 对的 all-to-all 分发），这层通信量随 `top_k` 线性增长，跟"MoE 省算力"这个直觉完全是两件事，是本篇最容易被搞反的地方之一（`## 6` 单独列一条）。
+- 不这样会怎样：如果一上来就奔着 EP 去，而没有先把该切的 TP/PP 用满，MoE 层内部的专家网络本身（每个专家依然是一到几个大矩阵乘）依然可能是单卡算不动的规模，EP 只解决了"专家分布在哪张卡"，没有解决"每个专家内部这层矩阵乘还是要跟其它并行方式配合切"这个问题。
+- 什么时候可以不这样：专家数很少（比如只有 8 个）而卡数远多于专家数时，单纯按专家切分撑不满所有卡，这时候 EP 要跟 TP、数据并行组合——`## 4` 提到 SGLang 有 `ep_size * moe_dp_size <= tp_size`（未在本篇引用具体行号；`server_args.py` 里 `ep_size` 附近有相关校验）这类约束，说明真实系统里 EP 从来不是单独使用的，是跟另外两个维度嵌套配置的。
+
+**决策四：什么时候根本不需要并行——模型装得下就别切。**
+- 为什么这样：`## 2.1`~`## 2.5` 证明的每一条代价（TP 的通信占比、PP 的气泡、EP 的负载不均）都是**切分本身带来的净新增成本**，不是"免费的多卡加速"。只有在单卡真的装不下（权重超过单卡显存，或者 `[[02-自回归解码为什么是访存瓶颈]]` 讲的"用 batch 换算术强度"这条杠杆需要更大的 KV 缓存空间）时，这些成本才换得回对应的收益（能跑起来、吞吐更高）。
+- 不这样会怎样：在一个单卡完全装得下的小模型上，为了"用满手头的 8 张卡"强行设 `tp=8`，`## 2.3` 算过这时候每张卡通信系数逼近 1.75~2.00、每张卡计算量却只剩 1/8——大概率通信主导整个前向，实际吞吐比单卡直接跑还要低，这是"为了并行而并行"最常见的翻车方式。
+- 什么时候必须并行（这条的反面）：模型权重本身超过单卡显存是最直接的触发条件；权重装得下但 `[[04-连续批处理]]` 想要的并发数、`[[02-自回归解码为什么是访存瓶颈]]` 想要的长上下文，需要的 KV 缓存空间超过单卡剩余显存，也是必须切的场景——这时候选哪个方向切（先 TP、再 PP、MoE 才谈 EP），才是 `## 5` 前三条决策要回答的顺序问题。
+
+## 6. 常见错误与踩坑
+
+**错误一：把 TP 拉到跨机。**
+`## 5` 决策一已经讲过原理，**错了会看到什么现象**：整体吞吐远低于预期，但排查 GPU 利用率会发现算力没有跑满、显存也没有爆——症状很像"网络慢"，但因为 TP 的每一层都要同步（不像数据并行那样通信频率低得多），这个"慢"是结构性的、贯穿整个前向，容易被误诊断成"模型太大"或"batch 开太大"，实际上是切分方式选错了：该先看的是"这几张卡是不是在同一台机器里"，而不是急着去调 batch size。
+
+**错误二：PP 的 `M`（micro-batch 数）开太小。**
+`## 5` 决策二、`## 3.4` 的实测表都已经证明这条。**错了会看到什么现象**：上线一套 PP 服务后发现吞吐提升远不如预期的"卡数倍数"，比如 4 张卡做 PP，吞吐远达不到接近 4 倍单卡——如果这时候去查日志、查显存、查网络，什么异常都看不到，因为**这不是 bug，是数学上必然的结果**：`## 3.4` 证明了 `idle_cells` 只取决于级数 `P`、跟 `M` 无关，`M` 太小时这部分固定浪费占比就是会很高。正确的排查方向是回去看这一时刻同时在跑的请求数够不够撑起一个大的 `M`，而不是怀疑 PP 的实现有问题。
+
+**错误三：以为 MoE 能省通信。**
+`## 2.5`/`## 3.5` 已经证明 `top_k` 越大总负载（也就是 all-to-all 要分发的 `(token, expert)` 对数）越大，不是越小。**错了会看到什么现象**：如果在做容量规划时，按"MoE 省算力"的直觉去预估 EP 场景下的网络带宽需求，会系统性地低估——实际部署后 all-to-all dispatch 成为瓶颈，表现为专家层前后有明显的等待间隙，而算力利用率却不高（因为大部分时间在等数据到位而不是在算）。这条错误的根源是把"MoE 省的是每个 token 激活的参数量"和"MoE 省通信"混成了一件事，`## 2.5` 结尾已经点破：这是两个完全不同的量。
+
+**错误四：`n_head` 除不尽时硬凑，而不是让它报错。**
+`## 2.2`/`## 3.3` 已经证明 `n_head % tp == 0` 是硬约束、不是实现偷懒。**错了会看到什么现象**：如果自己实现时把 `_lab/parallel.py:108` 这类 `assert` 删掉，换成"能凑就凑"的逻辑（比如某几张卡多分一个头、另几张卡少分一个头，代码上勉强能跑通、不报任何错），表面上看起来是成功的——但只要"多分/少分"这一步没有精心保证每张卡内部依然是完整、独立的头集合（`## 2.2` 强调的"完整的一部分隐藏单元，不是部分和"这个前提），输出就会在某个环节悄悄跟不切分时的参照结果分叉：`argmax` 从某一步开始给出不同的 token，不会有任何异常或崩溃。这跟 `[[04-连续批处理]]` 讲过的"推理引擎的 bug 绝大多数是静默的"是同一类教训——`_lab/parallel.py:108` 选择直接 `assert` 报错，宁可显式失败也不要静默凑合，这条护栏一旦被删掉就没有任何东西能提醒你输出已经错了。
+
+## 7. 自测题与延伸阅读
+
+**自测题（闭卷，做完再回 `## 2`/`## 3`/`## 4` 核对）：**
+
+1. 如果把 MLP 的切法完全反过来——`w1` 按行切、`w2` 按列切——一共需要几次通信？分别发生在计算的哪两个位置？（提示：`## 2.1` 最后一段）
+2. `n_head=16`、GQA 下 `n_kv_head=4`，`tp=8` 时 KV 头会被怎么处理（切分还是复制）？换成 `tp=2` 呢？两种情况的机制哪里不同？（提示：`## 4` 引的 `vllm:vllm/model_executor/models/llama.py:140-153`）
+3. 用 `## 2.4` 的推导，手算 `P=6, M=54` 时的气泡比例，并说明 `idle_cells = P*(P-1)` 这条结论是否也在这组参数下成立（可以用 `_lab/parallel.py` 直接跑出来核对）。
+4. `## 2.5` 证明了 `max/mean` 是 EP 唯一重要的数。如果专家数从 8 变成 64、路由偏斜程度（`skew`）不变，`imbalance` 会变大还是变小？先凭直觉猜一遍，再用 `_lab/parallel.py` 的 `moe_route`/`imbalance` 实际跑一次验证。
+5. `## 5` 给出的优先级是"先 TP（单机内）→ 不够再 PP（跨机）→ MoE 才谈 EP"，结合决策一、二、三，说清楚为什么不是"按业务需求随便选一个"，这个顺序背后的依据分别是什么。
+6.（附加）`## 4` 提到 TP 的头数约束是硬 `assert`、PP 的层数分配却允许不整除（`get_pp_indices()` 软性摊到中间分区）。这两种处理方式的本质区别是什么？（提示：想一下"头"和"层"作为切分粒度，各自是不是可以被不均匀分配而不破坏正确性）
+
+**延伸阅读**：
+
+- [[02-自回归解码为什么是访存瓶颈]]——本篇 `## 5` 反复借用的"什么时候必须并行"的判据，根子上是这篇的算术强度框架：并行解决的是"装不装得下""摆不摆得开"，不是凭空创造算力。
+- [[04-连续批处理]]——`## 5` 决策二里"在线推理很难攒出大 `M`"直接引用了这篇的 `max_running`/`Engine` 调度逻辑；这篇讲过的"bug 绝大多数是静默的"也是 `## 6` 错误四的同一个教训。
+- [[03-从玩具到生产还差什么]]——本篇 `## 4` 看到的真实引擎代码（`QKVParallelLinear`、`get_pp_indices`、SGLang 的量化通信分支）都是"从玩具到生产"路上要补的工程量的一部分，那一篇会把这类差距系统地归总。
+- [[05-量化]]——量化和并行是两条不同的"让模型装得下"的路径：量化压缩单卡需要的显存，并行把显存需求摊到多张卡上；`## 5` 决策四"什么时候根本不需要并行"，很多时候答案是"先试试量化能不能让它装进一张卡"。

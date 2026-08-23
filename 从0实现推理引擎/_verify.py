@@ -50,7 +50,8 @@ PLACEHOLDER_RE = re.compile(
 FENCE_RE = re.compile(r"```.*?```", re.S)
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 ROSTER_RE = re.compile(r"`(\d{2}-[^`]+?)\.md`")
-SKIP_DIRS = {"_lab", ".git", "__pycache__"}
+# `.pytest_cache` 里有一个 pytest 自己生成的 README.md，会被当成正文扫进来
+SKIP_DIRS = {"_lab", ".git", "__pycache__", ".pytest_cache"}
 
 
 class Report:
