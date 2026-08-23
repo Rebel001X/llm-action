@@ -33,7 +33,7 @@
 | 引擎（版本锚点） | ngram / lookup | 独立 draft model | Medusa | EAGLE / EAGLE3 | MTP | 其它自有方法 |
 |---|---|---|---|---|---|---|
 | **vLLM** v0.27.1（2026-08-11） | ✅ `ngram`、`ngram_gpu` | ✅ `draft_model` | ⚠️ 枚举里still在，**但文档目录已无 Medusa 专页** | ✅ `eagle` / `eagle3` | ✅ `mtp`（22 个模型族别名已折叠为 `mtp`） | `suffix`、`dflash`、`dspark`、`mlp_speculator`、`custom_class`、`extract_hidden_states`、PARD（`parallel_drafting`） |
-| **SGLang**（`main` 分支源码，2026-08-22 取；**具体 release tag 未查证**） | ✅ `NGRAM` | ✅ `STANDALONE` | **❌ 不在 builtin 枚举里** | ✅ `EAGLE` / `EAGLE3` | ✅ `NEXTN`（另有 `FROZEN_KV_MTP`） | `DFLASH`、`DSPARK`、多层 EAGLE、decoupled spec（draft/verify 拆成两个引擎） |
+| **SGLang** v0.5.18（GitHub release `2026-08-22T00:09:15Z`；PyPI 同版 `2026-08-21T20:58:46`；源码取同日 `main` 快照） | ✅ `NGRAM`（v0.5.18 新增 `--speculative-ngram-external-corpus-path`） | ✅ `STANDALONE` | **❌ 不在 builtin 枚举里** | ✅ `EAGLE` / `EAGLE3` | ✅ `NEXTN`（另有 `FROZEN_KV_MTP`） | `DFLASH`、`DSPARK`、多层 EAGLE、decoupled spec（draft/verify 拆成两个引擎） |
 | **TensorRT-LLM** 最新 stable **v1.2.1**（2026-04-20）；本篇源码取 tag **`v1.3.0rc24`**（2026-08-12） | ✅ `NGram` | ✅ `DraftTarget`（默认走 one-model 路径） | 源码里有 `MedusaDecodingConfig` 类，但**文档的 `decoding_type` 列表里没有** | ✅ `Eagle3`（`Eagle` 是向后兼容别名；**EAGLE v1/v2 checkpoint 不兼容**；**2-model 变体已预告 1.4 移除**） | ✅ `MTP` | `PARD`、`DFlash`、`SA`（Suffix Automaton）、`UserProvided`、`AUTO`；**源码里另有 `DSparkDecodingConfig`，文档未列** |
 | **llama.cpp** b10576 / **v0.2.0**（均 2026-08-22） | ✅ 四种：`ngram-simple` / `ngram-map-k` / `ngram-map-k4v` / `ngram-mod` / `ngram-cache` | ✅ `draft-simple` | **❌ 全仓库 grep 无 medusa** | ✅ `draft-eagle3`（EAGLE v1/v2 未查证） | ✅ `draft-mtp` | `draft-dflash`、`draft-dspark` |
 | **HF transformers** v5.15.1（2026-08-19） | ✅ `prompt_lookup_num_tokens` | ✅ `generate(assistant_model=...)`，另有跨 tokenizer 的 universal assisted | **❌ grep 无 medusa** | **❌ grep 无 eagle** | ✅ `use_mtp=True` | early-exit 自投机（`assistant_early_exit`）、`speculation_type="dflash"`、**静态集成校验 `assistant_ensemble_weight`（L3 有损）** |
@@ -444,6 +444,24 @@ RS-3 核到两组 Red Hat 实测，**结论方向相反**。按铁律二逐项�
 4. **MTP 的 `num_speculative_tokens > 1` 会掉接受率**（vLLM 源码 warning）： "will run multiple times of forward on same MTP layer, which may result in lower acceptance rate"。
 5. **词表不一致**：vLLM 非 TLI 模式直接 raise（"can cause out-of-bounds errors"）；llama.cpp 直接 `throw`（§3.2 的四条检查）； TRT-LLM 只警告后果 —— "make sure that the draft and target models were trained with the same tokenizer, else the **acceptance rate is extremely low and performance is regressed**"。
 6. **公开数字与文档链接都会过期**：vLLM 官方 blog 宣称的 2.8 倍被用户报告复现不出来（issue #10318，**原文亦未给 batch/并发与接受长度口径**）； #28135 是"为投机解码建立端到端回归测试"的 RFC，说明此前回归覆盖不足； 而 vLLM 的旧文档 URL `features/spec_decode.html`、llama.cpp 的 `--draft-max` 系列参数**都已失效**，网上大量教程仍在指向它们。
+
+7. **投机会打穿 prefix caching —— 不崩、不错，只是吞吐掉到 1/3**（SGLang #32459，open，2026-07-27，社区用户报告）。
+   标题本身就是判据：*"no crash, **silent 97%→40-53% reuse collapse**"*。
+   报告原文："enabling EAGLE speculative decoding **collapses radix prefix reuse for multi-turn agentic traffic — at any draft length**"，
+   而且 "The engine keeps serving but behaves as if cached prefixes are not reused（TTFT and throughput match full re-prefill）"、
+   "HiCache on/off does not change the result — **the regression tracks EAGLE alone**"。
+
+   | 配置（GLM-DSA NVFP4，v0.5.16，TP=8，**硬件型号原文未给**） | Input tok/s | TTFT p50 | Cache Hit（≥20K prompt） |
+   |---|---|---|---|
+   | 不开投机 | 43,981 | 0.54 s | **97%** |
+   | EAGLE steps=5 / draft=6 | 12,881 | 2.15 s | **53%** |
+   | EAGLE steps=3 / draft=4 | 16,811 | 2.68 s | **40%** |
+
+   ⚠️ **可信度**：**用户报告，页面未见维护者回复，本库未复现**。放进来是因为它是"投机 × prefix caching 相互作用"
+   目前最有冲击力的一组公开数字，展开见 [[23-与其它优化的相互作用-量化与KVcache与PD分离]]。
+   机制上与 §4.3 那条对得上：**EAGLE 会把 radix 前缀键强制切成 bigram**（`RadixKey(..., is_bigram=self.is_eagle, ...)`）——
+   前缀复用的命中率**不能沿用非投机场景的经验值**。这也是本篇反复强调的那件事：
+   **投机解码的成本不止在它自己那一格，它会去动别的优化的收益。**
 
 ---
 

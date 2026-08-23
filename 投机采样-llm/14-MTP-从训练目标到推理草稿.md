@@ -404,6 +404,43 @@ MTP 论文常被引成"多预测几步总是更好"，**原文不支持这个说
 
 ---
 
+### 9.1 一股反方向的力：PARD 让"独立 draft model"回来了
+
+上面这些证据说的是"绑得更紧"这条路走通了。但同一时期还有一股**正相反**的力，
+不写进来的话，读者会以为"草稿必须和 target 绑定"已经是定论 —— 它不是。
+
+MTP 把草稿焊死在 target 的训练里，这是 target-dependent 的极致：草稿模块与 target 同生共死，
+换一个 target 就得重来。EAGLE 系也一样（每个 target 训一个 head）。
+**PARD（AMD，2025-04 v1，arXiv:2504.18583）走的是反方向**，摘要逐字：
+
+> "While the EAGLE series achieves strong acceleration, its requirement of **training a separate draft head for each target model** introduces substantial adaptation costs. … we propose **PARD (PARallel Draft)**, a novel speculative decoding method featuring **target-independence** and **parallel token prediction**. Specifically, PARD enables **a single draft model to be applied across an entire family of target models** without requiring separate training for each variant…"
+
+**PARD-2**（2026-05 v1，arXiv:2605.08632，同组，含 AMD CTO Emad Barsoum）更进一步，
+把**训练目标本身**换掉了 —— 从"token 预测准确率"改成"**整体接受长度**"（摘要逐字：
+"shifting the focus from token prediction accuracy to the overall acceptance length"），
+用 Confidence-Adaptive Token (CAT) optimization 自适应重加权每个 token；
+并让**同一个 draft model 同时服务 target-dependent 与 target-independent 两种模式**。
+
+> ⚠️ **口径（铁律二）**：PARD-2 摘要自报 **up to 6.94×**「lossless acceleration」，
+> 并称在 Llama3.1-8B 上比 EAGLE-3 快 **1.9×**、比 PARD 快 **1.3×**。
+> **这三个数字都出自论文摘要，未给 batch、硬件与基线引擎** ——
+> 属于"论文自报、不可与引擎实测同表"那一档（[[20-主流引擎实现-vLLM与SGLang与TensorRTLLM]] §7.2）。
+> 无损标签按摘要自称记为 **L1**（[[07-无损的三种口径-分布无损不等于结果相同]]），本库**未独立复现**。
+
+**为什么这条对读 MTP 的人重要**：它把"草稿要不要与 target 绑定"重新变回一个**可选项**。
+两边押的是不同的东西 —— MTP 与 EAGLE 系押"绑得越紧、接受率越高"，
+PARD 押"**绑定的适配成本本身就是部署阻力**"。而且这不是纸面之争：
+PARD 已被 **vLLM 收为一等公民方法**（官方选型表标注 "High gain @ low QPS / Medium to high gain @ high QPS"，
+备注 "Low draft model latency"），也被 **TensorRT-LLM** 支持（`PARD`），
+在 TRT-LLM 里还能与 `SA`（Suffix Automaton）**叠加**。
+
+> ⚠️ **一处术语错配（是错配，不是编造）**：vLLM 的 P-EAGLE blog 曾以
+> "Position sampling [An et al., 2025](arxiv.org/pdf/2504.18583)" 的形式引用 PARD，
+> 但 PARD 的训练技巧叫 **COD（conditional drop token）**，不叫 "position sampling"。
+> **编号是对的，名字挂错了** —— 顺着 blog 的措辞去搜 "position sampling" 会一无所获。
+
+---
+
 ## 10. 它新增了什么 / 什么被后来推翻（铁律五）
 
 ### Gloeckle 等（Meta FAIR，2024-04，arXiv:2404.19737）

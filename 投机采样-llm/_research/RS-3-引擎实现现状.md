@@ -2411,7 +2411,7 @@ if (!vocab_cmpt) {
 - 唯一"合法的不同词表"路径是 **EAGLE-3 的 reduced draft vocab + `d2t` 映射表**，但那是 EAGLE3 转换脚本内部处理的，不是通用放宽。EAGLE3/DFlash/DSpark 转换必须带 `--target-model-dir`：
   > Convert the EAGLE-3 checkpoint with `--target-model-dir` so it inherits the target's tokenizer and the layer indices to read.
 
-> **三家横比（写进 `20-主流引擎实现` 的好素材）**：跨 tokenizer 草稿——HF transformers 有 UAG（无损版，arXiv:2502.05202（2025-02））、vLLM 有 TLI（`use_heterogeneous_vocab`，仅 greedy）、**llama.cpp 完全没有**、SGLang 有 FR-Spec 式的小词表（`--speculative-token-map`）但那是同 tokenizer 的子集，不是跨 tokenizer。
+> **三家横比（写进 `20-主流引擎实现` 的好素材）**：跨 tokenizer 草稿——HF transformers 有 UAG（无损版，arXiv:2502.05202（2025-01（v1）））、vLLM 有 TLI（`use_heterogeneous_vocab`，仅 greedy）、**llama.cpp 完全没有**、SGLang 有 FR-Spec 式的小词表（`--speculative-token-map`）但那是同 tokenizer 的子集，不是跨 tokenizer。
 
 ### 4.6 与 server 连续批处理 / slots / `-np` / prompt cache / KV shift 的交互
 

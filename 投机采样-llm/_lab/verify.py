@@ -406,6 +406,12 @@ def check_rules(verbose=True):
 ARXIV_PAT = re.compile(r"(?:arXiv[:\s]*|arxiv\.org/abs/)(\d{4}\.\d{4,5})", re.I)
 YM_NEAR = re.compile(r"(20\d\d)[-年/](\d{1,2})")
 SPEEDUP_NEAR = re.compile(r"(\d+(?:\.\d+)?)\s*[×xX](?![\w])")
+
+# `N×` 后面紧跟硬件型号时，那是**卡数**不是加速比（"4× A800-40GB"、"8× H100"）。
+# 实测：24 篇那个 "4" 就是这么被误当成 4× 加速比、进而与 25 篇报出"不一致"的。
+DEVICE_AFTER = re.compile(
+    r"^\s*(?:NVIDIA|AMD|Intel|华为|昇腾|Ascend|"
+    r"[AHLBV]\d{2,3}\b|RTX|GTX|TPU|MI\d|GH\d|GB\d|Gaudi|MTT|BR\d|MLU)", re.I)
 # 铁律五禁止的无主语句式
 NO_SUBJECT = [
     "最近有研究表明", "最近有工作",
@@ -413,6 +419,19 @@ NO_SUBJECT = [
     "有研究表明", "有工作表明",
     "相关研究表明", "众所周知",
 ]
+
+
+SENT_SPLIT = re.compile(r"[。！？；;]|\n")
+
+
+def _sentence_around(line: str, pos: int) -> str:
+    """取 line 里包含下标 pos 的那一句（按中英文句读切）。"""
+    starts = [0] + [m.end() for m in SENT_SPLIT.finditer(line)]
+    ends = [m.start() for m in SENT_SPLIT.finditer(line)] + [len(line)]
+    for a, b in zip(starts, ends):
+        if a <= pos <= b:
+            return line[a:b]
+    return line
 
 
 def check_consistency(verbose=True):
@@ -447,9 +466,14 @@ def check_consistency(verbose=True):
                         no_subj.append((p.name, i, ph))
             for m in ARXIV_PAT.finditer(raw):
                 aid = m.group(1)
-                ctx = " ".join(lines[max(0, i - 2):i + 1])   # 窄窗口：同行 + 上一行，降噪
+                # 再收窄到**同一句**：按中英文句读切开，只取包含该编号的那一句。
+                # 理由：±1 行仍会把同段里别的工作的数字算到这个编号头上 ——
+                # 逐条人工核过 19 处报告，13 组全是这种上下文污染，无一真矛盾。
+                ctx = _sentence_around(raw, m.start())
                 by_arxiv.setdefault(aid, {}).setdefault(p.name, set())
                 for sm in SPEEDUP_NEAR.finditer(ctx):
+                    if DEVICE_AFTER.match(ctx[sm.end():]):
+                        continue                       # 卡数，不是加速比
                     by_arxiv[aid][p.name].add(sm.group(1))
                 # 铁律五按 (文件, 编号) 聚合：同一篇里只要**有一处**给了年月就算合规，
                 # 后续行内再提不必重复标注。逐处计数会把交叉引用全判成违规（踩过）。
@@ -457,7 +481,12 @@ def check_consistency(verbose=True):
                 key = (p.name, aid)
                 ym_seen[key] = ym_seen.get(key, False) or dated
 
-    no_ym = [(f, 0, aid) for (f, aid), ok in sorted(ym_seen.items()) if not ok]
+    # 铁律五只管**正文章节**。`_research/RS-*` 是调研原始材料，
+    # 末尾成片的 URL 清单本来就不写年月，拿它去判等于把噪声当违规
+    # （citecheck.py 的标题核对出于同样理由也跳过 RS-*）。
+    _all_no_ym = [(f, 0, aid) for (f, aid), ok in sorted(ym_seen.items()) if not ok]
+    no_ym = [t for t in _all_no_ym if not t[0].startswith("RS-")]
+    no_ym_research = [t for t in _all_no_ym if t[0].startswith("RS-")]
 
     conflicts = []
     for aid, per_file in by_arxiv.items():
@@ -473,12 +502,21 @@ def check_consistency(verbose=True):
         print("[一致性] 同一编号在不同篇目里搭配了不同加速比数字：%d 处（需人工核对口径）"
               % len(conflicts))
         for aid, vals in conflicts[:12]:
-            print("  CHECK arXiv:%s" % aid)
+            # 若各篇的数字集合能按包含关系排成一条链，那是**引用详略不同**
+            # （一篇只引结论值、另一篇连原文区间一起引），不是互相矛盾。
+            # 标注而不是隐藏 —— 隐藏会让这个检查项慢慢变成永远不响的摆设。
+            sets = sorted((frozenset(v) for v in vals.values()), key=len)
+            chain = all(sets[i] <= sets[i + 1] for i in range(len(sets) - 1))
+            print("  CHECK arXiv:%s%s" % (aid, "   [子集关系：详略不同，非矛盾]" if chain else ""))
             for f, v in vals.items():
                 print("        %-46s %s" % (f, sorted(v)))
-        print("[铁律五] 整篇从未给年月的 arXiv 编号：%d 个（按 篇目x编号 聚合）" % len(no_ym))
+        print("[铁律五] 正文里整篇从未给年月的 arXiv 编号：%d 个（按 篇目x编号 聚合）" % len(no_ym))
         for f, _, aid in no_ym[:15]:
             print("  WARN %-46s arXiv:%s" % (f, aid))
+        if len(no_ym) > 15:
+            print("  …… 另有 %d 条未列出（此处只列前 15 条）" % (len(no_ym) - 15))
+        print("[铁律五] （参考，不计违规）调研笔记 _research/RS-* 里未给年月的：%d 个"
+              % len(no_ym_research))
         print("[铁律五] 无主语句式：%d 处" % len(no_subj))
         for f, i, ph in no_subj[:12]:
             print("  ERROR %s:%d  出现禁用表述" % (f, i))

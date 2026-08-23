@@ -172,3 +172,69 @@ def test_repo_has_no_rule_warnings():
     warn_lossless, warn_speedup, _ = verify.check_rules(verbose=False)
     assert warn_lossless == [], "铁律一新增 WARN：%s" % warn_lossless[:5]
     assert warn_speedup == [], "铁律二新增 WARN：%s" % warn_speedup[:5]
+
+# ---- 第八轮：三处降噪改动的反例（降噪不许把真信号一起降掉） -------------------
+
+@pytest.mark.parametrize("txt", [
+    "4× A800-40GB", "8× H100", "2× RTX 3090", "4× MI300X", "16× 昇腾910B",
+])
+def test_device_count_is_not_a_speedup(txt):
+    """`N×` 后面紧跟硬件型号 = 卡数，不是加速比。
+
+    实测踩过：24 篇 "硬件 4× A800-40GB" 里的 4 被当成 4× 加速比，
+    于是和 25 篇报出一条根本不存在的"数字不一致"。
+    """
+    m = verify.SPEEDUP_NEAR.search(txt)
+    assert m is not None, "先得能匹配上，否则这个测试是空的"
+    assert verify.DEVICE_AFTER.match(txt[m.end():]), txt
+
+
+@pytest.mark.parametrize("txt", [
+    "2.21× 的加速", "3.6×（batch=1）", "1.13× 全表最差",
+])
+def test_real_speedup_survives_device_exemption(txt):
+    """反例：真加速比后面不是硬件型号，豁免不许生效。"""
+    m = verify.SPEEDUP_NEAR.search(txt)
+    assert m is not None
+    assert not verify.DEVICE_AFTER.match(txt[m.end():]), txt
+
+
+def test_sentence_window_does_not_leak_across_punctuation():
+    """一致性窗口收窄到"同一句"：句号另一侧的数字不许算进来。
+
+    这是把 13 组误报降到 2 组的那处改动。
+    """
+    line = "A 方法见 arXiv:2401.00001，实测 2.0×。B 方法完全不同，实测 9.9×。"
+    pos = line.index("2401.00001")
+    sent = verify._sentence_around(line, pos)
+    assert "2.0" in sent
+    assert "9.9" not in sent, sent
+
+
+def test_sentence_window_still_sees_its_own_sentence():
+    """反例：收窄之后，同一句里的数字必须仍然看得见。"""
+    line = "StreamServe（arXiv:2604.09562）声称降低延迟 11-18×。"
+    sent = verify._sentence_around(line, line.index("2604.09562"))
+    assert "18" in sent
+
+
+def test_rule5_is_scoped_to_chapters_not_research_notes():
+    """铁律五只管正文。_research/RS-* 是调研原始材料，不计违规。
+
+    改动前这一项常年报 40 个 WARN，**一条都不需要处理** ——
+    一个永远无需处理的告警比没有告警更糟，它会训练读者忽略告警。
+    """
+    import contextlib
+    import io as _io
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        verify.check_consistency(verbose=True)   # 铁律五与一致性都在这个函数里打印
+    out = buf.getvalue()
+
+    # 正文里必须一个都不剩
+    assert "[铁律五] 正文里整篇从未给年月的 arXiv 编号：0 个" in out, out[-800:]
+
+    # 而且报出来的 WARN 明细里不许再出现调研笔记
+    warn_lines = [l for l in out.splitlines() if l.strip().startswith("WARN")]
+    assert not [l for l in warn_lines if "RS-" in l], warn_lines[:5]
+

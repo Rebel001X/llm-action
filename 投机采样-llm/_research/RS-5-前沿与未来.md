@@ -1329,7 +1329,7 @@ MLSys 2026 明确点名 "prior evaluations rely on research prototypes and unrea
 | 2603.03251 | 2026-03 | Speculative Speculative Decoding（Kumar/Dao/May） | §11.3 |
 | 2603.11053 | 2026-02 | SDSL 缩放律 | §11.4 |
 | 2603.18567 | 2026-03 | SpecForge 论文 | §5.1 |
-| 2604.09603 | 2026-04 | ECHO（ICML 2026，进 SGLang） | §7.3 |
+| 2604.09603 | 2026-03（v1） | ECHO（ICML 2026，进 SGLang） | §7.3 |
 | 2604.14682 | 2026-04 | Acceptance Dynamics Across Cognitive Domains | §9.3 |
 | 2605.08632 | 2026-05 | PARD-2（AMD） | §10.3 |
 | 2605.09329 | 2026-05 | **Test-Time Speculation** | §9.2 |

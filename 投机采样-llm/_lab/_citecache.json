@@ -1,0 +1,1758 @@
+{
+ "1706.03762": {
+  "authors": [
+   "Ashish Vaswani",
+   "Noam Shazeer",
+   "Niki Parmar",
+   "Jakob Uszkoreit",
+   "Llion Jones",
+   "Aidan N. Gomez"
+  ],
+  "published": "2017-06-12",
+  "title": "Attention Is All You Need",
+  "updated": "2023-08-02"
+ },
+ "1711.02281": {
+  "authors": [
+   "Jiatao Gu",
+   "James Bradbury",
+   "Caiming Xiong",
+   "Victor O. K. Li",
+   "Richard Socher"
+  ],
+  "published": "2017-11-07",
+  "title": "Non-Autoregressive Neural Machine Translation",
+  "updated": "2018-03-09"
+ },
+ "1802.06901": {
+  "authors": [
+   "Jason Lee",
+   "Elman Mansimov",
+   "Kyunghyun Cho"
+  ],
+  "published": "2018-02-19",
+  "title": "Deterministic Non-Autoregressive Neural Sequence Modeling by Iterative Refinement",
+  "updated": "2018-08-27"
+ },
+ "1811.03115": {
+  "authors": [
+   "Mitchell Stern",
+   "Noam Shazeer",
+   "Jakob Uszkoreit"
+  ],
+  "published": "2018-11-07",
+  "title": "Blockwise Parallel Decoding for Deep Autoregressive Models",
+  "updated": "2018-11-07"
+ },
+ "1904.09324": {
+  "authors": [
+   "Marjan Ghazvininejad",
+   "Omer Levy",
+   "Yinhan Liu",
+   "Luke Zettlemoyer"
+  ],
+  "published": "2019-04-19",
+  "title": "Mask-Predict: Parallel Decoding of Conditional Masked Language Models",
+  "updated": "2019-09-04"
+ },
+ "2002.03629": {
+  "authors": [
+   "Yang Song",
+   "Chenlin Meng",
+   "Renjie Liao",
+   "Stefano Ermon"
+  ],
+  "published": "2020-02-10",
+  "title": "Accelerating Feedforward Computation via Parallel Nonlinear Equation Solving",
+  "updated": "2021-06-11"
+ },
+ "2205.01966": {
+  "authors": [
+   "Jindřich Helcl",
+   "Barry Haddow",
+   "Alexandra Birch"
+  ],
+  "published": "2022-05-04",
+  "title": "Non-Autoregressive Machine Translation: It's Not as Fast as it Seems",
+  "updated": "2022-05-04"
+ },
+ "2205.10577": {
+  "authors": [
+   "Robin M. Schmidt",
+   "Telmo Pires",
+   "Stephan Peitz",
+   "Jonas Lööf"
+  ],
+  "published": "2022-05-21",
+  "title": "Non-Autoregressive Neural Machine Translation: A Call for Clarity",
+  "updated": "2022-10-21"
+ },
+ "2211.17192": {
+  "authors": [
+   "Yaniv Leviathan",
+   "Matan Kalman",
+   "Yossi Matias"
+  ],
+  "published": "2022-11-30",
+  "title": "Fast Inference from Transformers via Speculative Decoding",
+  "updated": "2023-05-18"
+ },
+ "2302.01318": {
+  "authors": [
+   "Charlie Chen",
+   "Sebastian Borgeaud",
+   "Geoffrey Irving",
+   "Jean-Baptiste Lespiau",
+   "Laurent Sifre",
+   "John Jumper"
+  ],
+  "published": "2023-02-02",
+  "title": "Accelerating Large Language Model Decoding with Speculative Sampling",
+  "updated": "2023-02-02"
+ },
+ "2302.07863": {
+  "authors": [
+   "Sehoon Kim",
+   "Karttikeya Mangalam",
+   "Suhong Moon",
+   "Jitendra Malik",
+   "Michael W. Mahoney",
+   "Amir Gholami"
+  ],
+  "published": "2023-02-15",
+  "title": "Speculative Decoding with Big Little Decoder",
+  "updated": "2023-10-12"
+ },
+ "2305.09781": {
+  "authors": [
+   "Xupeng Miao",
+   "Gabriele Oliaro",
+   "Zhihao Zhang",
+   "Xinhao Cheng",
+   "Zeyu Wang",
+   "Zhengxin Zhang"
+  ],
+  "published": "2023-05-16",
+  "title": "SpecInfer: Accelerating Generative Large Language Model Serving with Tree-based Speculative Inference and Verification",
+  "updated": "2024-04-01"
+ },
+ "2305.10427": {
+  "authors": [
+   "Andrea Santilli",
+   "Silvio Severino",
+   "Emilian Postolache",
+   "Valentino Maiorca",
+   "Michele Mancusi",
+   "Riccardo Marin"
+  ],
+  "published": "2023-05-17",
+  "title": "Accelerating Transformer Inference for Translation via Parallel Decoding",
+  "updated": "2023-05-17"
+ },
+ "2308.04623": {
+  "authors": [
+   "Benjamin Spector",
+   "Chris Re"
+  ],
+  "published": "2023-08-08",
+  "title": "Accelerating LLM Inference with Staged Speculative Decoding",
+  "updated": "2023-08-08"
+ },
+ "2309.08168": {
+  "authors": [
+   "Jun Zhang",
+   "Jue Wang",
+   "Huan Li",
+   "Lidan Shou",
+   "Ke Chen",
+   "Gang Chen"
+  ],
+  "published": "2023-09-15",
+  "title": "Draft & Verify: Lossless Large Language Model Acceleration via Self-Speculative Decoding",
+  "updated": "2024-05-20"
+ },
+ "2310.08461": {
+  "authors": [
+   "Yongchao Zhou",
+   "Kaifeng Lyu",
+   "Ankit Singh Rawat",
+   "Aditya Krishna Menon",
+   "Afshin Rostamizadeh",
+   "Sanjiv Kumar"
+  ],
+  "published": "2023-10-12",
+  "title": "DistillSpec: Improving Speculative Decoding via Knowledge Distillation",
+  "updated": "2024-03-31"
+ },
+ "2310.15141": {
+  "authors": [
+   "Ziteng Sun",
+   "Ananda Theertha Suresh",
+   "Jae Hun Ro",
+   "Ahmad Beirami",
+   "Himanshu Jain",
+   "Felix Yu"
+  ],
+  "published": "2023-10-23",
+  "title": "SpecTr: Fast Speculative Decoding via Optimal Transport",
+  "updated": "2024-01-18"
+ },
+ "2311.08252": {
+  "authors": [
+   "Zhenyu He",
+   "Zexuan Zhong",
+   "Tianle Cai",
+   "Jason D. Lee",
+   "Di He"
+  ],
+  "published": "2023-11-14",
+  "title": "REST: Retrieval-Based Speculative Decoding",
+  "updated": "2024-04-04"
+ },
+ "2312.11462": {
+  "authors": [
+   "Ziyi Chen",
+   "Xiaocong Yang",
+   "Jiacheng Lin",
+   "Chenkai Sun",
+   "Kevin Chen-Chuan Chang",
+   "Jie Huang"
+  ],
+  "published": "2023-12-18",
+  "title": "Cascade Speculative Drafting for Even Faster LLM Inference",
+  "updated": "2025-07-13"
+ },
+ "2401.07851": {
+  "authors": [
+   "Heming Xia",
+   "Zhe Yang",
+   "Qingxiu Dong",
+   "Peiyi Wang",
+   "Yongqi Li",
+   "Tao Ge"
+  ],
+  "published": "2024-01-15",
+  "title": "Unlocking Efficiency in Large Language Model Inference: A Comprehensive Survey of Speculative Decoding",
+  "updated": "2024-06-04"
+ },
+ "2401.10774": {
+  "authors": [
+   "Tianle Cai",
+   "Yuhong Li",
+   "Zhengyang Geng",
+   "Hongwu Peng",
+   "Jason D. Lee",
+   "Deming Chen"
+  ],
+  "published": "2024-01-19",
+  "title": "Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads",
+  "updated": "2024-06-14"
+ },
+ "2401.15077": {
+  "authors": [
+   "Yuhui Li",
+   "Fangyun Wei",
+   "Chao Zhang",
+   "Hongyang Zhang"
+  ],
+  "published": "2024-01-26",
+  "title": "EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty",
+  "updated": "2025-03-04"
+ },
+ "2402.01528": {
+  "authors": [
+   "Minghao Yan",
+   "Saurabh Agarwal",
+   "Shivaram Venkataraman"
+  ],
+  "published": "2024-02-02",
+  "title": "Decoding Speculative Decoding",
+  "updated": "2025-02-05"
+ },
+ "2402.02057": {
+  "authors": [
+   "Yichao Fu",
+   "Peter Bailis",
+   "Ion Stoica",
+   "Hao Zhang"
+  ],
+  "published": "2024-02-03",
+  "title": "Break the Sequential Dependency of LLM Inference Using Lookahead Decoding",
+  "updated": "2024-02-03"
+ },
+ "2402.02082": {
+  "authors": [
+   "Cunxiao Du",
+   "Jing Jiang",
+   "Xu Yuanchen",
+   "Jiawei Wu",
+   "Sicheng Yu",
+   "Yongqi Li"
+  ],
+  "published": "2024-02-03",
+  "title": "GliDe with a CaPE: A Low-Hassle Method to Accelerate Speculative Decoding",
+  "updated": "2024-02-03"
+ },
+ "2402.05109": {
+  "authors": [
+   "Zachary Ankner",
+   "Rishab Parthasarathy",
+   "Aniruddha Nrusimha",
+   "Christopher Rinard",
+   "Jonathan Ragan-Kelley",
+   "William Brandon"
+  ],
+  "published": "2024-02-07",
+  "title": "Hydra: Sequentially-Dependent Draft Heads for Medusa Decoding",
+  "updated": "2024-10-07"
+ },
+ "2402.12374": {
+  "authors": [
+   "Zhuoming Chen",
+   "Avner May",
+   "Ruslan Svirschevski",
+   "Yuhsun Huang",
+   "Max Ryabinin",
+   "Zhihao Jia"
+  ],
+  "published": "2024-02-19",
+  "title": "Sequoia: Scalable, Robust, and Hardware-aware Speculative Decoding",
+  "updated": "2025-07-05"
+ },
+ "2403.00835": {
+  "authors": [
+   "Siqi Kou",
+   "Lanxiang Hu",
+   "Zhezhi He",
+   "Zhijie Deng",
+   "Hao Zhang"
+  ],
+  "published": "2024-02-28",
+  "title": "CLLMs: Consistency Large Language Models",
+  "updated": "2024-06-13"
+ },
+ "2403.09919": {
+  "authors": [
+   "Yunfei Cheng",
+   "Aonan Zhang",
+   "Xuanyu Zhang",
+   "Chong Wang",
+   "Yi Wang"
+  ],
+  "published": "2024-03-14",
+  "title": "Recurrent Drafter for Fast Speculative Decoding in Large Language Models",
+  "updated": "2024-12-13"
+ },
+ "2403.10444": {
+  "authors": [
+   "Ziteng Sun",
+   "Uri Mendlovic",
+   "Yaniv Leviathan",
+   "Asaf Aharoni",
+   "Jae Hun Ro",
+   "Ahmad Beirami"
+  ],
+  "published": "2024-03-15",
+  "title": "Block Verification Accelerates Speculative Decoding",
+  "updated": "2025-04-10"
+ },
+ "2404.11912": {
+  "authors": [
+   "Hanshi Sun",
+   "Zhuoming Chen",
+   "Xinyu Yang",
+   "Yuandong Tian",
+   "Beidi Chen"
+  ],
+  "published": "2024-04-18",
+  "title": "TriForce: Lossless Acceleration of Long Sequence Generation with Hierarchical Speculative Decoding",
+  "updated": "2024-08-04"
+ },
+ "2404.16710": {
+  "authors": [
+   "Mostafa Elhoushi",
+   "Akshat Shrivastava",
+   "Diana Liskovich",
+   "Basil Hosmer",
+   "Bram Wasti",
+   "Liangzhen Lai"
+  ],
+  "published": "2024-04-25",
+  "title": "LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding",
+  "updated": "2024-10-18"
+ },
+ "2404.18911": {
+  "authors": [
+   "Fangcheng Liu",
+   "Yehui Tang",
+   "Zhenhua Liu",
+   "Yunsheng Ni",
+   "Kai Han",
+   "Yunhe Wang"
+  ],
+  "published": "2024-04-29",
+  "title": "Kangaroo: Lossless Self-Speculative Decoding via Double Early Exiting",
+  "updated": "2024-04-29"
+ },
+ "2404.19737": {
+  "authors": [
+   "Fabian Gloeckle",
+   "Badr Youbi Idrissi",
+   "Baptiste Rozière",
+   "David Lopez-Paz",
+   "Gabriel Synnaeve"
+  ],
+  "published": "2024-04-30",
+  "title": "Better & Faster Large Language Models via Multi-token Prediction",
+  "updated": "2024-04-30"
+ },
+ "2405.00263": {
+  "authors": [
+   "Bin Xiao",
+   "Chunan Shi",
+   "Xiaonan Nie",
+   "Fan Yang",
+   "Xiangwei Deng",
+   "Lei Su"
+  ],
+  "published": "2024-05-01",
+  "title": "Clover: Regressive Lightweight Speculative Decoding with Sequential Knowledge",
+  "updated": "2024-05-01"
+ },
+ "2405.04304": {
+  "authors": [
+   "Jonathan Mamou",
+   "Oren Pereg",
+   "Daniel Korat",
+   "Moshe Berchansky",
+   "Nadav Timor",
+   "Moshe Wasserblat"
+  ],
+  "published": "2024-05-07",
+  "title": "Dynamic Speculation Lookahead Accelerates Speculative Decoding of Large Language Models",
+  "updated": "2024-11-07"
+ },
+ "2405.19715": {
+  "authors": [
+   "Kaixuan Huang",
+   "Xudong Guo",
+   "Mengdi Wang"
+  ],
+  "published": "2024-05-30",
+  "title": "SpecDec++: Boosting Speculative Decoding via Adaptive Candidate Lengths",
+  "updated": "2025-07-11"
+ },
+ "2406.14066": {
+  "authors": [
+   "Xiaoxuan Liu",
+   "Jongseok Park",
+   "Langxiang Hu",
+   "Woosuk Kwon",
+   "Zhuohan Li",
+   "Chen Zhang"
+  ],
+  "published": "2024-06-20",
+  "title": "TurboSpec: Closed-loop Speculation Control System for Optimizing LLM Serving Goodput",
+  "updated": "2025-07-27"
+ },
+ "2406.16858": {
+  "authors": [
+   "Yuhui Li",
+   "Fangyun Wei",
+   "Chao Zhang",
+   "Hongyang Zhang"
+  ],
+  "published": "2024-06-24",
+  "title": "EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees",
+  "updated": "2024-06-30"
+ },
+ "2408.00264": {
+  "authors": [
+   "Bin Xiao",
+   "Lujun Gui",
+   "Lei Su",
+   "Weipeng Chen"
+  ],
+  "published": "2024-08-01",
+  "title": "Clover-2: Accurate Inference for Regressive Lightweight Speculative Decoding",
+  "updated": "2024-08-01"
+ },
+ "2408.11049": {
+  "authors": [
+   "Ranajoy Sadhukhan",
+   "Jian Chen",
+   "Zhuoming Chen",
+   "Vashisth Tiwari",
+   "Ruihang Lai",
+   "Jinyuan Shi"
+  ],
+  "published": "2024-08-20",
+  "title": "MagicDec: Breaking the Latency-Throughput Tradeoff for Long Context Generation with Speculative Decoding",
+  "updated": "2025-04-02"
+ },
+ "2408.15766": {
+  "authors": [
+   "Lefan Zhang",
+   "Xiaodan Wang",
+   "Yanhua Huang",
+   "Ruiwen Xu"
+  ],
+  "published": "2024-08-28",
+  "title": "Learning Harmonized Representations for Speculative Sampling",
+  "updated": "2025-02-26"
+ },
+ "2410.03804": {
+  "authors": [
+   "Matthieu Zimmer",
+   "Milan Gritta",
+   "Gerasimos Lampouras",
+   "Haitham Bou Ammar",
+   "Jun Wang"
+  ],
+  "published": "2024-10-04",
+  "title": "Mixture of Attentions For Speculative Decoding",
+  "updated": "2025-04-03"
+ },
+ "2411.04975": {
+  "authors": [
+   "Gabriele Oliaro",
+   "Zhihao Jia",
+   "Daniel Campos",
+   "Aurick Qiao"
+  ],
+  "published": "2024-11-07",
+  "title": "SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications",
+  "updated": "2025-10-07"
+ },
+ "2411.10666": {
+  "authors": [
+   "Yuxuan Hu",
+   "Ke Wang",
+   "Xiaokang Zhang",
+   "Fanjin Zhang",
+   "Cuiping Li",
+   "Hong Chen"
+  ],
+  "published": "2024-11-16",
+  "title": "SAM Decoding: Speculative Decoding via Suffix Automaton",
+  "updated": "2024-12-16"
+ },
+ "2411.13157": {
+  "authors": [
+   "Hyun Ryu",
+   "Eric Kim"
+  ],
+  "published": "2024-11-20",
+  "title": "Closer Look at Efficient Inference Methods: A Survey of Speculative Decoding",
+  "updated": "2024-11-27"
+ },
+ "2412.12639": {
+  "authors": [
+   "Xiangxiang Gao",
+   "Weisheng Xie",
+   "Yiwei Xiang",
+   "Feng Ji"
+  ],
+  "published": "2024-12-17",
+  "title": "Falcon: Faster and Parallel Inference of Large Language Models through Enhanced Semi-Autoregressive Drafting and Custom-Designed Decoding Tree",
+  "updated": "2025-04-22"
+ },
+ "2412.19437": {
+  "authors": [
+   " DeepSeek-AI",
+   "Aixin Liu",
+   "Bei Feng",
+   "Bing Xue",
+   "Bingxuan Wang",
+   "Bochao Wu"
+  ],
+  "published": "2024-12-27",
+  "title": "DeepSeek-V3 Technical Report",
+  "updated": "2025-02-18"
+ },
+ "2502.05202": {
+  "authors": [
+   "Nadav Timor",
+   "Jonathan Mamou",
+   "Daniel Korat",
+   "Moshe Berchansky",
+   "Gaurav Jain",
+   "Oren Pereg"
+  ],
+  "published": "2025-01-31",
+  "title": "Accelerating LLM Inference with Lossless Speculative Decoding Algorithms for Heterogeneous Vocabularies",
+  "updated": "2025-06-11"
+ },
+ "2502.10424": {
+  "authors": [
+   "Rishabh Tiwari",
+   "Haocheng Xi",
+   "Aditya Tomar",
+   "Coleman Hooper",
+   "Sehoon Kim",
+   "Maxwell Horton"
+  ],
+  "published": "2025-02-05",
+  "title": "QuantSpec: Self-Speculative Decoding with Hierarchical Quantized KV Cache",
+  "updated": "2025-02-05"
+ },
+ "2502.11018": {
+  "authors": [
+   "Shijing Hu",
+   "Jingyang Li",
+   "Xingyu Xie",
+   "Zhihui Lu",
+   "Kim-Chuan Toh",
+   "Pan Zhou"
+  ],
+  "published": "2025-02-16",
+  "title": "GRIFFIN: Effective Token Alignment for Faster Speculative Decoding",
+  "updated": "2025-10-19"
+ },
+ "2502.13652": {
+  "authors": [
+   "Feiye Huo",
+   "Jianchao Tan",
+   "Kefeng Zhang",
+   "Xunliang Cai",
+   "Shengli Sun"
+  ],
+  "published": "2025-02-19",
+  "title": "C2T: A Classifier-Based Tree Construction Method in Speculative Decoding",
+  "updated": "2025-02-19"
+ },
+ "2502.16880": {
+  "authors": [
+   "Yepeng Weng",
+   "Dianwen Mei",
+   "Huishi Qiu",
+   "Xujie Chen",
+   "Li Liu",
+   "Jiang Tian"
+  ],
+  "published": "2025-02-24",
+  "title": "CORAL: Learning Consistent Representations across Multi-step Training with Lighter Speculative Drafter",
+  "updated": "2025-05-25"
+ },
+ "2502.17421": {
+  "authors": [
+   "Penghui Yang",
+   "Cunxiao Du",
+   "Fengzhuo Zhang",
+   "Haonan Wang",
+   "Tianyu Pang",
+   "Chao Du"
+  ],
+  "published": "2025-02-24",
+  "title": "LongSpec: Long-Context Lossless Speculative Decoding with Efficient Drafting and Verification",
+  "updated": "2026-04-08"
+ },
+ "2502.19732": {
+  "authors": [
+   "Yunhai Hu",
+   "Zining Liu",
+   "Zhenyuan Dong",
+   "Tianfan Peng",
+   "Bradley McDanel",
+   "Sai Qian Zhang"
+  ],
+  "published": "2025-02-27",
+  "title": "Speculative Decoding and Beyond: An In-Depth Survey of Techniques",
+  "updated": "2025-10-08"
+ },
+ "2503.01840": {
+  "authors": [
+   "Yuhui Li",
+   "Fangyun Wei",
+   "Chao Zhang",
+   "Hongyang Zhang"
+  ],
+  "published": "2025-03-03",
+  "title": "EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test",
+  "updated": "2025-04-23"
+ },
+ "2504.06419": {
+  "authors": [
+   "Sanjit Neelam",
+   "Daniel Heinlein",
+   "Vaclav Cvicek",
+   "Akshay Mishra",
+   "Reiner Pope"
+  ],
+  "published": "2025-04-08",
+  "title": "SPIRe: Boosting LLM Inference Throughput with Speculative Decoding",
+  "updated": "2025-04-08"
+ },
+ "2504.07891": {
+  "authors": [
+   "Rui Pan",
+   "Yinwei Dai",
+   "Zhihao Zhang",
+   "Gabriele Oliaro",
+   "Zhihao Jia",
+   "Ravi Netravali"
+  ],
+  "published": "2025-04-10",
+  "title": "SpecReason: Fast and Accurate Inference-Time Compute via Speculative Reasoning",
+  "updated": "2025-05-16"
+ },
+ "2504.18583": {
+  "authors": [
+   "Zihao An",
+   "Huajun Bai",
+   "Ziqiong Liu",
+   "Dong Li",
+   "Emad Barsoum"
+  ],
+  "published": "2025-04-23",
+  "title": "PARD: Accelerating LLM Inference with Low-Cost PARallel Draft Model Adaptation",
+  "updated": "2025-11-30"
+ },
+ "2505.12398": {
+  "authors": [
+   "Yepeng Weng",
+   "Qiao Hu",
+   "Xujie Chen",
+   "Li Liu",
+   "Dianwen Mei",
+   "Huishi Qiu"
+  ],
+  "published": "2025-05-18",
+  "title": "Traversal Verification for Speculative Tree Decoding",
+  "updated": "2025-11-05"
+ },
+ "2505.17052": {
+  "authors": [
+   "Jinwoo Park",
+   "Seunggeun Cho",
+   "Dongsu Han"
+  ],
+  "published": "2025-05-16",
+  "title": "SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs",
+  "updated": "2025-11-18"
+ },
+ "2505.19645": {
+  "authors": [
+   "Zongle Huang",
+   "Lei Zhu",
+   "Zongyuan Zhan",
+   "Ting Hu",
+   "Weikai Mao",
+   "Xianzhi Yu"
+  ],
+  "published": "2025-05-26",
+  "title": "MoESD: Unveil Speculative Decoding's Potential for Accelerating Sparse MoE",
+  "updated": "2026-02-16"
+ },
+ "2505.20776": {
+  "authors": [
+   "Jungyoub Cha",
+   "Hyunjong Kim",
+   "Sungzoon Cho"
+  ],
+  "published": "2025-05-27",
+  "title": "SpecExtend: A Drop-in Enhancement for Speculative Decoding of Long Sequences",
+  "updated": "2026-01-19"
+ },
+ "2505.22179": {
+  "authors": [
+   "Yudi Zhang",
+   "Weilin Zhao",
+   "Xu Han",
+   "Tiejun Zhao",
+   "Wang Xu",
+   "Hailong Cao"
+  ],
+  "published": "2025-05-28",
+  "title": "Speculative Decoding Meets Quantization: Compatibility Evaluation and Hierarchical Framework Design",
+  "updated": "2025-05-29"
+ },
+ "2506.19830": {
+  "authors": [
+   "Yichao Fu",
+   "Rui Ge",
+   "Zelei Shao",
+   "Zhijie Deng",
+   "Hao Zhang"
+  ],
+  "published": "2025-06-24",
+  "title": "Scaling Speculative Decoding with Lookahead Reasoning",
+  "updated": "2025-06-24"
+ },
+ "2507.11830": {
+  "authors": [
+   "Samyam Rajbhandari",
+   "Mert Hidayetoglu",
+   "Aurick Qiao",
+   "Ye Wang",
+   "Juncheng Yang",
+   "Jeff Rasley"
+  ],
+  "published": "2025-07-16",
+  "title": "Arctic Inference with Shift Parallelism: Fast and Efficient Open Source Inference System for Enterprise AI",
+  "updated": "2025-07-16"
+ },
+ "2508.08192": {
+  "authors": [
+   "Bangsheng Tang",
+   "Carl Chengyan Fu",
+   "Fei Kou",
+   "Grigory Sizov",
+   "Haoci Zhang",
+   "Jason Park"
+  ],
+  "published": "2025-08-11",
+  "title": "Efficient Speculative Decoding for Llama at Scale: Challenges and Solutions",
+  "updated": "2025-08-11"
+ },
+ "2509.04474": {
+  "authors": [
+   "Shengyin Sun",
+   "Yiming Li",
+   "Xing Li",
+   "Yingzhao Lian",
+   "Weizhe Lin",
+   "Hui-Ling Zhen"
+  ],
+  "published": "2025-08-30",
+  "title": "Scaling Up, Speeding Up: A Benchmark of Speculative Decoding for Efficient LLM Test-Time Scaling",
+  "updated": "2025-08-30"
+ },
+ "2509.18362": {
+  "authors": [
+   "Yuxuan Cai",
+   "Xiaozhuan Liang",
+   "Xinghua Wang",
+   "Jin Ma",
+   "Haijin Liang",
+   "Jinwen Luo"
+  ],
+  "published": "2025-09-16",
+  "title": "FastMTP: Accelerating LLM Inference with Enhanced Multi-Token Prediction",
+  "updated": "2025-09-16"
+ },
+ "2509.22134": {
+  "authors": [
+   "Shijing Hu",
+   "Jingyang Li",
+   "Zhihui Lu",
+   "Pan Zhou"
+  ],
+  "published": "2025-09-26",
+  "title": "Bridging Draft Policy Misalignment: Group Tree Optimization for Speculative Decoding",
+  "updated": "2026-02-28"
+ },
+ "2509.23232": {
+  "authors": [
+   "Bingshuai Liu",
+   "Ante Wang",
+   "Zijun Min",
+   "Liang Yao",
+   "Haibo Zhang",
+   "Yang Liu"
+  ],
+  "published": "2025-09-27",
+  "title": "SPEC-RL: Accelerating On-Policy Reinforcement Learning with Speculative Rollouts",
+  "updated": "2026-01-12"
+ },
+ "2510.04767": {
+  "authors": [
+   "Wonjun Kang",
+   "Kevin Galim",
+   "Seunghyuk Oh",
+   "Minjae Lee",
+   "Yuchen Zeng",
+   "Shuibai Zhang"
+  ],
+  "published": "2025-10-06",
+  "title": "ParallelBench: Understanding the Trade-offs of Parallel Decoding in Diffusion LLMs",
+  "updated": "2026-06-23"
+ },
+ "2510.07535": {
+  "authors": [
+   "Jaeseong Lee",
+   "seung-won hwang",
+   "Aurick Qiao",
+   "Gabriele Oliaro",
+   "Ye Wang",
+   "Samyam Rajbhandari"
+  ],
+  "published": "2025-10-08",
+  "title": "OWL: Overcoming Window Length-Dependence in Speculative Decoding for Long-Context Inputs",
+  "updated": "2025-10-08"
+ },
+ "2510.11331": {
+  "authors": [
+   "Bingjie Zhu",
+   "Zhixiong Chen",
+   "Liqiang Zhao",
+   "Hyundong Shin",
+   "Arumugam Nallanathan"
+  ],
+  "published": "2025-10-13",
+  "title": "Efficient LLM Inference over Heterogeneous Edge Networks with Speculative Decoding",
+  "updated": "2025-10-13"
+ },
+ "2510.13161": {
+  "authors": [
+   "Nikhil Bhendawade",
+   "Kumari Nishu",
+   "Arnav Kundu",
+   "Chris Bartels",
+   "Minsik Cho",
+   "Irina Belousova"
+  ],
+  "published": "2025-10-15",
+  "title": "Mirror Speculative Decoding: Breaking the Serial Barrier in LLM Inference",
+  "updated": "2025-12-11"
+ },
+ "2510.15312": {
+  "authors": [
+   "Zhiyang Chen",
+   "Daliang Xu",
+   "Haiyang Shen",
+   "Chiheng Lou",
+   "Mengwei Xu",
+   "Shangguang Wang"
+  ],
+  "published": "2025-10-17",
+  "title": "Accelerating Mobile Language Model via Speculative Decoding and NPU-Coordinated Execution",
+  "updated": "2025-12-17"
+ },
+ "2510.22876": {
+  "authors": [
+   "Ranran Haoran Zhang",
+   "Soumik Dey",
+   "Ashirbad Mishra",
+   "Hansi Wu",
+   "Binbin Li",
+   "Rui Zhang"
+  ],
+  "published": "2025-10-26",
+  "title": "Batch Speculative Decoding Done Right",
+  "updated": "2026-02-15"
+ },
+ "2510.26527": {
+  "authors": [
+   "Ruilin Wang",
+   "Huixia Li",
+   "Yuexiao Ma",
+   "Xiawu Zheng",
+   "Fei Chao",
+   "Xuefeng Xiao"
+  ],
+  "published": "2025-10-30",
+  "title": "Polybasic Speculative Decoding Through a Theoretical Perspective",
+  "updated": "2025-10-30"
+ },
+ "2510.26577": {
+  "authors": [
+   "Yinrong Hong",
+   "Zhiquan Tan",
+   "Kai Hu"
+  ],
+  "published": "2025-10-30",
+  "title": "Inference-Cost-Aware Dynamic Tree Construction for Efficient Inference in Large Language Models",
+  "updated": "2026-02-26"
+ },
+ "2510.27641": {
+  "authors": [
+   "Harsh Shah"
+  ],
+  "published": "2025-10-31",
+  "title": "SpecAttn: Speculating Sparse Attention",
+  "updated": "2025-10-31"
+ },
+ "2511.16193": {
+  "authors": [
+   "Rongxin Cheng",
+   "Kai Zhou",
+   "Xingda Wei",
+   "Siyuan Liu",
+   "Mingcong Han",
+   "Mingjing Ai"
+  ],
+  "published": "2025-11-20",
+  "title": "Fast LLM Post-training via Decoupled and Fastest-of-N Speculation",
+  "updated": "2025-12-23"
+ },
+ "2512.01278": {
+  "authors": [
+   "Yilong Zhao",
+   "Jiaming Tang",
+   "Kan Zhu",
+   "Zihao Ye",
+   "Chi-Chih Chang",
+   "Chaofan Lin"
+  ],
+  "published": "2025-12-01",
+  "title": "Accelerating Large-Scale Reasoning Model Inference with Sparse Self-Speculative Decoding",
+  "updated": "2025-12-01"
+ },
+ "2512.02337": {
+  "authors": [
+   "Zhendong Tan",
+   "Xingjun Zhang",
+   "Chaoyi Hu",
+   "Junjie Peng",
+   "Kun Xia"
+  ],
+  "published": "2025-12-02",
+  "title": "SpecPV: Improving Self-Speculative Decoding for Long-Context Generation via Partial Verification",
+  "updated": "2025-12-02"
+ },
+ "2512.04752": {
+  "authors": [
+   "Siqi Wang",
+   "Hailong Yang",
+   "Junjie Zhu",
+   "Xuezhu Wang",
+   "Yufan Xu",
+   "Depei Qian"
+  ],
+  "published": "2025-12-04",
+  "title": "RLHFSpec: Breaking the Efficiency Bottleneck in RLHF Training via Adaptive Drafting",
+  "updated": "2025-12-12"
+ },
+ "2512.14681": {
+  "authors": [
+   "Lanxiang Hu",
+   "Siqi Kou",
+   "Yichao Fu",
+   "Samyam Rajbhandari",
+   "Tajana Rosing",
+   "Yuxiong He"
+  ],
+  "published": "2025-12-16",
+  "title": "Fast and Accurate Causal Parallel Decoding using Jacobi Forcing",
+  "updated": "2025-12-16"
+ },
+ "2512.15176": {
+  "authors": [
+   "Zicong Cheng",
+   "Guo-Wei Yang",
+   "Jia Li",
+   "Zhijie Deng",
+   "Meng-Hao Guo",
+   "Shi-Min Hu"
+  ],
+  "published": "2025-12-17",
+  "title": "DEER: Draft with Diffusion, Verify with Autoregressive Models",
+  "updated": "2025-12-17"
+ },
+ "2512.20573": {
+  "authors": [
+   "Rui Pan",
+   "Zhuofu Chen",
+   "Hongyi Liu",
+   "Arvind Krishnamurthy",
+   "Ravi Netravali"
+  ],
+  "published": "2025-12-23",
+  "title": "Fail Fast, Win Big: Rethinking the Drafting Strategy in Speculative Decoding via Diffusion LLMs",
+  "updated": "2026-01-28"
+ },
+ "2512.21323": {
+  "authors": [
+   "Felix Draxler",
+   "Justus Will",
+   "Farrin Marouf Sofian",
+   "Theofanis Karaletsos",
+   "Sameer Singh",
+   "Stephan Mandt"
+  ],
+  "published": "2025-12-24",
+  "title": "Parallel Token Prediction for Language Models",
+  "updated": "2026-03-04"
+ },
+ "2512.22420": {
+  "authors": [
+   "Rui Li",
+   "Zhaoning Zhang",
+   "Libo Zhang",
+   "Huaimin Wang",
+   "Xiang Fu",
+   "Zhiquan Lai"
+  ],
+  "published": "2025-12-27",
+  "title": "Nightjar: Dynamic Adaptive Speculative Decoding for Large Language Models Serving",
+  "updated": "2026-06-15"
+ },
+ "2601.11580": {
+  "authors": [
+   "Xiaoxuan Liu",
+   "Jiaxiang Yu",
+   "Jongseok Park",
+   "Ion Stoica",
+   "Alvin Cheung"
+  ],
+  "published": "2025-12-31",
+  "title": "Speculative Decoding: Performance or Illusion?",
+  "updated": "2026-03-18"
+ },
+ "2601.17768": {
+  "authors": [
+   "Raja Gond",
+   "Aditya K Kamath",
+   "Ramachandran Ramjee",
+   "Ashish Panwar"
+  ],
+  "published": "2026-01-25",
+  "title": "LLM-42: Enabling Determinism in LLM Inference with Verified Speculation",
+  "updated": "2026-01-30"
+ },
+ "2602.01469": {
+  "authors": [
+   "Mude Hui",
+   "Xin Huang",
+   "Jaime Campos Salas",
+   "Yue Sun",
+   "Nathan Pemberton",
+   "Xiang Song"
+  ],
+  "published": "2026-02-01",
+  "title": "P-EAGLE: Parallel-Drafting EAGLE with Scalable Training",
+  "updated": "2026-02-01"
+ },
+ "2602.06036": {
+  "authors": [
+   "Jian Chen",
+   "Yesheng Liang",
+   "Zhijian Liu"
+  ],
+  "published": "2026-02-05",
+  "title": "DFlash: Block Diffusion for Flash Speculative Decoding",
+  "updated": "2026-05-28"
+ },
+ "2602.06932": {
+  "authors": [
+   "Junxiong Wang",
+   "Fengxiang Bie",
+   "Jisen Li",
+   "Zhongzhu Zhou",
+   "Zelei Shao",
+   "Yubo Wang"
+  ],
+  "published": "2026-02-06",
+  "title": "When RL Meets Adaptive Speculative Training: A Unified Training-Serving System",
+  "updated": "2026-08-04"
+ },
+ "2602.07223": {
+  "authors": [
+   "Yikang Yue",
+   "Yuqi Xue",
+   "Jian Huang"
+  ],
+  "published": "2026-02-06",
+  "title": "Vegas: Self-Speculative Decoding with Verification-Guided Sparse Attention",
+  "updated": "2026-05-29"
+ },
+ "2602.09113": {
+  "authors": [
+   "Rohit Dutta",
+   "Paramita Koley",
+   "Soham Poddar",
+   "Janardan Misra",
+   "Sanjay Podder",
+   "Naveen Balani"
+  ],
+  "published": "2026-02-09",
+  "title": "Benchmarking the Energy Savings with Speculative Decoding Strategies",
+  "updated": "2026-02-09"
+ },
+ "2602.16052": {
+  "authors": [
+   "Bradley McDanel",
+   "Steven Li",
+   "Sruthikesh Surineni",
+   "Harshit Khaitan"
+  ],
+  "published": "2026-02-17",
+  "title": "MoE-Spec: Expert Budgeting for Efficient Speculative Decoding",
+  "updated": "2026-02-17"
+ },
+ "2602.23881": {
+  "authors": [
+   "Alexander Samarin",
+   "Sergei Krutikov",
+   "Anton Shevtsov",
+   "Sergei Skvortsov",
+   "Filipp Fisin",
+   "Alexander Golubev"
+  ],
+  "published": "2026-02-27",
+  "title": "LK Losses: Direct Acceptance Rate Optimization for Speculative Decoding",
+  "updated": "2026-06-01"
+ },
+ "2603.01639": {
+  "authors": [
+   "Jiebin Zhang",
+   "Zhenghan Yu",
+   "Liang Wang",
+   "Nan Yang",
+   "Eugene J. Yu",
+   "Zheng Li"
+  ],
+  "published": "2026-03-02",
+  "title": "Learning to Draft: Adaptive Speculative Decoding with Reinforcement Learning",
+  "updated": "2026-03-02"
+ },
+ "2603.03251": {
+  "authors": [
+   "Tanishq Kumar",
+   "Tri Dao",
+   "Avner May"
+  ],
+  "published": "2026-03-03",
+  "title": "Speculative Speculative Decoding",
+  "updated": "2026-05-04"
+ },
+ "2603.18016": {
+  "authors": [
+   "Zhenwei Tang",
+   "Arun Verma",
+   "Zijian Zhou",
+   "Zhaoxuan Wu",
+   "Alok Prakash",
+   "Daniela Rus"
+  ],
+  "published": "2026-02-24",
+  "title": "MineDraft: A Framework for Batch Parallel Speculative Decoding",
+  "updated": "2026-06-01"
+ },
+ "2603.18567": {
+  "authors": [
+   "Shenggui Li",
+   "Chao Wang",
+   "Yikai Zhu",
+   "Yubo Wang",
+   "Fan Yin",
+   "Shuai Shi"
+  ],
+  "published": "2026-03-19",
+  "title": "SpecForge: A Flexible and Efficient Open-Source Training Framework for Speculative Decoding",
+  "updated": "2026-03-19"
+ },
+ "2604.07622": {
+  "authors": [
+   "Ziyi Wang",
+   "Siva Rajesh Kasa",
+   "Ankith M S",
+   "Santhosh Kumar Kasa",
+   "Jiaru Zou",
+   "Sumit Negi"
+  ],
+  "published": "2026-04-08",
+  "title": "DIVERSED: Relaxed Speculative Decoding via Dynamic Ensemble Verification",
+  "updated": "2026-04-08"
+ },
+ "2604.09562": {
+  "authors": [
+   "Satyam Kumar",
+   "Arpit Singh Gautam",
+   "Kailash Talreja",
+   "Saurabh Jha"
+  ],
+  "published": "2026-02-11",
+  "title": "StreamServe: Adaptive Speculative Flows for Low-Latency Disaggregated LLM Serving",
+  "updated": "2026-02-11"
+ },
+ "2604.09603": {
+  "authors": [
+   "Xinyi Hu",
+   "Yuhao Shen",
+   "Baolin Zhang",
+   "Hengxin Zhang",
+   "Jun Dai",
+   "Shuang Ge"
+  ],
+  "published": "2026-03-10",
+  "title": "ECHO: Elastic Speculative Decoding with Sparse Gating for High-Concurrency Scenarios",
+  "updated": "2026-05-14"
+ },
+ "2604.12989": {
+  "authors": [
+   "Liran Ringel",
+   "Yaniv Romano"
+  ],
+  "published": "2026-04-14",
+  "title": "Accelerating Speculative Decoding with Block Diffusion Draft Trees",
+  "updated": "2026-04-14"
+ },
+ "2604.14682": {
+  "authors": [
+   "Saif Mahmoud"
+  ],
+  "published": "2026-04-16",
+  "title": "Acceptance Dynamics Across Cognitive Domains in Speculative Decoding",
+  "updated": "2026-04-16"
+ },
+ "2604.18655": {
+  "authors": [
+   "Sravanth Kodavanti",
+   "Sowmya Vajrala",
+   "Srinivas Miriyala",
+   "Utsav Tiwari",
+   "Uttam Kumar",
+   "Utkarsh Kumar Mahawar"
+  ],
+  "published": "2026-04-20",
+  "title": "Unlocking the Edge deployment and ondevice acceleration of multi-LoRA enabled one-for-all foundational LLM",
+  "updated": "2026-04-24"
+ },
+ "2604.26779": {
+  "authors": [
+   "Hayate Iso",
+   "Tiyasa Mitra",
+   "Sudipta Mondal",
+   "Rasoul Shafipour",
+   "Venmugil Elango",
+   "Terry Kong"
+  ],
+  "published": "2026-04-29",
+  "title": "Accelerating RL Post-Training Rollouts via System-Integrated Speculative Decoding",
+  "updated": "2026-04-29"
+ },
+ "2605.07243": {
+  "authors": [
+   "Weijie Shi",
+   "Qiang Xu",
+   "Fan Deng",
+   "Yaguang Wu",
+   "Jiarun Liu",
+   "Yehong Xu"
+  ],
+  "published": "2026-05-08",
+  "title": "SpecBlock: Block-Iterative Speculative Decoding with Dynamic Tree Drafting",
+  "updated": "2026-05-21"
+ },
+ "2605.08632": {
+  "authors": [
+   "Zihao An",
+   "Taichi Liu",
+   "Ziqiong Liu",
+   "Dong Li",
+   "Ruofeng Liu",
+   "Emad Barsoum"
+  ],
+  "published": "2026-05-09",
+  "title": "PARD-2: Target-Aligned Parallel Draft Model for Dual-Mode Speculative Decoding",
+  "updated": "2026-05-09"
+ },
+ "2605.09329": {
+  "authors": [
+   "Avinash Kumar",
+   "Sujay Sanghavi",
+   "Poulami Das"
+  ],
+  "published": "2026-05-10",
+  "title": "Test-Time Speculation",
+  "updated": "2026-05-19"
+ },
+ "2605.09992": {
+  "authors": [
+   "Doğaç Eldenk",
+   "Payal Mohapatra",
+   "Yigitcan Comlek",
+   "Kaan Oktay",
+   "Hongyang Zhang",
+   "Stephen Xia"
+  ],
+  "published": "2026-05-11",
+  "title": "Attention Drift: What Autoregressive Speculative Decoding Models Learn",
+  "updated": "2026-05-11"
+ },
+ "2605.15508": {
+  "authors": [
+   "Ceyu Xu",
+   "Jiangnan Yu",
+   "Yongji Wu",
+   "Yuan Xie"
+  ],
+  "published": "2026-05-15",
+  "title": "STS: Efficient Sparse Attention with Speculative Token Sparsity",
+  "updated": "2026-05-18"
+ },
+ "2605.17613": {
+  "authors": [
+   "Jiayi Yao",
+   "Samuel Shen",
+   "Kuntai Du",
+   "Shaoting Feng",
+   "Dongjoo Seo",
+   "Rui Zhang"
+  ],
+  "published": "2026-05-17",
+  "title": "VeriCache: Turning Lossy KV Cache into Lossless LLM Inference",
+  "updated": "2026-05-17"
+ },
+ "2605.19893": {
+  "authors": [
+   "Zhibin Wang",
+   "Ziyu Zhong",
+   "Nuo Shen",
+   "Yuhang Zhou",
+   "Rong Gu",
+   "Sheng Zhong"
+  ],
+  "published": "2026-05-19",
+  "title": "SSV: Sparse Speculative Verification for Efficient LLM Inference",
+  "updated": "2026-05-20"
+ },
+ "2605.26494": {
+  "authors": [
+   "Aili Chen",
+   "Aonian Li",
+   "Baichuan Zhou",
+   "Bangwei Gong",
+   "Binyang Jiang",
+   "Boji Dan"
+  ],
+  "published": "2026-05-26",
+  "title": "The MiniMax-M2 Series: Mini Activations Unleashing Max Real-World Intelligence",
+  "updated": "2026-07-30"
+ },
+ "2605.26558": {
+  "authors": [
+   "Soongyu Choi",
+   "Yuntae Kim",
+   "Muyoung Son",
+   "Joo-Young Kim"
+  ],
+  "published": "2026-05-26",
+  "title": "Cassandra: Enabling Reasoning LLMs at Edge via Self-Speculative Decoding",
+  "updated": "2026-05-26"
+ },
+ "2605.29707": {
+  "authors": [
+   "Jianuo Huang",
+   "Yaojie Zhang",
+   "Qituan Zhang",
+   "Hao Lin",
+   "Hanlin Xu",
+   "Linfeng Zhang"
+  ],
+  "published": "2026-05-28",
+  "title": "Domino: Decoupling Causal Modeling from Autoregressive Drafting in Speculative Decoding",
+  "updated": "2026-05-28"
+ },
+ "2605.30580": {
+  "authors": [
+   "Nirajan Paudel",
+   "Michael Ginn",
+   "Luc De Nardi",
+   "Alexis Palmer"
+  ],
+  "published": "2026-05-28",
+  "title": "Speculative Decoding and the Curse of Multilinguality",
+  "updated": "2026-08-04"
+ },
+ "2606.01813": {
+  "authors": [
+   "Shuai Zhang",
+   "Huachuan Qiu",
+   "Hongliang He",
+   "Yong Dai"
+  ],
+  "published": "2026-06-01",
+  "title": "Cost-Aware Diffusion Draft Trees for Speculative Decoding",
+  "updated": "2026-06-01"
+ },
+ "2606.03819": {
+  "authors": [
+   "Peer Rheinboldt",
+   "Frédéric Berdoz",
+   "Roger Wattenhofer"
+  ],
+  "published": "2026-06-02",
+  "title": "TreeFlash: Parallel AR-Approximation for Faster Speculative Decoding",
+  "updated": "2026-06-02"
+ },
+ "2606.12370": {
+  "authors": [
+   "Yucheng Li",
+   "Huiqiang Jiang",
+   "Yang Xu",
+   "Jianxin Yang",
+   "Yi Zhang",
+   "Yizhong Cao"
+  ],
+  "published": "2026-06-10",
+  "title": "Breaking Entropy Bounds: Accelerating RL Training via MTP with Rejection Sampling",
+  "updated": "2026-06-10"
+ },
+ "2606.13740": {
+  "authors": [
+   "Tuowei Wang",
+   "Yanfan Sun",
+   "Ju Ren"
+  ],
+  "published": "2026-06-11",
+  "title": "Efficient On-Device Diffusion LLM Inference with Mobile NPU",
+  "updated": "2026-06-11"
+ },
+ "2606.18967": {
+  "authors": [
+   "Minseo Kim",
+   "Minjae Lee",
+   "Seunghyuk Oh",
+   "Kevin Galim",
+   "Donghoon Kim",
+   "Coleman Hooper"
+  ],
+  "published": "2026-06-17",
+  "title": "EfficientRollout: System-Aware Self-Speculative Decoding for RL Rollouts",
+  "updated": "2026-06-17"
+ },
+ "2606.24957": {
+  "authors": [
+   "WenHung Lee",
+   "Jian-Jia Chen",
+   "Xiaolin Lin",
+   "Pei-Shuo Wang",
+   "Chi-Chih Chang",
+   "Chun-Che Yang"
+  ],
+  "published": "2026-06-23",
+  "title": "Dustin: Draft-Augmented Sparse Verification for Efficient Long-Context Generation with Speculative Decoding",
+  "updated": "2026-06-23"
+ },
+ "2606.25091": {
+  "authors": [
+   "Yuan Lyu",
+   "Bharath Irukulapati",
+   "Jaya Prakash Champati"
+  ],
+  "published": "2026-06-23",
+  "title": "Speculation at a Distance: Where Edge-Cloud Speculative Decoding Actually Pays Off",
+  "updated": "2026-06-23"
+ },
+ "2606.26744": {
+  "authors": [
+   "Luxi Lin",
+   "Shuang Peng",
+   "Rui Ma",
+   "Junhao Hua",
+   "Shuwei Fan",
+   "Zhengda Qin"
+  ],
+  "published": "2026-06-25",
+  "title": "HyperDFlash: Hyper-Connection-Aligned Block Speculative Decoding with Gated Residual Reduction",
+  "updated": "2026-06-29"
+ },
+ "2606.30265": {
+  "authors": [
+   "Aaryam Sharma"
+  ],
+  "published": "2026-06-29",
+  "title": "When Is a Draft Accepted? A Theory of Acceptance in Speculative Decoding",
+  "updated": "2026-06-29"
+ },
+ "2606.30389": {
+  "authors": [
+   "Tianyu Wang",
+   "Gourav Rattihalli",
+   "Aditya Dhakal",
+   "Junbo Li",
+   "Zhiwei Ren",
+   "Dejan Milojicic"
+  ],
+  "published": "2026-06-29",
+  "title": "Predict, Reuse, and Repair: Accelerating Dynamic Sparse Attention for Long-Context LLM Decoding",
+  "updated": "2026-06-29"
+ },
+ "2607.01893": {
+  "authors": [
+   "Tianjian Yang",
+   "Meng Li"
+  ],
+  "published": "2026-07-02",
+  "title": "Spec-AUF: Accept-Until-Fail Training under Train-Inference Misalignment for Masked Block Drafters",
+  "updated": "2026-07-02"
+ },
+ "2607.03333": {
+  "authors": [
+   "Huajun Bai",
+   "Weiwei Lv",
+   "Huichuan Zheng",
+   "Youyou Lu",
+   "Jiwu Shu"
+  ],
+  "published": "2026-07-03",
+  "title": "SPORK: Self-Speculative Forking to Accelerate Agentic LLM Inference",
+  "updated": "2026-07-03"
+ },
+ "2607.04244": {
+  "authors": [
+   "Jaeyeon Kim",
+   "Jewon Lee",
+   "Bo-Kyeong Kim"
+  ],
+  "published": "2026-07-05",
+  "title": "Quantize the Target, Quantize the Drafter: Efficient Inference with Qwen3.5-4B",
+  "updated": "2026-07-07"
+ },
+ "2607.05147": {
+  "authors": [
+   "Xin Cheng",
+   "Xingkai Yu",
+   "Chenze Shao",
+   "Jiashi Li",
+   "Yunfan Xiong",
+   "Yi Qian"
+  ],
+  "published": "2026-07-06",
+  "title": "DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation",
+  "updated": "2026-07-06"
+ },
+ "2607.12696": {
+  "authors": [
+   "Jincheng Xie",
+   "Runheng Liu",
+   "Heyan Huang",
+   "Yawen Ling",
+   "Hanbin Dai",
+   "Yu Zheng"
+  ],
+  "published": "2026-07-14",
+  "title": "Less Experts, Faster Decoding: Cost-Aware Speculative Decoding for Mixture-of-Experts",
+  "updated": "2026-07-14"
+ },
+ "2607.14647": {
+  "authors": [
+   "Tianyu Liu",
+   "Yuhao Shen",
+   "Rui Cen",
+   "Junhan Shi",
+   "Jiebin Zhang",
+   "Guangshuo Qin"
+  ],
+  "published": "2026-07-16",
+  "title": "D-cut: Adaptive Verification Depth Pruning for Batched Speculative Decoding",
+  "updated": "2026-07-16"
+ },
+ "2607.17283": {
+  "authors": [
+   "Param Chordiya"
+  ],
+  "published": "2026-07-19",
+  "title": "Lossless but Not Free: An Empirical Anatomy of Speculative Decoding on Consumer Hardware",
+  "updated": "2026-07-19"
+ },
+ "2607.17299": {
+  "authors": [
+   "Ryan Xu",
+   "Atlas Zhao",
+   "David Bao",
+   "Frank Du"
+  ],
+  "published": "2026-07-19",
+  "title": "WAR: Workload-Aware Rollouts for Synchronous Agentic Reinforcement Learning",
+  "updated": "2026-07-19"
+ },
+ "2607.20723": {
+  "authors": [
+   "Sadegh Majidi",
+   "Niloofar Mireshghallah",
+   "Kazem Taram"
+  ],
+  "published": "2026-07-22",
+  "title": "Leaky Language Models: Stealing Architecture and Inference Optimizations via Per-Token Timing",
+  "updated": "2026-07-22"
+ },
+ "2607.21535": {
+  "authors": [
+   "Alagappan Valliappan"
+  ],
+  "published": "2026-07-23",
+  "title": "Windowed-MTP: Removing the Full-Context Draft-KV Tax at Million-Token Context",
+  "updated": "2026-07-23"
+ },
+ "2607.21804": {
+  "authors": [
+   "Run Wang",
+   "Chaoyi Zhou",
+   "Xi Liu",
+   "Yi Zhu",
+   "Amir Salarpour",
+   "Pedram MohajerAnsari"
+  ],
+  "published": "2026-07-23",
+  "title": "Adversarial Prompts for Acceptance Collapse in Speculative Decoding",
+  "updated": "2026-07-23"
+ },
+ "2607.25852": {
+  "authors": [
+   "Hong Liu",
+   "Rui Cen",
+   "Junhan Shi",
+   "Guangshuo Qin",
+   "Jiebin Zhang",
+   "Tianyu Liu"
+  ],
+  "published": "2026-07-28",
+  "title": "AngelSpec: Towards Real-World High Performance Inference with Speculative Decoding",
+  "updated": "2026-07-29"
+ },
+ "2607.26627": {
+  "authors": [
+   "Tianyu Wang",
+   "Yuxuan Zhou",
+   "Wenbin Wang",
+   "Heng Li",
+   "Zikai Xiao",
+   "Junyuan Shang"
+  ],
+  "published": "2026-07-29",
+  "title": "Revisiting Lossy Verification in Speculative Decoding: Mechanisms, Trade-offs, and Failure Modes",
+  "updated": "2026-07-29"
+ },
+ "2607.27735": {
+  "authors": [
+   "Yuesong Liu",
+   "Yuan Zeng",
+   "Min Lyu",
+   "Ruilin Liu",
+   "Yu Guo",
+   "Yinlong Xu"
+  ],
+  "published": "2026-07-30",
+  "title": "A Sparse Glimpse of the Whole: Train-Free Self-Speculative Decoding",
+  "updated": "2026-07-30"
+ },
+ "2608.03447": {
+  "authors": [
+   "Yuannuo Feng",
+   "Zegang Peng",
+   "Yuxin Xie",
+   "Yubing Ye",
+   "Yizhe Chen",
+   "Wenshuai Yao"
+  ],
+  "published": "2026-08-04",
+  "title": "Approximate Speculative Decoding",
+  "updated": "2026-08-19"
+ },
+ "2608.04962": {
+  "authors": [
+   "Nhat Minh Pham",
+   "Duy Tung Doan",
+   "Thi Duyen Ngo",
+   "Vinh Van Nguyen",
+   "Khac-Hoai Nam Bui"
+  ],
+  "published": "2026-08-05",
+  "title": "SpecRoll: Fast-Slow Verifier-Feedback Adaptation for Speculative Reinforcement Learning Rollouts",
+  "updated": "2026-08-05"
+ },
+ "2608.15018": {
+  "authors": [
+   "Haochen Huang",
+   "Shengxuan Qiu",
+   "Meng Li"
+  ],
+  "published": "2026-08-15",
+  "title": "S2-MoE: Enabling Efficient Self-Speculative Decoding for Mixture-of-Experts on Edge Devices",
+  "updated": "2026-08-19"
+ }
+}
